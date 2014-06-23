@@ -3,7 +3,7 @@ package net2
 import (
 	"net"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 // This returns the list of local ip addresses which other hosts can connect

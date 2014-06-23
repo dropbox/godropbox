@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 type idleConn struct {

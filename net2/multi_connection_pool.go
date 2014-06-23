@@ -3,7 +3,7 @@ package net2
 import (
 	"sync"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 // A connection pool implementation that manages multiple (network, address)
