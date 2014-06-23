@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 
 	"github.com/dropbox/godropbox/time2"
 )
