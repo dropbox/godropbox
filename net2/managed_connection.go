@@ -72,10 +72,12 @@ func (c *ManagedConnImpl) RawConn() net.Conn {
 	return c.conn
 }
 
+// See ManagedConn for documentation.
 func (c *ManagedConnImpl) Key() NetworkAddress {
 	return c.addr
 }
 
+// See ManagedConn for documentation.
 func (c *ManagedConnImpl) Owner() ConnectionPool {
 	return c.pool
 }
