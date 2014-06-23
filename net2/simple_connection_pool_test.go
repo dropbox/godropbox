@@ -7,7 +7,7 @@ import (
 
 	. "launchpad.net/gocheck"
 
-	"dropbox/util/time2"
+	"github.com/dropbox/godropbox/time2"
 )
 
 // Hook up gocheck into go test runner
