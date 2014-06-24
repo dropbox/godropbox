@@ -6,15 +6,17 @@ import (
 	"github.com/dropbox/godropbox/net2"
 )
 
+type MemcachedState int
+
 const (
-	ActiveServer    = 0
-	WriteOnlyServer = 1
-	DownServer      = 2
+	ActiveServer    = MemcachedState(0)
+	WriteOnlyServer = MemcachedState(1)
+	DownServer      = MemcachedState(2)
 )
 
 type ShardState struct {
 	Address string
-	State   int
+	State   MemcachedState
 }
 
 // A base shard manager implementation that can be used to implement other
