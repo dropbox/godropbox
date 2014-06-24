@@ -6,12 +6,12 @@ Common libraries for writing go services/applications.
 ``go get github.com/dropbox/godropbox``
 
 ### Dropbox Internal Contributors
-Christian Ohler
-Cuong Do
-Harish Mallipeddi
-Jack Ferris
-Jamie Turner
-Patrick Lee
-Samir Goel
-Todd Eisenberger
-Zviad Metreveli
+- Christian Ohler
+- Cuong Do
+- Harish Mallipeddi
+- Jack Ferris
+- Jamie Turner
+- Patrick Lee
+- Samir Goel
+- Todd Eisenberger
+- Zviad Metreveli
