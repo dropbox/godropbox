@@ -132,15 +132,15 @@ func (c *MockClient) Prepend(key string, value []byte) MutateResponse {
 // This increments the key's counter by delta.  If the counter does not
 // exist, one of two things may happen:
 // 1. If the expiration value is all one-bits (0xffffffff), the operation
-//    will fail with StatusNotFound.
+// will fail with StatusNotFound.
 // 2. For all other expiration values, the operation will succeed by
-//    seeding the value for this key with the provided initValue to expire
-//    with the provided expiration time. The flags will be set to zero.
+// seeding the value for this key with the provided initValue to expire
+// with the provided expiration time. The flags will be set to zero.
 //
 // NOTE:
 // 1. If you want to set the value of the counter with add/set/replace,
-//    the objects data must be the ascii representation of the value and
-//    not the byte values of a 64 bit integer.
+// the objects data must be the ascii representation of the value and
+// not the byte values of a 64 bit integer.
 // 2. Incrementing the counter may cause the counter to wrap.
 func (c *MockClient) Increment(
 	key string,
@@ -154,17 +154,17 @@ func (c *MockClient) Increment(
 // This decrements the key's counter by delta.  If the counter does not
 // exist, one of two things may happen:
 // 1. If the expiration value is all one-bits (0xffffffff), the operation
-//    will fail with StatusNotFound.
+// will fail with StatusNotFound.
 // 2. For all other expiration values, the operation will succeed by
-//    seeding the value for this key with the provided initValue to expire
-//    with the provided expiration time. The flags will be set to zero.
+// seeding the value for this key with the provided initValue to expire
+// with the provided expiration time. The flags will be set to zero.
 //
 // NOTE:
 // 1. If you want to set the value of the counter with add/set/replace,
-//    the objects data must be the ascii representation of the value and
-//    not the byte values of a 64 bit integer.
+// the objects data must be the ascii representation of the value and
+// not the byte values of a 64 bit integer.
 // 2. Decrementing a counter will never result in a "negative value" (or
-//    cause the counter to "wrap"). instead the counter is set to 0.
+// cause the counter to "wrap"). instead the counter is set to 0.
 func (c *MockClient) Decrement(
 	key string,
 	delta uint64,
