@@ -29,8 +29,8 @@ func NewStaticShardManager(
 
 	shardStates := make([]ShardState, len(serverAddrs), len(serverAddrs))
 	for i, addr := range serverAddrs {
-		shardStates[i].address = addr
-		shardStates[i].state = ActiveServer
+		shardStates[i].Address = addr
+		shardStates[i].State = ActiveServer
 	}
 
 	manager.UpdateShardStates(shardStates)

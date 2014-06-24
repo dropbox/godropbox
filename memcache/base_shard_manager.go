@@ -13,8 +13,8 @@ const (
 )
 
 type ShardState struct {
-	address string
-	state   int
+	Address string
+	State   int
 }
 
 // A base shard manager implementation that can be used to implement other
@@ -53,11 +53,11 @@ func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
 	// Register new connections / Unregister old connections
 	diffs := make(map[string]int)
 	for _, state := range m.shardStates {
-		diffs[state.address] = -1
+		diffs[state.Address] = -1
 	}
 
 	for _, state := range shardStates {
-		diffs[state.address] += 1
+		diffs[state.Address] += 1
 	}
 
 	for address, state := range diffs {
@@ -90,12 +90,12 @@ func (m *BaseShardManager) GetShard(
 		return
 	}
 
-	if m.shardStates[shardId].state != ActiveServer {
+	if m.shardStates[shardId].State != ActiveServer {
 		m.logInfo("Memcache shard ", shardId, " is not in active state.")
 		return
 	}
 
-	conn, err = m.pool.Get("tcp", m.shardStates[shardId].address)
+	conn, err = m.pool.Get("tcp", m.shardStates[shardId].Address)
 	if err != nil {
 		m.logError(err)
 		conn = nil
@@ -122,8 +122,8 @@ func (m *BaseShardManager) GetShardsForKeys(
 			entry = &ShardMapping{}
 			if shardId != -1 {
 				state := m.shardStates[shardId]
-				if state.state == ActiveServer {
-					conn, err := m.pool.Get("tcp", state.address)
+				if state.State == ActiveServer {
+					conn, err := m.pool.Get("tcp", state.Address)
 					if err != nil {
 						m.logError(err)
 						entry.ConnErr = err
@@ -159,8 +159,8 @@ func (m *BaseShardManager) GetShardsForItems(
 			entry = &ShardMapping{}
 			if shardId != -1 {
 				state := m.shardStates[shardId]
-				if state.state == ActiveServer {
-					conn, err := m.pool.Get("tcp", state.address)
+				if state.State == ActiveServer {
+					conn, err := m.pool.Get("tcp", state.Address)
 					if err != nil {
 						m.logError(err)
 						entry.ConnErr = err
@@ -196,10 +196,10 @@ func (m *BaseShardManager) GetShardsForSentinels(
 			entry = &ShardMapping{}
 			if shardId != -1 {
 				state := m.shardStates[shardId]
-				if state.state == ActiveServer ||
-					state.state == WriteOnlyServer {
+				if state.State == ActiveServer ||
+					state.State == WriteOnlyServer {
 
-					conn, err := m.pool.Get("tcp", state.address)
+					conn, err := m.pool.Get("tcp", state.Address)
 					if err != nil {
 						m.logError(err)
 						entry.ConnErr = err
@@ -225,7 +225,7 @@ func (m *BaseShardManager) GetAllShards() map[int]net2.ManagedConn {
 	defer m.rwMutex.RUnlock()
 
 	for i, state := range m.shardStates {
-		conn, err := m.pool.Get("tcp", state.address)
+		conn, err := m.pool.Get("tcp", state.Address)
 		if err != nil {
 			m.logError(err)
 			conn = nil
