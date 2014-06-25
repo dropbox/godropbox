@@ -9,33 +9,32 @@ import (
     "testing"
     "time"
 
-    "dropbox/util/testing2"
+    . "gopkg.in/check.v1"
 )
 
-func TestNull(t *testing.T) {
+func Test(t *testing.T) {
+}
+
+type SqlTypesSuite struct {
+}
+
+var _ = Suite(&SqlTypesSuite{})
+
+func (s *SqlTypesSuite) TestNull(c *C) {
     n := Value{}
-    if !n.IsNull() {
-        t.Errorf("value is not null")
-    }
-    if n.String() != "" {
-        t.Errorf("Expecting '', got %s", n.String())
-    }
+    c.Assert(n.IsNull(), Equals, true)
+    c.Assert(n.String(), Equals, "")
+
     b := bytes.NewBuffer(nil)
     n.EncodeSql(b)
-    if b.String() != "null" {
-        t.Errorf("Expecting null, got %s", b.String())
-    }
+    c.Assert(b.String(), Equals, "")
+
     n.EncodeAscii(b)
-    if b.String() != "nullnull" {
-        t.Errorf("Expecting nullnull, got %s", b.String())
-    }
+    c.Assert(b.String(), Equals, "nullnull")
+
     js, err := n.MarshalJSON()
-    if err != nil {
-        t.Errorf("Unexpected error: %s", err)
-    }
-    if string(js) != "null" {
-        t.Errorf("Expecting null, received %s", js)
-    }
+    c.Assert(err, IsNil)
+    c.Assert(string(js), Equals, "null")
 }
 
 func TestNumeric(t *testing.T) {
@@ -159,144 +158,104 @@ func TestString(t *testing.T) {
     }
 }
 
-func TestBuildValue(t *testing.T) {
-    h := testing2.H{t}
-
+func (s *SqlTypesSuite) TestBuildValue(c *C) {
     v, err := BuildValue(nil)
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNull() {
-        t.Errorf("Expecting null")
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNull(), Equals, true)
+
     var n64 uint64
     err = ConvertAssign(v, &n64)
-    h.AssertErrorContains(err, "source is null")
+    c.Assert(err, NotNil)
+
     v, err = BuildValue(int(-1))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNumeric() || v.String() != "-1" {
-        t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "-1")
+
     v, err = BuildValue(int32(-1))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNumeric() || v.String() != "-1" {
-        t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "-1")
+
     v, err = BuildValue(int64(-1))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNumeric() || v.String() != "-1" {
-        t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "-1")
+
     err = ConvertAssign(v, &n64)
-    if err == nil {
-        t.Errorf("-1 shouldn't convert into uint64")
-    }
+    c.Assert(err, NotNil)
+
     v, err = BuildValue(uint(1))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNumeric() || v.String() != "1" {
-        t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "1")
+
     v, err = BuildValue(uint32(1))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNumeric() || v.String() != "1" {
-        t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "1")
+
     v, err = BuildValue(uint64(1))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
+    c.Assert(err, IsNil)
+
     err = ConvertAssign(v, &n64)
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if n64 != 1 {
-        t.Errorf("Expecting 1, got %v", n64)
-    }
-    if !v.IsNumeric() || v.String() != "1" {
-        t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(n64, Equals, int64(1))
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "1")
+
     v, err = BuildValue(1.23)
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsFractional() || v.String() != "1.23" {
-        t.Errorf("Expecting 1.23, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsFractional(), Equals, true)
+    c.Assert(v.String(), Equals, "1.23")
+
     err = ConvertAssign(v, &n64)
-    if err == nil {
-        t.Errorf("1.23 shouldn't convert into uint64")
-    }
+    c.Assert(err, NotNil)
+
     v, err = BuildValue("abcd")
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsString() || v.String() != "abcd" {
-        t.Errorf("Expecting abcd, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsString(), Equals, true)
+    c.Assert(v.String(), Equals, "abcd")
+
     v, err = BuildValue([]byte("abcd"))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsString() || v.String() != "abcd" {
-        t.Errorf("Expecting abcd, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsString(), Equals, true)
+    c.Assert(v.String(), Equals, "abcd")
+
     err = ConvertAssign(v, &n64)
-    h.AssertErrorContains(err, "source: 'abcd' is not Numeric")
+    c.Assert(err, NotNil)
 
     v, err = BuildValue(time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsString() || v.String() != "'2012-02-24 23:19:43'" {
-        t.Errorf("Expecting '2012-02-24 23:19:43', received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsString(), Equals, true)
+    c.Assert(v.String(), Equals, "'2012-02-24 23:19:43'")
+
     v, err = BuildValue(Numeric([]byte("123")))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsNumeric() || v.String() != "123" {
-        t.Errorf("Expecting 123, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsNumeric(), Equals, true)
+    c.Assert(v.String(), Equals, "123")
+
     v, err = BuildValue(Fractional([]byte("12.3")))
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsFractional() || v.String() != "12.3" {
-        t.Errorf("Expecting 12.3, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsFractional(), Equals, true)
+    c.Assert(v.String(), Equals, "12.3")
+
     v, err = BuildValue(String{data: []byte("abc")})
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsString() || v.String() != "abc" {
-        t.Errorf("Expecting abc, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsString(), Equals, true)
+    c.Assert(v.String(), Equals, "abc")
+
     v, err = BuildValue(float32(1.23))
-    if err == nil {
-        t.Errorf("Did not receive error")
-    }
+    c.Assert(err, NotNil)
+
     v1 := MakeString([]byte("ab"))
     v, err = BuildValue(v1)
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    if !v.IsString() || v.String() != "ab" {
-        t.Errorf("Expecting ab, received %T: %s", v.Inner, v.String())
-    }
+    c.Assert(err, IsNil)
+    c.Assert(v.IsString(), Equals, true)
+    c.Assert(v.String(), Equals, "ab")
+
     v, err = BuildValue(float32(1.23))
-    if err == nil {
-        t.Errorf("Did not receive error")
-    }
+    c.Assert(err, NotNil)
 }
 
 func TestConvertAssignDefault(t *testing.T) {
