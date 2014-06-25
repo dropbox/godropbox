@@ -17,11 +17,11 @@ func NewMockClient() Client {
 func (c *MockClient) Get(key string) GetResponse {
 	if v, ok := c.data[key]; ok {
 		return NewGetResponse(
-            key,
-            StatusNoError,
-            v.Flags,
-            v.Value,
-            v.DataVersionId)
+			key,
+			StatusNoError,
+			v.Flags,
+			v.Value,
+			v.DataVersionId)
 	}
 	return NewGetResponse(key, StatusKeyNotFound, 0, nil, 0)
 }
@@ -51,7 +51,7 @@ func (c *MockClient) Set(item *Item) MutateResponse {
 	existing, ok := c.data[newItem.Key]
 
 	if item.DataVersionId == 0 ||
-        (ok && item.DataVersionId == existing.DataVersionId) {
+		(ok && item.DataVersionId == existing.DataVersionId) {
 
 		c.data[newItem.Key] = newItem
 		return NewMutateResponse(
@@ -98,8 +98,8 @@ func (c *MockClient) Add(item *Item) MutateResponse {
 // the does not exist in memcache.
 func (c *MockClient) Replace(item *Item) MutateResponse {
 	return NewMutateErrorResponse(
-        item.Key,
-        errors.Newf("Replace not implemented"))
+		item.Key,
+		errors.Newf("Replace not implemented"))
 }
 
 // This delets a single entry from memcache.
