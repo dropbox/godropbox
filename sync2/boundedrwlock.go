@@ -1,3 +1,13 @@
+package sync2
+
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/dropbox/godropbox/errors"
+)
+
 // A fair RWLock with timeouts and a capacity.
 //
 // Obeys the typical rules about RWLocks
@@ -9,18 +19,6 @@
 // The lock favors writers, but readers are not starved, and the next batch of
 // readers will be served in before any waiting writers in FIFO order
 // (when a writer releases the lock).
-
-package sync2
-
-import (
-	"sync"
-	"sync/atomic"
-	"time"
-
-	"github.com/dropbox/godropbox/errors"
-)
-
-// A RWLock that supports timeouts and a capped # of waiting goroutines.
 type BoundedRWLock struct {
 	waiters    chan *rwwait
 	control    *sync.Mutex
