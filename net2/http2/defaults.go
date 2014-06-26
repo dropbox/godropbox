@@ -13,8 +13,8 @@ const (
 	DefaultMaxIdle = 10
 )
 
-func DefaultPoolParams() SimplePoolParams {
-	return SimplePoolParams{
+func DefaultPoolParams() ConnectionParams {
+	return ConnectionParams{
 		MaxIdle:         DefaultMaxIdle,
 		ConnectTimeout:  DefaultConnectTimeout,
 		ResponseTimeout: DefaultTimeout,

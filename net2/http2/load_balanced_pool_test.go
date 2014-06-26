@@ -49,7 +49,7 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 	}
 
 	// create pool
-	pool := NewLoadBalancedPool(SimplePoolParams{
+	pool := NewLoadBalancedPool(ConnectionParams{
 		ConnectTimeout:  1 * time.Second,
 		ResponseTimeout: 5 * time.Second,
 	})
@@ -99,7 +99,7 @@ func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
 	server, addr := setupTestServer(false)
 	defer server.Close()
 
-	params := SimplePoolParams{
+	params := ConnectionParams{
 		MaxIdle:         1,
 		ResponseTimeout: 100 * time.Millisecond,
 	}

@@ -25,7 +25,7 @@ type SimplePool struct {
 	transport *http.Transport
 
 	addr   string
-	params SimplePoolParams
+	params ConnectionParams
 }
 
 // get from http://golang.org/src/pkg/net/http/transport.go
@@ -42,7 +42,7 @@ func getenvEitherCase(k string) string {
 // HTTP/HTTPS traffic.  It will be used as the hostname by default for virtual hosting
 // and SSL certificate validation; if you'd like to use a different hostname,
 // set params.HostHeader.
-func NewSimplePool(addr string, params SimplePoolParams) *SimplePool {
+func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 	pool := &SimplePool{
 		addr:   addr,
 		params: params,

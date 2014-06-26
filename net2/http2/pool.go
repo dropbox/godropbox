@@ -26,8 +26,7 @@ type Pool interface {
 	Close()
 }
 
-// TODO(zviad): rename this to ConnectionParams
-type SimplePoolParams struct {
+type ConnectionParams struct {
 	// Number of idle HTTP clients we allow to remain in the pool
 	MaxIdle int
 

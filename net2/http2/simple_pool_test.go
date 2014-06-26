@@ -18,7 +18,7 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 	defer server.Close()
 
 	// do single request
-	params := SimplePoolParams{
+	params := ConnectionParams{
 		MaxIdle: 1,
 	}
 	var pool Pool = NewSimplePool(addr, params)
@@ -52,7 +52,7 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 
 func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
 	addr := "127.1.1.254:8000"
-	params := SimplePoolParams{
+	params := ConnectionParams{
 		MaxIdle:        1,
 		ConnectTimeout: 1 * time.Microsecond,
 	}
@@ -70,7 +70,7 @@ func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 	server, addr := setupTestServer(false)
 	defer server.Close()
 
-	params := SimplePoolParams{
+	params := ConnectionParams{
 		MaxIdle:         1,
 		ResponseTimeout: 100 * time.Millisecond,
 	}
@@ -85,7 +85,7 @@ func (s *SimplePoolSuite) TestSSL(c *C) {
 	server, addr := setupTestServer(true)
 	defer server.Close()
 
-	params := SimplePoolParams{
+	params := ConnectionParams{
 		MaxIdle:         1,
 		ResponseTimeout: 1 * time.Second,
 		UseSSL:          true,
@@ -100,7 +100,7 @@ func (s *SimplePoolSuite) TestSSL(c *C) {
 }
 
 func (s *SimplePoolSuite) TestConnectionRefused(c *C) {
-	params := SimplePoolParams{
+	params := ConnectionParams{
 		MaxIdle:         1,
 		ResponseTimeout: 100 * time.Millisecond,
 		ConnectTimeout:  1 * time.Second,
