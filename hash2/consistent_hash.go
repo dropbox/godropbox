@@ -86,7 +86,7 @@ func ConsistentHash(key uint64, numShards uint16) uint16 {
 	for i := uint16(0); i < numBlocks; i++ {
 		// Each hash can generate 2 permutation positions.  Implementation
 		// note: we can replace murmur hash with any other pesudorandom
-		// generator,  as long as it's sufficiently "random".
+		// generator, as long as it's sufficiently "random".
 		hash = simpleMurmur32(hash)
 
 		shard := i << 1
