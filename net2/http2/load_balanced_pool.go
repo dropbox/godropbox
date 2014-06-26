@@ -44,7 +44,7 @@ type LoadBalancedPool struct {
 	// as down and unusuable.
 	markDownUntil []int64
 
-	params   SimplePoolParams // Parameters for creating SimplePool-s.
+	params   ConnectionParams // Parameters for creating SimplePool-s.
 	strategy LBStrategy       // Load balancing strategy.
 }
 
@@ -66,7 +66,7 @@ type LBPoolInstanceInfo struct {
 	Addr       string
 }
 
-func NewLoadBalancedPool(params SimplePoolParams) *LoadBalancedPool {
+func NewLoadBalancedPool(params ConnectionParams) *LoadBalancedPool {
 	return &LoadBalancedPool{
 		instances:     make(map[string]*instancePool),
 		instanceList:  make(instancePoolSlice, 0),
