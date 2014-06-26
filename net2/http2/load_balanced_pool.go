@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"dropbox/dlog"
 	"godropbox/errors"
 )
 
@@ -151,7 +150,6 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
 			}
 
 			if (i + 1) < connectionAttempts {
-				dlog.V(1).Infof("DialError: %v, retrying: #%d", err, i)
 				continue
 			}
 		}
