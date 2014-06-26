@@ -3,11 +3,11 @@ package hash2
 import (
 	"testing"
 
-    . "gopkg.in/check.v1"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) {
-    TestingT(t)
+	TestingT(t)
 }
 
 type ChecksumSuite struct {
