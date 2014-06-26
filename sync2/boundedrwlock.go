@@ -17,7 +17,7 @@ import (
     "sync/atomic"
     "time"
 
-    "godropbox/errors"
+    "github.com/dropbox/godropbox/errors"
 )
 
 // A RWLock that supports timeouts and a capped # of waiting goroutines.

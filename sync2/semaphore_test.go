@@ -4,10 +4,19 @@ import (
     "testing"
     "time"
 
-    "dropbox/util/testing2"
+    . "gopkg.in/check.v1"
 )
 
-func TestNonBlockedWait(t *testing.T) {
+func Test(t *testing.T) {
+    TestingT(t)
+}
+
+type SemaphoreSuite struct {
+}
+
+var _ = Suite(&SemaphoreSuite{})
+
+func (suite *SemaphoreSuite) TestNonBlockedWait(t *C) {
     c := make(chan bool)
     go func() {
         s := NewSemaphore(3)
@@ -24,7 +33,7 @@ func TestNonBlockedWait(t *testing.T) {
     }
 }
 
-func TestBlockedWait(t *testing.T) {
+func (suite *SemaphoreSuite) TestBlockedWait(t *C) {
     c := make(chan bool)
     s := NewSemaphore(0)
     go func() {
@@ -49,7 +58,7 @@ func TestBlockedWait(t *testing.T) {
     }
 }
 
-func TestMultipleWaiters(t *testing.T) {
+func (suite *SemaphoreSuite) TestMultipleWaiters(t *C) {
     c := make(chan bool)
     s := NewSemaphore(0)
     waiter := func() {
@@ -107,7 +116,7 @@ func TestMultipleWaiters(t *testing.T) {
     }
 }
 
-func TestLotsOfWaiters(t *testing.T) {
+func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
     c := make(chan bool)
     s := NewSemaphore(0)
     waiter := func() {
@@ -124,13 +133,11 @@ func TestLotsOfWaiters(t *testing.T) {
     }
 }
 
-func TestWaitWithTimeout(t *testing.T) {
-    h := testing2.H{t}
-
+func (suite *SemaphoreSuite) TestWaitWithTimeout(t *C) {
     s := NewSemaphore(0)
     res := s.WaitTimeout(1, time.Millisecond)
-    h.AssertEquals(res, false, "Request did not timeout")
+    t.Assert(res, Equals, false)
     s.Increment(1)
     res = s.WaitTimeout(1, time.Millisecond)
-    h.AssertEquals(res, true, "Request did not timeout")
+    t.Assert(res, Equals, true)
 }
