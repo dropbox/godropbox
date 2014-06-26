@@ -31,8 +31,39 @@ func simpleMurmur32(val uint32) uint32 {
 	return h
 }
 
-// This implements a variant of consistent hashing. This implementation
-// supports up to a maximum of (1 << 16 - 1) 65535 number of shards.
+// A space efficient permutation-based consistent hashing function.  This
+// implementation supports up to a maximum of (1 << 16 - 1), 65535, number
+// of shards.
+//
+// Implementation details:
+//
+// Unlike the standard ring-based algorithm (e.g., as described in dynamo db),
+// this algorithm relays on shard permutations to determine the mapping.  The
+// idea is as follow:
+//  1. Assume there exist a set of shard ids, S, which contains every possible
+//     shard ids in the universe (in this case 0 .. 65535).
+//  2. Now suppose, A (a subset of S), is the set of available shard ids, and we
+//     want to find the shard mapping for key, K
+//  3. Use K as the pseudorandom generator's seed, and generate a random
+//     permutation of S using variable-base permutation encoding (see
+//     http://stackoverflow.com/questions/1506078/fast-permutation-number-permutation-mapping-algorithms
+//     for additional details)
+//  4. Ignore all shard ids in the permutation that are not in set A
+//  5. use the first valid shard as the result.
+//
+// NOTE: Because each key generates a different permutation, the data
+// distibution is generally more uniform than the standard algorithm (The
+// standard algorithm works around this issue by adding more points to the
+// ring, which unfortunately uses even more memory).
+//
+// Complexity: this algorithm is O(1) in theory (because the max shard id is
+// known), but O(n) in practice.
+//
+// Example:
+//  1. Assume S = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, and A = {0, 1, 2, 3, 4}.
+//  2. Now suppose K = 31415 and perm(S, K) = (3, 1, 9, 4, 7, 5, 8, 2, 0, 6).
+//  3. After ignoring S - A, the remaining permutation ids are (3, 1, 4, 2, 0)
+//  4. Therefore, the key belongs to shard 3.
 func ConsistentHash(key uint64, numShards uint16) uint16 {
 	if numShards < 2 {
 		return 0
@@ -53,7 +84,9 @@ func ConsistentHash(key uint64, numShards uint16) uint16 {
 
 	numBlocks := numShards >> 1
 	for i := uint16(0); i < numBlocks; i++ {
-		// Each hash can generate 2 permutation positions
+		// Each hash can generate 2 permutation positions.  Implementation
+		// note: we can replace murmur hash with any other pesudorandom
+		// generator,  as long as it's sufficiently "random".
 		hash = simpleMurmur32(hash)
 
 		shard := i << 1
