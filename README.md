@@ -13,5 +13,6 @@ Common libraries for writing go services/applications.
 - Jamie Turner
 - Patrick Lee
 - Samir Goel
+- Sujay Jayakar
 - Todd Eisenberger
 - Zviad Metreveli
