@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 // A generic interface for HTTP connection pools

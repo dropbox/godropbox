@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 const (
