@@ -8,12 +8,19 @@ import (
 	"testing"
 	"time"
 
-	"dropbox/util/testing2"
+	. "gopkg.in/check.v1"
 )
 
-func TestLoadBalancedPool(t *testing.T) {
-	h := testing2.H{t}
+func Test(t *testing.T) {
+	TestingT(t)
+}
 
+type LoadBalancedPoolSuite struct {
+}
+
+var _ = Suite(&LoadBalancedPoolSuite{})
+
+func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 	// start an http server that responds with the port # it's listening on
 	startHttpServer := func(port int) {
 		serveMux := http.NewServeMux()
@@ -28,17 +35,17 @@ func TestLoadBalancedPool(t *testing.T) {
 	}
 
 	ports := []int{
-		h.RandomListenPort(),
-		h.RandomListenPort(),
-		h.RandomListenPort(),
-		h.RandomListenPort(),
-		h.RandomListenPort()}
+		randomListenPort(c),
+		randomListenPort(c),
+		randomListenPort(c),
+		randomListenPort(c),
+		randomListenPort(c)}
 
 	for _, port := range ports {
 		go startHttpServer(port)
 	}
 	for _, port := range ports {
-		h.EnsureListen(fmt.Sprintf("127.0.0.1:%d", port))
+		ensureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
 	}
 
 	// create pool
@@ -61,23 +68,15 @@ func TestLoadBalancedPool(t *testing.T) {
 	for i := 0; i < numRequests; i++ {
 		go func() {
 			req, err := http.NewRequest("GET", "/", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			c.Assert(err, IsNil)
 
 			resp, err := pool.Do(req)
-			if err != nil {
-				t.Fatalf("error issuing GET: %v", err)
-			}
-			if resp.StatusCode != 200 {
-				t.Fatalf("invalid http status code: %v", resp.StatusCode)
-			}
+			c.Assert(err, IsNil)
+			c.Assert(resp.StatusCode, Equals, 200)
 
 			bodyBytes, err := ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
-			if err != nil {
-				t.Fatalf("error reading body: %v", err)
-			}
+			c.Assert(err, IsNil)
 			responses <- string(bodyBytes)
 		}()
 	}
@@ -90,17 +89,14 @@ func TestLoadBalancedPool(t *testing.T) {
 			receivedPorts[portStr] = true
 
 		case <-time.After(5 * time.Second):
-			t.Fatal("timed out waiting for responses")
+			c.FailNow()
 		}
 	}
-	if len(receivedPorts) < len(ports) {
-		t.Fatal("load balanced pool is not balancing!")
-	}
+	c.Assert(len(receivedPorts) < len(ports), Equals, false)
 }
 
-func TestRetries(t *testing.T) {
-	h := testing2.H{t}
-	server, addr := setupTestServer(t, false)
+func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
+	server, addr := setupTestServer(false)
 	defer server.Close()
 
 	params := SimplePoolParams{
@@ -121,18 +117,14 @@ func TestRetries(t *testing.T) {
 	pool.Update(infos)
 
 	simplePool, err := pool.GetInstancePool(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if simplePool.addr != "127.0.0.1:1111" {
-		t.Fatalf("Invalid SimplePool: %v", simplePool)
-	}
+	c.Assert(err, IsNil)
+	c.Assert(simplePool.addr, Equals, "127.0.0.1:1111")
 
 	for i := 0; i < 10; i++ {
 		// no requests should ever fail, because of retries and mark downs
 		req, err := http.NewRequest("GET", "/", nil)
-		h.FatalIf(err)
+		c.Assert(err, IsNil)
 		_, err = pool.Do(req)
-		h.FatalIf(err)
+		c.Assert(err, IsNil)
 	}
 }

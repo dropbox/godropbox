@@ -1,13 +1,15 @@
 package http2
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"testing"
 	"time"
+
+	. "gopkg.in/check.v1"
 )
 
-func setupTestServer(t *testing.T, ssl bool) (server *httptest.Server, addr string) {
+func setupTestServer(ssl bool) (server *httptest.Server, addr string) {
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/slow_request", func(writer http.ResponseWriter, req *http.Request) {
 		time.Sleep(500 * time.Millisecond)
@@ -27,4 +29,24 @@ func setupTestServer(t *testing.T, ssl bool) (server *httptest.Server, addr stri
 
 	addr = server.Listener.Addr().String()
 	return
+}
+
+func randomListenPort(c *C) int {
+	sock, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	port := sock.Addr().(*net.TCPAddr).Port
+	sock.Close()
+	return port
+}
+
+func ensureListen(c *C, hostport string) {
+	for i := 0; i < 10; i++ {
+		conn, err := net.Dial("tcp", hostport)
+		if err == nil {
+			conn.Close()
+			return
+		}
+		time.Sleep(time.Duration(50*(i+1)) * time.Millisecond)
+	}
+	c.FailNow()
 }

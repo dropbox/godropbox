@@ -3,14 +3,18 @@ package http2
 import (
 	"net/http"
 	"runtime"
-	"testing"
 	"time"
 
-	"dropbox/util/testing2"
+	. "gopkg.in/check.v1"
 )
 
-func TestHTTP(t *testing.T) {
-	server, addr := setupTestServer(t, false)
+type SimplePoolSuite struct {
+}
+
+var _ = Suite(&SimplePoolSuite{})
+
+func (s *SimplePoolSuite) TestHTTP(c *C) {
+	server, addr := setupTestServer(false)
 	defer server.Close()
 
 	// do single request
@@ -19,9 +23,7 @@ func TestHTTP(t *testing.T) {
 	}
 	var pool Pool = NewSimplePool(addr, params)
 	req, err := http.NewRequest("GET", "/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c.Assert(err, IsNil)
 
 	// do 10 requests concurrently
 	origMaxProcs := runtime.GOMAXPROCS(runtime.NumCPU())
@@ -32,9 +34,7 @@ func TestHTTP(t *testing.T) {
 	for i := 0; i < count; i++ {
 		go func() {
 			_, err = pool.Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
+			c.Assert(err, IsNil)
 			finished <- true
 		}()
 	}
@@ -45,14 +45,12 @@ func TestHTTP(t *testing.T) {
 			// cool
 
 		case <-time.After(5 * time.Second):
-			t.Fatal("timed out")
+			c.FailNow()
 		}
 	}
 }
 
-func TestConnectTimeout(t *testing.T) {
-	h := testing2.H{t}
-
+func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
 	addr := "127.1.1.254:8000"
 	params := SimplePoolParams{
 		MaxIdle:        1,
@@ -61,18 +59,15 @@ func TestConnectTimeout(t *testing.T) {
 	var pool Pool = NewSimplePool(addr, params)
 
 	req, err := http.NewRequest("GET", "/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c.Assert(err, IsNil)
 
 	_, err = pool.Do(req)
 	_, ok := err.(DialError)
-	h.AssertEquals(ok, true, "Must be DialError!")
+	c.Assert(ok, Equals, true)
 }
 
-func TestResponseTimeout(t *testing.T) {
-	h := testing2.H{t}
-	server, addr := setupTestServer(t, false)
+func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
+	server, addr := setupTestServer(false)
 	defer server.Close()
 
 	params := SimplePoolParams{
@@ -81,16 +76,13 @@ func TestResponseTimeout(t *testing.T) {
 	}
 	pool := NewSimplePool(addr, params)
 	req, err := http.NewRequest("GET", "/slow_request", nil)
-	if err != nil {
-		h.Fatalf(err.Error())
-	}
+	c.Assert(err, IsNil)
 	_, err = pool.Do(req)
-	h.AssertErrorContains(err, "timeout")
+	c.Assert(err, NotNil)
 }
 
-func TestSSL(t *testing.T) {
-	h := testing2.H{t}
-	server, addr := setupTestServer(t, true)
+func (s *SimplePoolSuite) TestSSL(c *C) {
+	server, addr := setupTestServer(true)
 	defer server.Close()
 
 	params := SimplePoolParams{
@@ -101,14 +93,13 @@ func TestSSL(t *testing.T) {
 	}
 	pool := NewSimplePool(addr, params)
 	req, err := http.NewRequest("GET", "/", nil)
-	h.FatalIf(err)
+	c.Assert(err, IsNil)
 	resp, err := pool.Do(req)
-	h.FatalIf(err)
-	h.AssertEquals(resp.StatusCode, http.StatusOK, "http status not ok")
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 }
 
-func TestConnectionRefused(t *testing.T) {
-	h := testing2.H{t}
+func (s *SimplePoolSuite) TestConnectionRefused(c *C) {
 	params := SimplePoolParams{
 		MaxIdle:         1,
 		ResponseTimeout: 100 * time.Millisecond,
@@ -116,9 +107,9 @@ func TestConnectionRefused(t *testing.T) {
 	}
 	pool := NewSimplePool("127.0.0.1:1111", params)
 	req, err := http.NewRequest("GET", "/connection_refused", nil)
-	h.FatalIf(err)
+	c.Assert(err, IsNil)
 	_, err = pool.Do(req)
-	h.AssertEquals(err != nil, true, "Must have failed!")
+	c.Assert(err, NotNil)
 	_, ok := err.(DialError)
-	h.AssertEquals(ok, true, "Must be DialError!")
+	c.Assert(ok, Equals, true)
 }
