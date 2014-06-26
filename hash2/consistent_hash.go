@@ -38,8 +38,8 @@ func simpleMurmur32(val uint32) uint32 {
 // Implementation details:
 //
 // Unlike the standard ring-based algorithm (e.g., as described in dynamo db),
-// this algorithm relays on shard permutations to determine the mapping.  The
-// idea is as follow:
+// this algorithm relays on shard permutations to determine the key's shard
+// mapping. The idea is as follow:
 //  1. Assume there exist a set of shard ids, S, which contains every possible
 //     shard ids in the universe (in this case 0 .. 65535).
 //  2. Now suppose, A (a subset of S), is the set of available shard ids, and we
