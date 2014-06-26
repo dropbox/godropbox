@@ -49,7 +49,7 @@ func simpleMurmur32(val uint32) uint32 {
 //     http://stackoverflow.com/questions/1506078/fast-permutation-number-permutation-mapping-algorithms
 //     for additional details)
 //  4. Ignore all shard ids in the permutation that are not in set A
-//  5. use the first valid shard as the result.
+//  5. Finally, use the first shard id as K's shard mapping.
 //
 // NOTE: Because each key generates a different permutation, the data
 // distibution is generally more uniform than the standard algorithm (The
@@ -62,7 +62,7 @@ func simpleMurmur32(val uint32) uint32 {
 // Example:
 //  1. Assume S = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, and A = {0, 1, 2, 3, 4}.
 //  2. Now suppose K = 31415 and perm(S, K) = (3, 1, 9, 4, 7, 5, 8, 2, 0, 6).
-//  3. After ignoring S - A, the remaining permutation ids are (3, 1, 4, 2, 0)
+//  3. After ignoring S - A, the remaining ids are (3, 1, 4, 2, 0)
 //  4. Therefore, the key belongs to shard 3.
 func ConsistentHash(key uint64, numShards uint16) uint16 {
 	if numShards < 2 {
