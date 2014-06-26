@@ -3,32 +3,41 @@ package lrucache
 import (
 	"testing"
 
-	"dropbox/util/testing2"
+	. "gopkg.in/check.v1"
 )
 
-func TestLRUCache(t *testing.T) {
-	h := testing2.H{t}
-	c := New(2)
-	c.Set("1", 1)
-	c.Set("2", 2)
-	c.Set("3", 9)
-	h.AssertEquals(c.Len(), 2, "LRU cache length not correct")
-	_, ok := c.Get("2")
-	h.Assert(ok, "couldn't find key 2")
-	_, ok = c.Get("3")
-	h.Assert(ok, "couldn't find key 3")
-	_, ok = c.Get("1")
-	h.Assert(!ok, "key 1 should have been evicted")
+func Test(t *testing.T) {
+	TestingT(t)
+}
 
-	_, ok = c.Get("2")
-	h.Assert(ok, "key 2 should still be in cache")
-	c.Set("4", 4)
-	_, ok = c.Get("1")
-	h.Assert(!ok, "key 1 should have been evicted")
-	_, ok = c.Get("3")
-	h.Assert(!ok, "key 3 should have been evicted")
-	_, ok = c.Get("2")
-	h.Assert(ok, "couldn't find key 2")
-	_, ok = c.Get("4")
-	h.Assert(ok, "couldn't find key 4")
+type LRUCacheSuite struct {
+}
+
+var _ = Suite(&LRUCacheSuite{})
+
+func (s *LRUCacheSuite) TestBasic(c *C) {
+	cache := New(2)
+	cache.Set("1", 1)
+	cache.Set("2", 2)
+	cache.Set("3", 9)
+	c.Assert(cache.Len(), Equals, 2)
+	_, ok := cache.Get("2")
+	c.Assert(ok, Equals, true)
+	_, ok = cache.Get("3")
+	c.Assert(ok, Equals, true)
+	_, ok = cache.Get("1")
+	c.Assert(ok, Equals, false)
+
+	_, ok = cache.Get("2")
+	c.Assert(ok, Equals, true)
+	cache.Set("4", 4)
+	_, ok = cache.Get("1")
+	c.Assert(ok, Equals, false)
+	_, ok = cache.Get("3")
+	c.Assert(ok, Equals, false)
+	_, ok = cache.Get("2")
+	c.Assert(ok, Equals, true)
+	_, ok = cache.Get("4")
+	c.Assert(ok, Equals, true)
+	c.Assert(cache.Len(), Equals, 2)
 }

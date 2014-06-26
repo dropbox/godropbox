@@ -3,31 +3,36 @@ package set
 import (
 	"testing"
 
-	"dropbox/util/testing2"
+	. "gopkg.in/check.v1"
 )
 
-func TestBasicSetOps(t *testing.T) {
-	h := testing2.H{t}
-
-	s := NewSet()
-	h.Assert(!s.Contains(1), "")
-	h.Assert(!s.Contains(2), "")
-	h.AssertEquals(s.Len(), 0, "")
-	s.Add(1)
-	h.AssertEquals(s.Len(), 1, "")
-	s.Add(2)
-	h.AssertEquals(s.Len(), 2, "")
-	h.Assert(s.Contains(1), "")
-	h.Assert(s.Contains(2), "")
-	s.Remove(1)
-	h.AssertEquals(s.Len(), 1, "")
-	h.Assert(!s.Contains(1), "")
-	h.Assert(s.Contains(2), "")
+func Test(t *testing.T) {
+	TestingT(t)
 }
 
-func TestUnion(t *testing.T) {
-	h := testing2.H{t}
+type SetSuite struct {
+}
 
+var _ = Suite(&SetSuite{})
+
+func (suite *SetSuite) TestBasicSetOps(c *C) {
+	s := NewSet()
+	c.Assert(s.Contains(1), Equals, false)
+	c.Assert(s.Contains(2), Equals, false)
+	c.Assert(s.Len(), Equals, 0)
+	s.Add(1)
+	c.Assert(s.Len(), Equals, 1)
+	s.Add(2)
+	c.Assert(s.Len(), Equals, 2)
+	c.Assert(s.Contains(1), Equals, true)
+	c.Assert(s.Contains(2), Equals, true)
+	s.Remove(1)
+	c.Assert(s.Len(), Equals, 1)
+	c.Assert(s.Contains(1), Equals, false)
+	c.Assert(s.Contains(2), Equals, true)
+}
+
+func (suite *SetSuite) TestUnion(c *C) {
 	s1 := NewSet()
 	s1.Add(1)
 	s1.Add(2)
@@ -38,18 +43,16 @@ func TestUnion(t *testing.T) {
 
 	s1.Union(s2)
 
-	h.Assert(s1.Contains(1), "")
-	h.Assert(s1.Contains(2), "")
-	h.Assert(s1.Contains(4), "")
+	c.Assert(s1.Contains(1), Equals, true)
+	c.Assert(s1.Contains(2), Equals, true)
+	c.Assert(s1.Contains(4), Equals, true)
 
-	h.Assert(!s2.Contains(1), "")
-	h.Assert(s2.Contains(2), "")
-	h.Assert(s2.Contains(4), "")
+	c.Assert(s2.Contains(1), Equals, false)
+	c.Assert(s2.Contains(2), Equals, true)
+	c.Assert(s2.Contains(4), Equals, true)
 }
 
-func TestIntersect(t *testing.T) {
-	h := testing2.H{t}
-
+func (suite *SetSuite) TestIntersect(c *C) {
 	s1 := NewSet()
 	s1.Add(1)
 	s1.Add(2)
@@ -60,18 +63,16 @@ func TestIntersect(t *testing.T) {
 
 	s1.Intersect(s2)
 
-	h.Assert(!s1.Contains(1), "")
-	h.Assert(s1.Contains(2), "")
-	h.Assert(!s1.Contains(4), "")
+	c.Assert(s1.Contains(1), Equals, false)
+	c.Assert(s1.Contains(2), Equals, true)
+	c.Assert(s1.Contains(4), Equals, false)
 
-	h.Assert(!s2.Contains(1), "")
-	h.Assert(s2.Contains(2), "")
-	h.Assert(s2.Contains(4), "")
+	c.Assert(s2.Contains(1), Equals, false)
+	c.Assert(s2.Contains(2), Equals, true)
+	c.Assert(s2.Contains(4), Equals, true)
 }
 
-func TestSubtract(t *testing.T) {
-	h := testing2.H{t}
-
+func (suite *SetSuite) TestSubtract(c *C) {
 	s1 := NewSet()
 	s1.Add(1)
 	s1.Add(2)
@@ -82,49 +83,46 @@ func TestSubtract(t *testing.T) {
 
 	s1.Subtract(s2)
 
-	h.Assert(s1.Contains(1), "")
-	h.Assert(!s1.Contains(2), "")
-	h.Assert(!s1.Contains(4), "")
+	c.Assert(s1.Contains(1), Equals, true)
+	c.Assert(s1.Contains(2), Equals, false)
+	c.Assert(s1.Contains(4), Equals, false)
 
-	h.Assert(!s2.Contains(1), "")
-	h.Assert(s2.Contains(2), "")
-	h.Assert(s2.Contains(4), "")
+	c.Assert(s2.Contains(1), Equals, false)
+	c.Assert(s2.Contains(2), Equals, true)
+	c.Assert(s2.Contains(4), Equals, true)
 }
 
-func TestSubsets(t *testing.T) {
-	h := testing2.H{t}
-
+func (suite *SetSuite) TestSubsets(c *C) {
 	s1 := NewSet()
-	h.Assert(s1.IsSubset(s1), "")
-	h.Assert(s1.IsSuperset(s1), "")
+	c.Assert(s1.IsSubset(s1), Equals, true)
+	c.Assert(s1.IsSuperset(s1), Equals, true)
 	s2 := NewSet()
 
-	h.Assert(s1.IsSubset(s2), "")
-	h.Assert(s2.IsSubset(s1), "")
-	h.Assert(s1.IsSuperset(s2), "")
-	h.Assert(s2.IsSuperset(s1), "")
+	c.Assert(s1.IsSubset(s2), Equals, true)
+	c.Assert(s2.IsSubset(s1), Equals, true)
+	c.Assert(s1.IsSuperset(s2), Equals, true)
+	c.Assert(s2.IsSuperset(s1), Equals, true)
 
 	s2.Add(3)
-	h.Assert(s1.IsSubset(s2), "")
-	h.Assert(!s2.IsSubset(s1), "")
-	h.Assert(!s1.IsSuperset(s2), "")
-	h.Assert(s2.IsSuperset(s1), "")
+	c.Assert(s1.IsSubset(s2), Equals, true)
+	c.Assert(s2.IsSubset(s1), Equals, false)
+	c.Assert(s1.IsSuperset(s2), Equals, false)
+	c.Assert(s2.IsSuperset(s1), Equals, true)
 	s2.Add(7)
 	s1.Add(3)
-	h.Assert(s1.IsSubset(s2), "")
-	h.Assert(!s2.IsSubset(s1), "")
-	h.Assert(!s1.IsSuperset(s2), "")
-	h.Assert(s2.IsSuperset(s1), "")
+	c.Assert(s1.IsSubset(s2), Equals, true)
+	c.Assert(s2.IsSubset(s1), Equals, false)
+	c.Assert(s1.IsSuperset(s2), Equals, false)
+	c.Assert(s2.IsSuperset(s1), Equals, true)
 
 	s1.Add(4)
-	h.Assert(!s1.IsSubset(s2), "")
-	h.Assert(!s2.IsSubset(s1), "")
-	h.Assert(!s1.IsSuperset(s2), "")
-	h.Assert(!s2.IsSuperset(s1), "")
+	c.Assert(s1.IsSubset(s2), Equals, false)
+	c.Assert(s2.IsSubset(s1), Equals, false)
+	c.Assert(s1.IsSuperset(s2), Equals, false)
+	c.Assert(s2.IsSuperset(s1), Equals, false)
 }
 
-func TestIter(t *testing.T) {
-	h := testing2.H{t}
+func (suite *SetSuite) TestIter(c *C) {
 	elements := map[int]bool{1: true, 2: true, 3: true}
 	s := NewSet()
 
@@ -136,5 +134,5 @@ func TestIter(t *testing.T) {
 		delete(elements, key.(int))
 	}
 
-	h.AssertEquals(len(elements), 0, "")
+	c.Assert(len(elements), Equals, 0)
 }
