@@ -87,7 +87,7 @@ func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 }
 
 func (s *SimplePoolSuite) TestSSL(c *C) {
-	server, addr := s.setupTestServer(true)
+	server, addr := setupTestServer(true)
 	defer server.Close()
 
 	params := ConnectionParams{
