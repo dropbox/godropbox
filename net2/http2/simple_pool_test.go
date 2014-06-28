@@ -22,8 +22,6 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 		MaxIdle: 1,
 	}
 	var pool Pool = NewSimplePool(addr, params)
-	req, err := http.NewRequest("GET", "/", nil)
-	c.Assert(err, IsNil)
 
 	// do 10 requests concurrently
 	origMaxProcs := runtime.GOMAXPROCS(runtime.NumCPU())
@@ -33,7 +31,10 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 	finished := make(chan bool)
 	for i := 0; i < count; i++ {
 		go func() {
-			_, err := pool.Do(req)
+			req, err := http.NewRequest("GET", "/", nil)
+			c.Assert(err, IsNil)
+
+			_, err = pool.Do(req)
 			c.Assert(err, IsNil)
 			finished <- true
 		}()
@@ -68,7 +69,11 @@ func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
 
 func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 	server, addr := setupTestServer(false)
-	defer server.Close()
+	defer func() {
+		server.closeChan <- true
+		time.Sleep(10 * time.Millisecond)
+		server.Close()
+	}()
 
 	params := ConnectionParams{
 		MaxIdle:         1,
@@ -82,7 +87,7 @@ func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 }
 
 func (s *SimplePoolSuite) TestSSL(c *C) {
-	server, addr := setupTestServer(true)
+	server, addr := s.setupTestServer(true)
 	defer server.Close()
 
 	params := ConnectionParams{
