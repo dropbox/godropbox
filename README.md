@@ -10,6 +10,7 @@ Common libraries for writing go services/applications.
 See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 
 #### Dropbox Internal Contributors
+- Adam Faulkner
 - Christian Ohler
 - Cuong Do
 - Harish Mallipeddi
