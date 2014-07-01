@@ -5,6 +5,10 @@ Common libraries for writing go services/applications.
 ### Installation
 ``go get github.com/dropbox/godropbox``
 
+### Documentation
+
+See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
+
 #### Dropbox Internal Contributors
 - Christian Ohler
 - Cuong Do
