@@ -33,7 +33,7 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 	finished := make(chan bool)
 	for i := 0; i < count; i++ {
 		go func() {
-			_, err = pool.Do(req)
+			_, err := pool.Do(req)
 			c.Assert(err, IsNil)
 			finished <- true
 		}()
