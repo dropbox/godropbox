@@ -9,16 +9,35 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func setupTestServer(ssl bool) (server *httptest.Server, addr string) {
-	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/slow_request", func(writer http.ResponseWriter, req *http.Request) {
-		time.Sleep(500 * time.Millisecond)
-	})
-	serveMux.HandleFunc("/", func(writer http.ResponseWriter, req *http.Request) {
-		writer.Write([]byte("ok"))
-	})
+type testServer struct {
+	*httptest.Server
 
-	server = httptest.NewUnstartedServer(serveMux)
+	closeChan chan bool
+}
+
+func setupTestServer(ssl bool) (*testServer, string) {
+	closeChan := make(chan bool, 1)
+
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc(
+		"/slow_request",
+		func(writer http.ResponseWriter, req *http.Request) {
+
+			select {
+			case <-closeChan:
+				return
+			case <-time.After(500 * time.Millisecond):
+				return
+			}
+		})
+	serveMux.HandleFunc(
+		"/",
+		func(writer http.ResponseWriter, req *http.Request) {
+
+			writer.Write([]byte("ok"))
+		})
+
+	server := httptest.NewUnstartedServer(serveMux)
 	server.Config.ReadTimeout = 5 * time.Second
 	server.Config.WriteTimeout = 5 * time.Second
 	if ssl {
@@ -27,8 +46,8 @@ func setupTestServer(ssl bool) (server *httptest.Server, addr string) {
 		server.Start()
 	}
 
-	addr = server.Listener.Addr().String()
-	return
+	addr := server.Listener.Addr().String()
+	return &testServer{server, closeChan}, addr
 }
 
 func randomListenPort(c *C) int {
