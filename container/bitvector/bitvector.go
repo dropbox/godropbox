@@ -1,3 +1,5 @@
+// A variable sized compact vector of bits which supports lookups, sets,
+// appends, insertions, and deletions.
 package bitvector
 
 // A BitVector is a variable sized vector of bits. It supports
