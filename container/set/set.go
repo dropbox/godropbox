@@ -22,7 +22,7 @@ type Set interface {
 
 func NewSet(items ...interface{}) Set {
 	res := setImpl{
-		data: make(map[interface{}]bool),
+		data: make(map[interface{}]struct{}),
 	}
 	for _, item := range items {
 		res.Add(item)
@@ -31,7 +31,7 @@ func NewSet(items ...interface{}) Set {
 }
 
 type setImpl struct {
-	data map[interface{}]bool
+	data map[interface{}]struct{}
 }
 
 func (s setImpl) Len() int {
@@ -45,7 +45,7 @@ func (s setImpl) Copy() Set {
 }
 
 func (s setImpl) Init() {
-	s.data = make(map[interface{}]bool)
+	s.data = make(map[interface{}]struct{})
 }
 
 func (s setImpl) Contains(v interface{}) bool {
@@ -54,7 +54,7 @@ func (s setImpl) Contains(v interface{}) bool {
 }
 
 func (s setImpl) Add(v interface{}) {
-	s.data[v] = true
+	s.data[v] = struct{}{}
 }
 
 func (s setImpl) Remove(v interface{}) bool {
