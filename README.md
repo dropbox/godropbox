@@ -11,6 +11,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 
 #### Contributors
 - Adam Faulkner
+- Antoine Grondin
 - Christian Ohler
 - Cuong Do
 - Harish Mallipeddi
