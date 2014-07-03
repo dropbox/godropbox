@@ -48,7 +48,7 @@ type header struct {
 
 // An unsharded memcache client implementation which operates on a pre-existing
 // io channel (The user must explicitly setup and close down the channel).
-// Note that the client assumes nothing else is sending or receiveing on the
+// Note that the client assumes nothing else is sending or receiving on the
 // network channel.  In general, all client operations are serialized (Use
 // multiple channels / clients if parallelism is needed).
 type RawClient struct {

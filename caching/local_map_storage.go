@@ -57,7 +57,7 @@ func newLocalMapStorage(
 	return storage, NewGenericStorage(name, options)
 }
 
-// This returns a local non-presistent storage which uses map[string]interface{}
+// This returns a local non-persistent storage which uses map[string]interface{}
 // as its underlying storage.
 func NewLocalMapStorage(
 	name string,

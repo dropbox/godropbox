@@ -8,7 +8,7 @@ import (
 	"github.com/dropbox/godropbox/errors"
 )
 
-// Dial's arguements.
+// Dial's arguments.
 type NetworkAddress struct {
 	Network string
 	Address string

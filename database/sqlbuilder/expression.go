@@ -85,7 +85,7 @@ func serializeClauses(
 	return nil
 }
 
-// Representation of n-ary conjunections (AND/OR)
+// Representation of n-ary conjunctions (AND/OR)
 type conjunctExpression struct {
 	isExpression
 	isBoolExpression
@@ -505,7 +505,7 @@ func (c *inExpression) SerializeSql(out *bytes.Buffer) error {
 func In(lhs Expression, valList interface{}) BoolExpression {
 	var clauses []Clause = nil
 	switch val := valList.(type) {
-	// This attrocious body of copy-paste code is due to the fact that if you
+	// This atrocious body of copy-paste code is due to the fact that if you
 	// try to merge the cases, you can't treat val as a list
 	case []int:
 		clauses = make([]Clause, 0, len(val))
@@ -610,7 +610,7 @@ func (exp *ifExpression) SerializeSql(out *bytes.Buffer) error {
 	return nil
 }
 
-// Returnes a representation of an if-expression, of the form:
+// Returns a representation of an if-expression, of the form:
 //   IF (BOOLEAN TEST, VALUE-IF-TRUE, VALUE-IF-FALSE)
 func If(conditional BoolExpression,
 	trueExpression Expression,

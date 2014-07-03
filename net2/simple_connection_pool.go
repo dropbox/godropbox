@@ -14,7 +14,7 @@ type idleConn struct {
 	keepUntil *time.Time
 }
 
-// A connection pool implemenation where all connections are connected to the
+// A connection pool implementation where all connections are connected to the
 // same (network, address).
 type SimpleConnectionPool struct {
 	network string
