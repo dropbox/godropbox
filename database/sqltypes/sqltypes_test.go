@@ -10,6 +10,8 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -22,7 +24,7 @@ var _ = Suite(&SqlTypesSuite{})
 
 func (s *SqlTypesSuite) TestNull(c *C) {
 	n := Value{}
-	c.Assert(n.IsNull(), Equals, true)
+	c.Assert(n.IsNull(), IsTrue)
 	c.Assert(n.String(), Equals, "")
 
 	b := bytes.NewBuffer(nil)
@@ -161,7 +163,7 @@ func TestString(t *testing.T) {
 func (s *SqlTypesSuite) TestBuildValue(c *C) {
 	v, err := BuildValue(nil)
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNull(), Equals, true)
+	c.Assert(v.IsNull(), IsTrue)
 
 	var n64 uint64
 	err = ConvertAssign(v, &n64)
@@ -169,17 +171,17 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 
 	v, err = BuildValue(int(-1))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "-1")
 
 	v, err = BuildValue(int32(-1))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "-1")
 
 	v, err = BuildValue(int64(-1))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "-1")
 
 	err = ConvertAssign(v, &n64)
@@ -187,12 +189,12 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 
 	v, err = BuildValue(uint(1))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "1")
 
 	v, err = BuildValue(uint32(1))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "1")
 
 	v, err = BuildValue(uint64(1))
@@ -201,12 +203,12 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 	err = ConvertAssign(v, &n64)
 	c.Assert(err, IsNil)
 	c.Assert(n64, Equals, int64(1))
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "1")
 
 	v, err = BuildValue(1.23)
 	c.Assert(err, IsNil)
-	c.Assert(v.IsFractional(), Equals, true)
+	c.Assert(v.IsFractional(), IsTrue)
 	c.Assert(v.String(), Equals, "1.23")
 
 	err = ConvertAssign(v, &n64)
@@ -214,12 +216,12 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 
 	v, err = BuildValue("abcd")
 	c.Assert(err, IsNil)
-	c.Assert(v.IsString(), Equals, true)
+	c.Assert(v.IsString(), IsTrue)
 	c.Assert(v.String(), Equals, "abcd")
 
 	v, err = BuildValue([]byte("abcd"))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsString(), Equals, true)
+	c.Assert(v.IsString(), IsTrue)
 	c.Assert(v.String(), Equals, "abcd")
 
 	err = ConvertAssign(v, &n64)
@@ -227,22 +229,22 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 
 	v, err = BuildValue(time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsString(), Equals, true)
+	c.Assert(v.IsString(), IsTrue)
 	c.Assert(v.String(), Equals, "'2012-02-24 23:19:43'")
 
 	v, err = BuildValue(Numeric([]byte("123")))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsNumeric(), Equals, true)
+	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "123")
 
 	v, err = BuildValue(Fractional([]byte("12.3")))
 	c.Assert(err, IsNil)
-	c.Assert(v.IsFractional(), Equals, true)
+	c.Assert(v.IsFractional(), IsTrue)
 	c.Assert(v.String(), Equals, "12.3")
 
 	v, err = BuildValue(String{data: []byte("abc")})
 	c.Assert(err, IsNil)
-	c.Assert(v.IsString(), Equals, true)
+	c.Assert(v.IsString(), IsTrue)
 	c.Assert(v.String(), Equals, "abc")
 
 	v, err = BuildValue(float32(1.23))
@@ -251,7 +253,7 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 	v1 := MakeString([]byte("ab"))
 	v, err = BuildValue(v1)
 	c.Assert(err, IsNil)
-	c.Assert(v.IsString(), Equals, true)
+	c.Assert(v.IsString(), IsTrue)
 	c.Assert(v.String(), Equals, "ab")
 
 	v, err = BuildValue(float32(1.23))

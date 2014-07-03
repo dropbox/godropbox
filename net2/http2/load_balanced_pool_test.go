@@ -9,6 +9,8 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -92,7 +94,7 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 			c.FailNow()
 		}
 	}
-	c.Assert(len(receivedPorts) < len(ports), Equals, false)
+	c.Assert(len(receivedPorts) < len(ports), IsFalse)
 }
 
 func (s *LoadBalancedPoolSuite) TestRetries(c *C) {

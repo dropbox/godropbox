@@ -6,6 +6,8 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 type SimplePoolSuite struct {
@@ -64,7 +66,7 @@ func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
 
 	_, err = pool.Do(req)
 	_, ok := err.(DialError)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 }
 
 func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
@@ -116,5 +118,5 @@ func (s *SimplePoolSuite) TestConnectionRefused(c *C) {
 	_, err = pool.Do(req)
 	c.Assert(err, NotNil)
 	_, ok := err.(DialError)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 }
