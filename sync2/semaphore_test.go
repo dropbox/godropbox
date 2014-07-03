@@ -5,6 +5,8 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -136,8 +138,8 @@ func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
 func (suite *SemaphoreSuite) TestWaitWithTimeout(t *C) {
 	s := NewSemaphore(0)
 	res := s.WaitTimeout(1, time.Millisecond)
-	t.Assert(res, Equals, false)
+	t.Assert(res, IsFalse)
 	s.Increment(1)
 	res = s.WaitTimeout(1, time.Millisecond)
-	t.Assert(res, Equals, true)
+	t.Assert(res, IsTrue)
 }

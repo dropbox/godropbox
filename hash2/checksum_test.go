@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -22,12 +24,12 @@ func (s *ChecksumSuite) TestHash(c *C) {
 	ourMd5 := ComputeMd5Checksum(input)
 	c.Assert(ourMd5, DeepEquals, md5Reference)
 
-	c.Assert(ValidateMd5Checksum(input, md5Reference), Equals, true)
-	c.Assert(ValidateMd5Checksum(input, ourMd5), Equals, true)
+	c.Assert(ValidateMd5Checksum(input, md5Reference), IsTrue)
+	c.Assert(ValidateMd5Checksum(input, ourMd5), IsTrue)
 
 	// Fails...
-	c.Assert(ValidateMd5Checksum(ourMd5, input), Equals, false)
+	c.Assert(ValidateMd5Checksum(ourMd5, input), IsFalse)
 
 	// No panic on empty
-	c.Assert(ValidateMd5Checksum([]byte(""), []byte("")), Equals, false)
+	c.Assert(ValidateMd5Checksum([]byte(""), []byte("")), IsFalse)
 }

@@ -7,6 +7,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	. "github.com/dropbox/godropbox/gocheck2"
 	"github.com/dropbox/godropbox/time2"
 )
 
@@ -109,16 +110,16 @@ func (s *SimpleConnectionPoolSuite) TestRecycleConnections(c *C) {
 
 	n1, err := pool.Get("foo", "bar")
 	c.Assert(err, IsNil)
-	c.Assert(SameConnection(n1, c4), Equals, true)
+	c.Assert(SameConnection(n1, c4), IsTrue)
 
 	n2, err := pool.Get("foo", "bar")
 	c.Assert(err, IsNil)
-	c.Assert(SameConnection(n2, c2), Equals, true)
+	c.Assert(SameConnection(n2, c2), IsTrue)
 
 	n3, err := pool.Get("foo", "bar")
 	c.Assert(err, IsNil)
-	c.Assert(SameConnection(n3, c1), Equals, false)
-	c.Assert(SameConnection(n3, c3), Equals, true)
+	c.Assert(SameConnection(n3, c1), IsFalse)
+	c.Assert(SameConnection(n3, c3), IsTrue)
 
 	n4, err := pool.Get("foo", "bar")
 	c.Assert(dialer.MaxId(), Equals, 5)
