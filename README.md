@@ -17,6 +17,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Harish Mallipeddi
 - Jack Ferris
 - Jamie Turner
+- Pascal Borreli
 - Patrick Lee
 - Samir Goel
 - Sujay Jayakar
