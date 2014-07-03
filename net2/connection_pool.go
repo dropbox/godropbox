@@ -54,7 +54,7 @@ type ConnectionPool interface {
 	//  4. pool.Discard(conn)
 	Get(network string, address string) (ManagedConn, error)
 
-	// This releases an active connetion back to the connection pool.
+	// This releases an active connection back to the connection pool.
 	Release(conn ManagedConn) error
 
 	// This discards an active connection from the connection pool.

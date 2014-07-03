@@ -30,7 +30,7 @@ type GenericStorageOptions struct {
 	// on Flush calls.
 	ErrorOnFlush bool
 
-	// GenricStorage will call FlushFunc in its Flush implementation.  When
+	// GenericStorage will call FlushFunc in its Flush implementation.  When
 	// FlushFunc is unavailable (and ErrorOnFlush is false), GenericStorage
 	// will do nothing and return nil.
 	FlushFunc func() error

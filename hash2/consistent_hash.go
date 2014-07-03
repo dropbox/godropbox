@@ -52,7 +52,7 @@ func simpleMurmur32(val uint32) uint32 {
 //  5. Finally, use the first shard id as K's shard mapping.
 //
 // NOTE: Because each key generates a different permutation, the data
-// distibution is generally more uniform than the standard algorithm (The
+// distribution is generally more uniform than the standard algorithm (The
 // standard algorithm works around this issue by adding more points to the
 // ring, which unfortunately uses even more memory).
 //
@@ -85,7 +85,7 @@ func ConsistentHash(key uint64, numShards uint16) uint16 {
 	numBlocks := numShards >> 1
 	for i := uint16(0); i < numBlocks; i++ {
 		// Each hash can generate 2 permutation positions.  Implementation
-		// note: we can replace murmur hash with any other pesudorandom
+		// note: we can replace murmur hash with any other pseudorandom
 		// generator, as long as it's sufficiently "random".
 		hash = simpleMurmur32(hash)
 

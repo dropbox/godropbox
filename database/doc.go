@@ -1,2 +1,2 @@
-// Utility libaries for database operations.
+// Utility libraries for database operations.
 package database
