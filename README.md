@@ -1,4 +1,4 @@
-# godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.png)](https://godoc.org/github.com/dropbox/godropbox)
+# godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.svg)](https://godoc.org/github.com/dropbox/godropbox)
 
 Common libraries for writing go services/applications.
 
