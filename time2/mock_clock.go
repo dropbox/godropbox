@@ -23,3 +23,8 @@ func (c *MockClock) Advance(delta time.Duration) {
 func (c *MockClock) Now() time.Time {
 	return c.currentTime
 }
+
+// Returns the time elapsed since the fake current time.
+func (c *MockClock) Since(t time.Time) time.Duration {
+	return c.currentTime.Sub(t)
+}
