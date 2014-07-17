@@ -23,6 +23,8 @@ type LoadBalancedPoolSuite struct {
 var _ = Suite(&LoadBalancedPoolSuite{})
 
 func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
+	util := &TestUtil{}
+
 	// start an http server that responds with the port # it's listening on
 	startHttpServer := func(port int) {
 		serveMux := http.NewServeMux()
@@ -37,17 +39,17 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 	}
 
 	ports := []int{
-		randomListenPort(c),
-		randomListenPort(c),
-		randomListenPort(c),
-		randomListenPort(c),
-		randomListenPort(c)}
+		util.RandomListenPort(c),
+		util.RandomListenPort(c),
+		util.RandomListenPort(c),
+		util.RandomListenPort(c),
+		util.RandomListenPort(c)}
 
 	for _, port := range ports {
 		go startHttpServer(port)
 	}
 	for _, port := range ports {
-		ensureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
+		util.EnsureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
 	}
 
 	// create pool

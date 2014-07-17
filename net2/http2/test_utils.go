@@ -50,7 +50,12 @@ func setupTestServer(ssl bool) (*testServer, string) {
 	return &testServer{server, closeChan}, addr
 }
 
-func randomListenPort(c *C) int {
+// A set of utility functions for unittesting.
+type TestUtil struct {
+}
+
+// This returns a random port for unit testing.  DO NOT USE IN PRODUCTION.
+func (*TestUtil) RandomListenPort(c *C) int {
 	sock, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 	port := sock.Addr().(*net.TCPAddr).Port
@@ -58,7 +63,9 @@ func randomListenPort(c *C) int {
 	return port
 }
 
-func ensureListen(c *C, hostport string) {
+// This checks to ensure a server is running on the specified host port.
+// DO NOT USE IN PRODUCTION.
+func (*TestUtil) EnsureListen(c *C, hostport string) {
 	for i := 0; i < 10; i++ {
 		conn, err := net.Dial("tcp", hostport)
 		if err == nil {
