@@ -19,6 +19,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Jamie Turner
 - Pascal Borreli
 - Patrick Lee
+- Rajat Goel
 - Samir Goel
 - Sujay Jayakar
 - Todd Eisenberger

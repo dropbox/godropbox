@@ -55,7 +55,7 @@ var IsFalse Checker = &isBoolValueChecker{
 }
 
 // -----------------------------------------------------------------------
-// BytesEqual checker.
+// BytesEquals checker.
 
 type bytesEquals struct{}
 
@@ -83,10 +83,15 @@ func (b *bytesEquals) Info() *CheckerInfo {
 	}
 }
 
-// ByteEquals checker compares two bytes sequence using bytes.Equal.
+// BytesEquals checker compares two bytes sequence using bytes.Equal.
 //
 // For example:
 //
 //     c.Assert(b, BytesEquals, []byte("bar"))
 //
+// Main difference between DeepEquals and BytesEquals is that BytesEquals treats
+// `nil` as empty byte sequence while DeepEquals doesn't.
+//
+//     c.Assert(nil, BytesEquals, []byte("")) // succeeds
+//     c.Assert(nil, DeepEquals, []byte("")) // fails
 var BytesEquals = &bytesEquals{}
