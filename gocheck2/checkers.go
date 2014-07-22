@@ -55,7 +55,7 @@ var IsFalse Checker = &isBoolValueChecker{
 }
 
 // -----------------------------------------------------------------------
-// BytesEqual checker compares two bytes sequence using bytes.Equal
+// BytesEqual checker.
 
 type bytesEquals struct{}
 
@@ -83,4 +83,10 @@ func (b *bytesEquals) Info() *CheckerInfo {
 	}
 }
 
+// ByteEquals checker compares two bytes sequence using bytes.Equal.
+//
+// For example:
+//
+//     c.Assert(b, BytesEquals, []byte("bar"))
+//
 var BytesEquals = &bytesEquals{}
