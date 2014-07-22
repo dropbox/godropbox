@@ -1,4 +1,5 @@
-package http2
+// Utility functions for testing net2/http2
+package test_utils
 
 import (
 	"net"
@@ -9,13 +10,14 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type testServer struct {
+type TestServer struct {
 	*httptest.Server
 
-	closeChan chan bool
+	CloseChan chan bool
 }
 
-func setupTestServer(ssl bool) (*testServer, string) {
+// Create a dummy server for unittesting.  DO NOT USE IN PRODUCTION.
+func SetupTestServer(ssl bool) (*TestServer, string) {
 	closeChan := make(chan bool, 1)
 
 	serveMux := http.NewServeMux()
@@ -47,15 +49,11 @@ func setupTestServer(ssl bool) (*testServer, string) {
 	}
 
 	addr := server.Listener.Addr().String()
-	return &testServer{server, closeChan}, addr
-}
-
-// A set of utility functions for unittesting.
-type TestUtil struct {
+	return &TestServer{server, closeChan}, addr
 }
 
 // This returns a random port for unit testing.  DO NOT USE IN PRODUCTION.
-func (*TestUtil) RandomListenPort(c *C) int {
+func RandomListenPort(c *C) int {
 	sock, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 	port := sock.Addr().(*net.TCPAddr).Port
@@ -65,7 +63,7 @@ func (*TestUtil) RandomListenPort(c *C) int {
 
 // This checks to ensure a server is running on the specified host port.
 // DO NOT USE IN PRODUCTION.
-func (*TestUtil) EnsureListen(c *C, hostport string) {
+func EnsureListen(c *C, hostport string) {
 	for i := 0; i < 10; i++ {
 		conn, err := net.Dial("tcp", hostport)
 		if err == nil {
