@@ -11,6 +11,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/dropbox/godropbox/gocheck2"
+	"github.com/dropbox/godropbox/net2/http2/test_utils"
 )
 
 func Test(t *testing.T) {
@@ -23,8 +24,6 @@ type LoadBalancedPoolSuite struct {
 var _ = Suite(&LoadBalancedPoolSuite{})
 
 func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
-	util := &TestUtil{}
-
 	// start an http server that responds with the port # it's listening on
 	startHttpServer := func(port int) {
 		serveMux := http.NewServeMux()
@@ -39,17 +38,17 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 	}
 
 	ports := []int{
-		util.RandomListenPort(c),
-		util.RandomListenPort(c),
-		util.RandomListenPort(c),
-		util.RandomListenPort(c),
-		util.RandomListenPort(c)}
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c)}
 
 	for _, port := range ports {
 		go startHttpServer(port)
 	}
 	for _, port := range ports {
-		util.EnsureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
+		test_utils.EnsureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
 	}
 
 	// create pool
@@ -100,7 +99,7 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 }
 
 func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
-	server, addr := setupTestServer(false)
+	server, addr := test_utils.SetupTestServer(false)
 	defer server.Close()
 
 	params := ConnectionParams{

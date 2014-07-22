@@ -8,6 +8,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/dropbox/godropbox/gocheck2"
+	"github.com/dropbox/godropbox/net2/http2/test_utils"
 )
 
 type SimplePoolSuite struct {
@@ -16,7 +17,7 @@ type SimplePoolSuite struct {
 var _ = Suite(&SimplePoolSuite{})
 
 func (s *SimplePoolSuite) TestHTTP(c *C) {
-	server, addr := setupTestServer(false)
+	server, addr := test_utils.SetupTestServer(false)
 	defer server.Close()
 
 	// do single request
@@ -70,9 +71,9 @@ func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
 }
 
 func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
-	server, addr := setupTestServer(false)
+	server, addr := test_utils.SetupTestServer(false)
 	defer func() {
-		server.closeChan <- true
+		server.CloseChan <- true
 		time.Sleep(10 * time.Millisecond)
 		server.Close()
 	}()
@@ -89,7 +90,7 @@ func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 }
 
 func (s *SimplePoolSuite) TestSSL(c *C) {
-	server, addr := setupTestServer(true)
+	server, addr := test_utils.SetupTestServer(true)
 	defer server.Close()
 
 	params := ConnectionParams{
