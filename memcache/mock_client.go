@@ -41,12 +41,13 @@ func (c *MockClient) GetMulti(keys []string) map[string]GetResponse {
 func (c *MockClient) Set(item *Item) MutateResponse {
 	c.version++
 
-	newItem := &Item{}
-	newItem.Key = item.Key
-	newItem.Value = item.Value
-	newItem.Flags = item.Flags
-	newItem.Expiration = item.Expiration
-	newItem.DataVersionId = c.version
+	newItem := &Item{
+		Key:           item.Key,
+		Value:         item.Value,
+		Flags:         item.Flags,
+		Expiration:    item.Expiration,
+		DataVersionId: c.version,
+	}
 
 	existing, ok := c.data[newItem.Key]
 
@@ -91,7 +92,38 @@ func (c *MockClient) SetSentinels(items []*Item) []MutateResponse {
 // This adds a single entry into memcache.  Note: Add will fail if the
 // item already exist in memcache.
 func (c *MockClient) Add(item *Item) MutateResponse {
-	return NewMutateErrorResponse(item.Key, errors.Newf("Add not implemented"))
+	c.version++
+
+	newItem := &Item{
+		Key:           item.Key,
+		Value:         item.Value,
+		Flags:         item.Flags,
+		Expiration:    item.Expiration,
+		DataVersionId: c.version,
+	}
+
+	if _, ok := c.data[newItem.Key]; !ok {
+		c.data[newItem.Key] = newItem
+		return NewMutateResponse(
+			newItem.Key,
+			StatusNoError,
+			newItem.DataVersionId)
+	} else {
+		return NewMutateResponse(
+			newItem.Key,
+			StatusKeyExists,
+			0)
+	}
+}
+
+// Batch version of the Add method.  Note that the response entries
+// ordering is undefined (i.e., may not match the input ordering).
+func (c *MockClient) AddMulti(items []*Item) []MutateResponse {
+	res := make([]MutateResponse, len(items))
+	for i, item := range items {
+		res[i] = c.Add(item)
+	}
+	return res
 }
 
 // This replaces a single entry in memcache.  Note: Replace will fail if

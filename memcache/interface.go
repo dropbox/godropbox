@@ -145,6 +145,10 @@ type Client interface {
 	// item already exist in memcache.
 	Add(item *Item) MutateResponse
 
+	// Batch version of the Add method.  Note that the response entries
+	// ordering is undefined (i.e., may not match the input ordering).
+	AddMulti(item []*Item) []MutateResponse
+
 	// This replaces a single entry in memcache.  Note: Replace will fail if
 	// the does not exist in memcache.
 	Replace(item *Item) MutateResponse

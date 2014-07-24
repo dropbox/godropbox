@@ -118,8 +118,9 @@ func (c *ShardedClient) GetMulti(keys []string) map[string]GetResponse {
 	return results
 }
 
-// See Client interface for documentation.
-func (c *ShardedClient) Set(item *Item) MutateResponse {
+func (c *ShardedClient) mutate(
+	mutateFunc func(Client, *Item) MutateResponse,
+	item *Item) MutateResponse {
 	shard, conn, err := c.manager.GetShard(item.Key)
 	if shard == -1 {
 		return NewMutateErrorResponse(item.Key, c.unmappedError(item.Key))
@@ -135,10 +136,21 @@ func (c *ShardedClient) Set(item *Item) MutateResponse {
 	client := NewRawClient(shard, conn)
 	defer c.release(client, conn)
 
-	return client.Set(item)
+	return mutateFunc(client, item)
 }
 
-func (c *ShardedClient) setMultiHelper(
+// A helper used to specify a set mutation operation on a shard client.
+func setMutator(shardClient Client, shardItem *Item) MutateResponse {
+	return shardClient.Set(shardItem)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) Set(item *Item) MutateResponse {
+	return c.mutate(setMutator, item)
+}
+
+func (c *ShardedClient) mutateMultiHelper(
+	mutateMultiFunc func(Client, []*Item) []MutateResponse,
 	shard int,
 	conn net2.ManagedConn,
 	connErr error,
@@ -174,18 +186,21 @@ func (c *ShardedClient) setMultiHelper(
 		client := NewRawClient(shard, conn)
 		defer c.release(client, conn)
 
-		results = client.SetMulti(items)
+		results = mutateMultiFunc(client, items)
 	}
 	resultsChannel <- results
 }
 
 // See Client interface for documentation.
-func (c *ShardedClient) SetMulti(items []*Item) []MutateResponse {
+func (c *ShardedClient) mutateMulti(
+	mutateMultiFunc func(Client, []*Item) []MutateResponse,
+	items []*Item) []MutateResponse {
 	shardMapping := c.manager.GetShardsForItems(items)
 
 	resultsChannel := make(chan []MutateResponse)
 	for shard, mapping := range shardMapping {
-		go c.setMultiHelper(
+		go c.mutateMultiHelper(
+			mutateMultiFunc,
 			shard,
 			mapping.Connection,
 			mapping.ConnErr,
@@ -198,6 +213,16 @@ func (c *ShardedClient) SetMulti(items []*Item) []MutateResponse {
 		results = append(results, (<-resultsChannel)...)
 	}
 	return results
+}
+
+// A helper used to specify a SetMulti mutation operation on a shard client.
+func setMultiMutator(shardClient Client, shardItems []*Item) []MutateResponse {
+	return shardClient.SetMulti(shardItems)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) SetMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(setMultiMutator, items)
 }
 
 // See Client interface for documentation.
@@ -206,7 +231,8 @@ func (c *ShardedClient) SetSentinels(items []*Item) []MutateResponse {
 
 	resultsChannel := make(chan []MutateResponse)
 	for shard, mapping := range shardMapping {
-		go c.setMultiHelper(
+		go c.mutateMultiHelper(
+			setMultiMutator,
 			shard,
 			mapping.Connection,
 			mapping.ConnErr,
@@ -221,26 +247,24 @@ func (c *ShardedClient) SetSentinels(items []*Item) []MutateResponse {
 	return results
 }
 
+// A helper used to specify an Add mutation operation on a shard client.
+func addMutator(shardClient Client, shardItem *Item) MutateResponse {
+	return shardClient.Add(shardItem)
+}
+
 // See Client interface for documentation.
 func (c *ShardedClient) Add(item *Item) MutateResponse {
-	shard, conn, err := c.manager.GetShard(item.Key)
-	if shard == -1 {
-		return NewMutateErrorResponse(item.Key, c.unmappedError(item.Key))
-	}
-	if err != nil {
-		return NewMutateErrorResponse(
-			item.Key,
-			c.connectionError(shard, err))
-	}
-	if conn == nil {
-		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(item.Key, StatusNoError, 0)
-	}
+	return c.mutate(addMutator, item)
+}
 
-	client := NewRawClient(shard, conn)
-	defer c.release(client, conn)
+// A helper used to specify a AddMulti mutation operation on a shard client.
+func addMultiMutator(shardClient Client, shardItems []*Item) []MutateResponse {
+	return shardClient.AddMulti(shardItems)
+}
 
-	return client.Add(item)
+// See Client interface for documentation.
+func (c *ShardedClient) AddMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(addMultiMutator, items)
 }
 
 // See Client interface for documentation.

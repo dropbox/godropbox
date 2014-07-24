@@ -363,8 +363,8 @@ func (c *RawClient) receiveMutateResponse(
 	return NewMutateResponse(key, status, version)
 }
 
-// See Client interface for documentation.
-func (c *RawClient) Set(item *Item) MutateResponse {
+// Perform a mutation operation specified by the given code.
+func (c *RawClient) mutate(code opCode, item *Item) MutateResponse {
 	if item == nil {
 		return NewMutateErrorResponse("", errors.New("item is nil"))
 	}
@@ -372,36 +372,52 @@ func (c *RawClient) Set(item *Item) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if resp := c.sendMutateRequest(opSet, item, true); resp != nil {
+	if resp := c.sendMutateRequest(code, item, true); resp != nil {
 		return resp
 	}
 
-	return c.receiveMutateResponse(opSet, item.Key)
+	return c.receiveMutateResponse(code, item.Key)
 }
 
-// See Client interface for documentation.
-func (c *RawClient) SetMulti(items []*Item) []MutateResponse {
+// Batch version of the mutate method.  Note that the response entries
+// ordering is undefined (i.e., may not match the input ordering)
+func (c *RawClient) mutateMulti(code opCode, items []*Item) []MutateResponse {
 	if items == nil {
 		return nil
 	}
 
 	responses := make([]MutateResponse, len(items), len(items))
 
+	// Short-circuit function to avoid locking.
+	if len(items) == 0 {
+		return responses
+	}
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	for i, item := range items {
-		responses[i] = c.sendMutateRequest(opSet, item, true)
+		responses[i] = c.sendMutateRequest(code, item, true)
 	}
 
 	for i, item := range items {
 		if responses[i] != nil { // error occurred while sending
 			continue
 		}
-		responses[i] = c.receiveMutateResponse(opSet, item.Key)
+		responses[i] = c.receiveMutateResponse(code, item.Key)
 	}
 
 	return responses
+}
+
+// See Client interface for documentation.
+func (c *RawClient) Set(item *Item) MutateResponse {
+	return c.mutate(opSet, item)
+}
+
+// See Client interface for documentation.
+func (c *RawClient) SetMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(opSet, items)
 }
 
 // See Client interface for documentation.
@@ -413,18 +429,12 @@ func (c *RawClient) SetSentinels(items []*Item) []MutateResponse {
 
 // See Client interface for documentation.
 func (c *RawClient) Add(item *Item) MutateResponse {
-	if item == nil {
-		return NewMutateErrorResponse("", errors.New("item is nil"))
-	}
+	return c.mutate(opAdd, item)
+}
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if resp := c.sendMutateRequest(opAdd, item, true); resp != nil {
-		return resp
-	}
-
-	return c.receiveMutateResponse(opAdd, item.Key)
+// See Client interface for documentation.
+func (c *RawClient) AddMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(opAdd, items)
 }
 
 // See Client interface for documentation.
