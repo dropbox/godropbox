@@ -438,16 +438,16 @@ func (s *StmtSuite) TestDeleteWithLimit(c *gc.C) {
 //
 
 func (s *StmtSuite) TestLockStatement(c *gc.C) {
-    stmt := NewLockStatement().AddReadLock(table1).AddWriteLock(table2)
-    sql, err := stmt.String("db")
-    c.Assert(err, gc.IsNil)
+	stmt := NewLockStatement().AddReadLock(table1).AddWriteLock(table2)
+	sql, err := stmt.String("db")
+	c.Assert(err, gc.IsNil)
 
-    c.Assert(sql, gc.Equals, "LOCK TABLES `db`.`table1` READ, `db`.`table2` WRITE")
+	c.Assert(sql, gc.Equals, "LOCK TABLES `db`.`table1` READ, `db`.`table2` WRITE")
 }
 
 func (s *StmtSuite) TestUnlockStatement(c *gc.C) {
-    stmt := NewUnlockStatement()
-    sql, err := stmt.String("db")
-    c.Assert(err, gc.IsNil)
-    c.Assert(sql, gc.Equals, "UNLOCK TABLES")
+	stmt := NewUnlockStatement()
+	sql, err := stmt.String("db")
+	c.Assert(err, gc.IsNil)
+	c.Assert(sql, gc.Equals, "UNLOCK TABLES")
 }

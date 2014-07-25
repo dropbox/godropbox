@@ -9,12 +9,12 @@ import (
 )
 
 type Statement interface {
-    // String returns generated SQL as string.
+	// String returns generated SQL as string.
 	String(database string) (sql string, err error)
 }
 
 type SelectStatement interface {
-    Statement
+	Statement
 
 	Where(expression BoolExpression) SelectStatement
 	GroupBy(expressions ...Expression) SelectStatement
@@ -27,7 +27,7 @@ type SelectStatement interface {
 }
 
 type InsertStatement interface {
-    Statement
+	Statement
 
 	// Add a row of values to the insert statement.
 	Add(row ...Expression) InsertStatement
@@ -37,7 +37,7 @@ type InsertStatement interface {
 }
 
 type UpdateStatement interface {
-    Statement
+	Statement
 
 	Set(column NonAliasColumn, expression Expression) UpdateStatement
 	Where(expression BoolExpression) UpdateStatement
@@ -47,7 +47,7 @@ type UpdateStatement interface {
 }
 
 type DeleteStatement interface {
-    Statement
+	Statement
 
 	Where(expression BoolExpression) DeleteStatement
 	OrderBy(clauses ...OrderByClause) DeleteStatement
@@ -58,17 +58,17 @@ type DeleteStatement interface {
 // LockStatement is used to take Read/Write lock on tables.
 // See http://dev.mysql.com/doc/refman/5.0/en/lock-tables.html
 type LockStatement interface {
-    Statement
+	Statement
 
-    AddReadLock(table *Table) LockStatement
-    AddWriteLock(table *Table) LockStatement
+	AddReadLock(table *Table) LockStatement
+	AddWriteLock(table *Table) LockStatement
 }
 
 // UnlockStatement can be used to release table locks taken using LockStatement.
 // NOTE: You can not selectively release a lock and continue to hold lock on another
 // table. UnlockStatement releases all the lock held in the current session.
 type UnlockStatement interface {
-    Statement
+	Statement
 }
 
 //
@@ -682,26 +682,26 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 //
 
 func NewLockStatement() LockStatement {
-    return &lockStatementImpl{}
+	return &lockStatementImpl{}
 }
 
 type lockStatementImpl struct {
-    locks []tableLock
+	locks []tableLock
 }
 
 type tableLock struct {
-    t *Table
-    w bool
+	t *Table
+	w bool
 }
 
 func (s *lockStatementImpl) AddReadLock(t *Table) LockStatement {
-    s.locks = append(s.locks, tableLock{t: t, w: false})
-    return s
+	s.locks = append(s.locks, tableLock{t: t, w: false})
+	return s
 }
 
 func (s *lockStatementImpl) AddWriteLock(t *Table) LockStatement {
-    s.locks = append(s.locks, tableLock{t: t, w: true})
-    return s
+	s.locks = append(s.locks, tableLock{t: t, w: true})
+	return s
 }
 
 func (s *lockStatementImpl) String(database string) (sql string, err error) {
@@ -709,45 +709,45 @@ func (s *lockStatementImpl) String(database string) (sql string, err error) {
 		return "", errors.New("Invalid database name specified")
 	}
 
-    if len(s.locks) == 0 {
-        return "", errors.New("No locks added")
-    }
+	if len(s.locks) == 0 {
+		return "", errors.New("No locks added")
+	}
 
 	buf := new(bytes.Buffer)
 	buf.WriteString("LOCK TABLES ")
 
-    for idx, lock := range s.locks {
-        if lock.t == nil {
-		    return "", errors.Newf("nil table.  Generated sql: %s", buf.String())
-        }
+	for idx, lock := range s.locks {
+		if lock.t == nil {
+			return "", errors.Newf("nil table.  Generated sql: %s", buf.String())
+		}
 
-        if err = lock.t.SerializeSql(database, buf); err != nil {
-		    return
-	    }
+		if err = lock.t.SerializeSql(database, buf); err != nil {
+			return
+		}
 
-        if lock.w {
-            buf.WriteString(" WRITE")
-        } else {
-            buf.WriteString(" READ")
-        }
+		if lock.w {
+			buf.WriteString(" WRITE")
+		} else {
+			buf.WriteString(" READ")
+		}
 
-        if idx != len(s.locks) - 1 {
-            buf.WriteString(", ")
-        }
-    }
+		if idx != len(s.locks)-1 {
+			buf.WriteString(", ")
+		}
+	}
 
 	return buf.String(), nil
 }
 
 func NewUnlockStatement() UnlockStatement {
-    return &unlockStatementImpl{}
+	return &unlockStatementImpl{}
 }
 
 type unlockStatementImpl struct {
 }
 
 func (s *unlockStatementImpl) String(database string) (sql string, err error) {
-    return "UNLOCK TABLES", nil
+	return "UNLOCK TABLES", nil
 }
 
 //
