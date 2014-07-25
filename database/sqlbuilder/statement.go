@@ -55,6 +55,17 @@ type DeleteStatement interface {
 	String(database string) (sql string, err error)
 }
 
+type LockStatement interface {
+    AddReadLock(table *Table) LockStatement
+    AddWriteLock(table *Table) LockStatement
+
+    String(database string) (sql string, err error)
+}
+
+type UnlockStatement interface {
+    String(database string) (sql string, err error)
+}
+
 //
 // UNION SELECT Statement ======================================================
 //
@@ -659,6 +670,79 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	return buf.String(), nil
+}
+
+//
+// LOCK statement ===========================================================
+//
+
+func NewLockStatement() LockStatement {
+    return &lockStatementImpl{}
+}
+
+type lockStatementImpl struct {
+    locks []tableLock
+}
+
+type tableLock struct {
+    t *Table
+    w bool
+}
+
+func (s *lockStatementImpl) AddReadLock(t *Table) LockStatement {
+    s.locks = append(s.locks, tableLock{t: t, w: false})
+    return s
+}
+
+func (s *lockStatementImpl) AddWriteLock(t *Table) LockStatement {
+    s.locks = append(s.locks, tableLock{t: t, w: true})
+    return s
+}
+
+func (s *lockStatementImpl) String(database string) (sql string, err error) {
+	if !validIdentifierName(database) {
+		return "", errors.New("Invalid database name specified")
+	}
+
+    if len(s.locks) == 0 {
+        return "", errors.New("No locks added")
+    }
+
+	buf := new(bytes.Buffer)
+	buf.WriteString("LOCK TABLES ")
+
+    for idx, lock := range s.locks {
+        if lock.t == nil {
+		    return "", errors.Newf("nil table.  Generated sql: %s", buf.String())
+        }
+
+        if err = lock.t.SerializeSql(database, buf); err != nil {
+		    return
+	    }
+
+        if lock.w {
+            buf.WriteString(" WRITE")
+        } else {
+            buf.WriteString(" READ")
+        }
+
+        if idx != len(s.locks) - 1 {
+            buf.WriteString(", ")
+        }
+    }
+
+	return buf.String(), nil
+}
+
+func NewUnlockStatement() UnlockStatement {
+    return &unlockStatementImpl{}
+}
+
+type unlockStatementImpl struct {
+}
+
+func (s *unlockStatementImpl) String(database string) (sql string, err error) {
+    return "UNLOCK TABLES", nil
 }
 
 //
