@@ -9,10 +9,13 @@ import (
 )
 
 type Statement interface {
+    // String returns generated SQL as string.
 	String(database string) (sql string, err error)
 }
 
 type SelectStatement interface {
+    Statement
+
 	Where(expression BoolExpression) SelectStatement
 	GroupBy(expressions ...Expression) SelectStatement
 	OrderBy(clauses ...OrderByClause) SelectStatement
@@ -21,49 +24,51 @@ type SelectStatement interface {
 	ForUpdate() SelectStatement
 	Offset(offset int64) SelectStatement
 	Comment(comment string) SelectStatement
-
-	String(database string) (sql string, err error)
 }
 
 type InsertStatement interface {
+    Statement
+
 	// Add a row of values to the insert statement.
 	Add(row ...Expression) InsertStatement
 	AddOnDuplicateKeyUpdate(col NonAliasColumn, expr Expression) InsertStatement
 	Comment(comment string) InsertStatement
 	IgnoreDuplicates(ignore bool) InsertStatement
-
-	// Generate the insert sql statement string.
-	String(database string) (sql string, err error)
 }
 
 type UpdateStatement interface {
+    Statement
+
 	Set(column NonAliasColumn, expression Expression) UpdateStatement
 	Where(expression BoolExpression) UpdateStatement
 	OrderBy(clauses ...OrderByClause) UpdateStatement
 	Limit(limit int64) UpdateStatement
 	Comment(comment string) UpdateStatement
-
-	String(database string) (sql string, err error)
 }
 
 type DeleteStatement interface {
+    Statement
+
 	Where(expression BoolExpression) DeleteStatement
 	OrderBy(clauses ...OrderByClause) DeleteStatement
 	Limit(limit int64) DeleteStatement
 	Comment(comment string) DeleteStatement
-
-	String(database string) (sql string, err error)
 }
 
+// LockStatement is used to take Read/Write lock on tables.
+// See http://dev.mysql.com/doc/refman/5.0/en/lock-tables.html
 type LockStatement interface {
+    Statement
+
     AddReadLock(table *Table) LockStatement
     AddWriteLock(table *Table) LockStatement
-
-    String(database string) (sql string, err error)
 }
 
+// UnlockStatement can be used to release table locks taken using LockStatement.
+// NOTE: You can not selectively release a lock and continue to hold lock on another
+// table. UnlockStatement releases all the lock held in the current session.
 type UnlockStatement interface {
-    String(database string) (sql string, err error)
+    Statement
 }
 
 //
