@@ -681,6 +681,9 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 // LOCK statement ===========================================================
 //
 
+// NewLockStatement returns a SQL representing empty set of locks. You need to use
+// AddReadLock/AddWriteLock to add tables that need to be locked.
+// NOTE: You need at least one lock in the set for it to be a valid statement.
 func NewLockStatement() LockStatement {
 	return &lockStatementImpl{}
 }
@@ -694,11 +697,13 @@ type tableLock struct {
 	w bool
 }
 
+// AddReadLock takes read lock on the table.
 func (s *lockStatementImpl) AddReadLock(t *Table) LockStatement {
 	s.locks = append(s.locks, tableLock{t: t, w: false})
 	return s
 }
 
+// AddWriteLock takes write lock on the table.
 func (s *lockStatementImpl) AddWriteLock(t *Table) LockStatement {
 	s.locks = append(s.locks, tableLock{t: t, w: true})
 	return s
@@ -739,6 +744,8 @@ func (s *lockStatementImpl) String(database string) (sql string, err error) {
 	return buf.String(), nil
 }
 
+// NewUnlockStatement returns SQL statement that can be used to release table locks
+// grabbed by the current session.
 func NewUnlockStatement() UnlockStatement {
 	return &unlockStatementImpl{}
 }
