@@ -1,20 +1,22 @@
 package memcache
 
 import (
+	"sync"
+
 	"github.com/dropbox/godropbox/errors"
 )
 
 type MockClient struct {
 	data    map[string]*Item
 	version uint64
+	mutex   sync.Mutex
 }
 
 func NewMockClient() Client {
 	return &MockClient{data: make(map[string]*Item)}
 }
 
-// This retrieves a single entry from memcache.
-func (c *MockClient) Get(key string) GetResponse {
+func (c *MockClient) getHelper(key string) GetResponse {
 	if v, ok := c.data[key]; ok {
 		return NewGetResponse(
 			key,
@@ -26,19 +28,27 @@ func (c *MockClient) Get(key string) GetResponse {
 	return NewGetResponse(key, StatusKeyNotFound, 0, nil, 0)
 }
 
+// This retrieves a single entry from memcache.
+func (c *MockClient) Get(key string) GetResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return c.getHelper(key)
+}
+
 // Batch version of the Get method.
 func (c *MockClient) GetMulti(keys []string) map[string]GetResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	res := make(map[string]GetResponse)
 	for _, key := range keys {
-		res[key] = c.Get(key)
+		res[key] = c.getHelper(key)
 	}
 	return res
 }
 
-// This sets a single entry into memcache.  If the item's data version id
-// (aka CAS) is nonzero, the set operation can only succeed if the item
-// exists in memcache and has a same data version id.
-func (c *MockClient) Set(item *Item) MutateResponse {
+func (c *MockClient) setHelper(item *Item) MutateResponse {
 	c.version++
 
 	newItem := &Item{
@@ -74,12 +84,25 @@ func (c *MockClient) Set(item *Item) MutateResponse {
 
 }
 
+// This sets a single entry into memcache.  If the item's data version id
+// (aka CAS) is nonzero, the set operation can only succeed if the item
+// exists in memcache and has a same data version id.
+func (c *MockClient) Set(item *Item) MutateResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return c.setHelper(item)
+}
+
 // Batch version of the Set method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering).
 func (c *MockClient) SetMulti(items []*Item) []MutateResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	res := make([]MutateResponse, len(items))
 	for i, item := range items {
-		res[i] = c.Set(item)
+		res[i] = c.setHelper(item)
 	}
 	return res
 }
@@ -89,9 +112,7 @@ func (c *MockClient) SetSentinels(items []*Item) []MutateResponse {
 	return c.SetMulti(items)
 }
 
-// This adds a single entry into memcache.  Note: Add will fail if the
-// item already exist in memcache.
-func (c *MockClient) Add(item *Item) MutateResponse {
+func (c *MockClient) addHelper(item *Item) MutateResponse {
 	c.version++
 
 	newItem := &Item{
@@ -116,12 +137,24 @@ func (c *MockClient) Add(item *Item) MutateResponse {
 	}
 }
 
+// This adds a single entry into memcache.  Note: Add will fail if the
+// item already exist in memcache.
+func (c *MockClient) Add(item *Item) MutateResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return c.addHelper(item)
+}
+
 // Batch version of the Add method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering).
 func (c *MockClient) AddMulti(items []*Item) []MutateResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	res := make([]MutateResponse, len(items))
 	for i, item := range items {
-		res[i] = c.Add(item)
+		res[i] = c.addHelper(item)
 	}
 	return res
 }
@@ -209,6 +242,9 @@ func (c *MockClient) Decrement(
 // This invalidates all existing cache items after expiration number of
 // seconds.
 func (c *MockClient) Flush(expiration uint32) Response {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	// TODO: Use expiration argument
 	c.data = make(map[string]*Item)
 	return NewResponse(StatusNoError)
