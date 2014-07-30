@@ -25,15 +25,21 @@ type mockReadWriter struct {
 	recvBuf *bytes.Buffer
 	// The buffer that will be used for Write.
 	sendBuf *bytes.Buffer
+	// Notification channel for recvBuf.
+	receivedChan chan struct{}
+	// Notification channel for sendBuf.
+	sentChan chan struct{}
 }
 
 // Implements the Reader interface.
 func (rw *mockReadWriter) Read(p []byte) (n int, err error) {
+	defer func() { rw.receivedChan <- struct{}{} }()
 	return rw.recvBuf.Read(p)
 }
 
 // Implements the Writer interface.
 func (rw *mockReadWriter) Write(p []byte) (n int, err error) {
+	defer func() { rw.sentChan <- struct{}{} }()
 	return rw.sendBuf.Write(p)
 }
 
@@ -43,21 +49,20 @@ func Test(t *testing.T) {
 }
 
 type RawClientSuite struct {
-	recvBuf *bytes.Buffer
-	sendBuf *bytes.Buffer
-	client  *RawClient
+	rw     *mockReadWriter
+	client *RawClient
 }
 
 var _ = Suite(&RawClientSuite{})
 
 func (s *RawClientSuite) SetUpTest(c *C) {
-	s.recvBuf = &bytes.Buffer{}
-	s.sendBuf = &bytes.Buffer{}
-	channel := &mockReadWriter{
-		recvBuf: s.recvBuf,
-		sendBuf: s.sendBuf,
+	s.rw = &mockReadWriter{
+		recvBuf:      &bytes.Buffer{},
+		sendBuf:      &bytes.Buffer{},
+		receivedChan: make(chan struct{}, 100),
+		sentChan:     make(chan struct{}, 100),
 	}
-	s.client = NewRawClient(0, channel).(*RawClient)
+	s.client = NewRawClient(0, s.rw).(*RawClient)
 }
 
 func (s *RawClientSuite) verifyRequestMessage(c *C, code opCode) {
@@ -125,7 +130,7 @@ func (s *RawClientSuite) verifyRequestMessage(c *C, code opCode) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	c.Assert(s.sendBuf.Bytes(), DeepEquals, serializedRequestMessage)
+	c.Assert(s.rw.sendBuf.Bytes(), DeepEquals, serializedRequestMessage)
 }
 
 func (s *RawClientSuite) TestSendRequest(c *C) {
@@ -203,7 +208,7 @@ func (s *RawClientSuite) TestRecvResponse(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint32
@@ -236,7 +241,7 @@ func (s *RawClientSuite) TestRecvResponseNoExtrasByteWithExtrasArg(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint32
@@ -263,7 +268,7 @@ func (s *RawClientSuite) TestRecvResponseNotEnoughExtrasBytes(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint32
@@ -292,7 +297,7 @@ func (s *RawClientSuite) TestRecvResponseTooManExtrasBytes(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint16 // normally should be 32
@@ -319,7 +324,7 @@ func (s *RawClientSuite) TestRecvResponseBadTotalLength(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint32
@@ -346,7 +351,7 @@ func (s *RawClientSuite) TestRecvResponseBadMagic(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint32
@@ -374,7 +379,7 @@ func (s *RawClientSuite) TestRecvResponseBadOpCode(c *C) {
 		'W', 'o', 'r', 'l', 'd', // value
 	}
 
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	var flags uint32
@@ -409,7 +414,7 @@ func (s *RawClientSuite) performMutateRequestTest(c *C, code opCode, isMulti boo
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // cas
 		'H', 'e', 'l', 'l', 'o', // key
 	}
-	_, err := s.recvBuf.Write(serializedResponseMessage)
+	_, err := s.rw.recvBuf.Write(serializedResponseMessage)
 	c.Assert(err, IsNil)
 
 	// Kick off the add.
@@ -432,14 +437,10 @@ func (s *RawClientSuite) performMutateRequestTest(c *C, code opCode, isMulti boo
 	}()
 
 	// Wait for the request buffer to be populated.
-	timeoutChan := time.After(500 * time.Millisecond)
-	for s.sendBuf.Len() == 0 {
-		select {
-		case <-timeoutChan:
-			c.Fatal("Timed out waiting for client to send request")
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
+	select {
+	case <-s.rw.sentChan:
+	case <-time.After(500 * time.Millisecond):
+		c.Fatal("Timed out waiting for client to send request")
 	}
 
 	s.verifyRequestMessage(c, code)
