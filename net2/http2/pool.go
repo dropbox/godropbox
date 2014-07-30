@@ -3,7 +3,6 @@ package http2
 import (
 	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
@@ -48,9 +47,6 @@ type ConnectionParams struct {
 
 	// Dial function to use instead of the default
 	Dial func(network, addr string) (net.Conn, error)
-
-	// Function to determine proxy
-	Proxy func(*http.Request) (*url.URL, error)
 }
 
 type DialError struct {
