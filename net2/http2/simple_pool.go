@@ -55,10 +55,10 @@ func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 	transport.MaxIdleConnsPerHost = params.MaxIdle
 
 	if params.Proxy != nil {
- 		transport.Proxy = params.Proxy
- 	} else {
- 		transport.Proxy = http.ProxyFromEnvironment
- 	}
+		transport.Proxy = params.Proxy
+	} else {
+		transport.Proxy = http.ProxyFromEnvironment
+	}
 
 	if params.Dial == nil {
 		// dialTimeout could only be used in none proxy requests since it talks directly
