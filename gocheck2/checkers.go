@@ -6,6 +6,7 @@ package gocheck2
 
 import (
 	"bytes"
+	"reflect"
 
 	. "gopkg.in/check.v1"
 )
@@ -95,3 +96,41 @@ func (b *bytesEquals) Info() *CheckerInfo {
 //     c.Assert(nil, BytesEquals, []byte("")) // succeeds
 //     c.Assert(nil, DeepEquals, []byte("")) // fails
 var BytesEquals = &bytesEquals{}
+
+// -----------------------------------------------------------------------
+// HasKey checker.
+
+type hasKey struct{}
+
+func (h *hasKey) Check(params []interface{}, names []string) (bool, string) {
+	if len(params) != 2 {
+		return false, "HasKey takes 2 arguments: a map and a key"
+	}
+
+	mapValue := reflect.ValueOf(params[0])
+	if mapValue.Kind() != reflect.Map {
+		return false, "First argument to HasKey must be a map"
+	}
+
+	keyValue := reflect.ValueOf(params[1])
+	if !keyValue.Type().AssignableTo(mapValue.Type().Key()) {
+		return false, "Second argument must be assignable to the map key type"
+	}
+
+	return mapValue.MapIndex(keyValue).IsValid(), ""
+}
+
+func (h *hasKey) Info() *CheckerInfo {
+	return &CheckerInfo{
+		Name:   "HasKey",
+		Params: []string{"obtained", "key"},
+	}
+}
+
+// The HasKey checker verifies that the obtained map contains the given key.
+//
+// For example:
+//
+//     c.Assert(myMap, HasKey, "foo")
+//
+var HasKey = &hasKey{}
