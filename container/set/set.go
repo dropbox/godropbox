@@ -95,16 +95,16 @@ func (s setImpl) Union(s2 Set) {
 }
 
 func (s setImpl) Intersect(s2 Set) {
-    var toRemove []interface{} = nil
+	var toRemove []interface{} = nil
 	for key := range s.data {
 		if !s2.Contains(key) {
 			toRemove = append(toRemove, key)
 		}
 	}
 
-    for _, key := range toRemove {
-        s.Remove(key)
-    }
+	for _, key := range toRemove {
+		s.Remove(key)
+	}
 }
 
 func (s setImpl) Subtract(s2 Set) {
