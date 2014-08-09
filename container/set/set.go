@@ -132,9 +132,14 @@ func (s setImpl) IsEqual(s2 Set) bool {
 }
 
 func (s setImpl) RemoveIf(f func(interface{}) bool) {
-	for el := range s.Iter() {
-		if f(el) {
-			s.Remove(el)
+	var toRemove []interface{}
+	for item := range s.data {
+		if f(item) {
+			toRemove = append(toRemove, item)
 		}
+	}
+
+	for _, item := range toRemove {
+		s.Remove(item)
 	}
 }

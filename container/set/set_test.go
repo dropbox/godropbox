@@ -124,6 +124,34 @@ func (suite *SetSuite) TestSubsets(c *C) {
 	c.Assert(s2.IsSuperset(s1), IsFalse)
 }
 
+func (suit *SetSuite) TestEquality(c *C) {
+	s1 := NewSet()
+	s2 := NewSet()
+
+	s1.Add(1)
+	s2.Add(1)
+	s2.Add(2)
+
+	c.Assert(s1.IsEqual(s2), IsFalse)
+	c.Assert(s2.IsEqual(s1), IsFalse)
+
+	s1.Add(2)
+
+	c.Assert(s1.IsEqual(s2), IsTrue)
+	c.Assert(s2.IsEqual(s1), IsTrue)
+}
+
+func (suite *SetSuite) TestRemoveIf(c *C) {
+	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+	expected := NewSet(0, 2, 4, 6, 8)
+
+	s.RemoveIf(func(i interface{}) bool {
+		return i.(int)%2 == 1
+	})
+
+	c.Assert(s.IsEqual(expected), IsTrue)
+}
+
 func (suite *SetSuite) TestIter(c *C) {
 	elements := map[int]bool{1: true, 2: true, 3: true}
 	s := NewSet()
