@@ -78,7 +78,7 @@ func (c *MockClient) setHelper(item *Item) MutateResponse {
 		// CAS mismatch
 		return NewMutateResponse(
 			newItem.Key,
-			StatusItemNotStored,
+			StatusKeyExists,
 			0)
 	}
 
