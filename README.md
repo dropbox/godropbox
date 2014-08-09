@@ -13,6 +13,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Adam Faulkner
 - Alex Degtiar
 - Antoine Grondin
+- Arsham F.
 - Christian Ohler
 - Cuong Do
 - Harish Mallipeddi
