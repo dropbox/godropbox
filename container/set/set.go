@@ -18,6 +18,8 @@ type Set interface {
 	Init()
 	IsSubset(s Set) bool
 	IsSuperset(s Set) bool
+	IsEqual(s Set) bool
+	RemoveIf(f func(interface{}) bool)
 }
 
 func NewSet(items ...interface{}) Set {
@@ -119,4 +121,20 @@ func (s setImpl) IsSubset(s2 Set) (isSubset bool) {
 
 func (s setImpl) IsSuperset(s2 Set) bool {
 	return s2.IsSubset(s)
+}
+
+func (s setImpl) IsEqual(s2 Set) bool {
+	if s.Len() != s2.Len() {
+		return false
+	}
+
+	return s.IsSubset(s2)
+}
+
+func (s setImpl) RemoveIf(f func(interface{}) bool) {
+	for el := range s.Iter() {
+		if f(el) {
+			s.Remove(el)
+		}
+	}
 }
