@@ -167,9 +167,25 @@ func (c *MockClient) Replace(item *Item) MutateResponse {
 		errors.Newf("Replace not implemented"))
 }
 
-// This delets a single entry from memcache.
+// This deletes a single entry from memcache.
 func (c *MockClient) Delete(key string) MutateResponse {
-	return NewMutateErrorResponse(key, errors.Newf("Delete not implemented"))
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, ok := c.data[key]
+	if !ok {
+		return NewMutateResponse(
+			key,
+			StatusKeyNotFound,
+			0)
+	}
+
+	delete(c.data, key)
+
+	return NewMutateResponse(
+		key,
+		StatusNoError,
+		0)
 }
 
 // Batch version of the Delete method.  Note that the response entries
