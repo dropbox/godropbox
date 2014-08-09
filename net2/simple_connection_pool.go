@@ -120,7 +120,7 @@ func (p *SimpleConnectionPool) Get(
 	}
 
 	if conn := p.getIdleConn(); conn != nil {
-		return NewManagedConn(network, address, conn, p), nil
+		return NewManagedConn(network, address, conn, p, p.options), nil
 	}
 
 	var conn net.Conn
@@ -133,7 +133,7 @@ func (p *SimpleConnectionPool) Get(
 	if err != nil {
 		return nil, errors.Wrap(err, "Dial error")
 	}
-	return NewManagedConn(network, address, conn, p), nil
+	return NewManagedConn(network, address, conn, p, p.options), nil
 }
 
 // See ConnectionPool for documentation.
@@ -177,7 +177,7 @@ func (p *SimpleConnectionPool) EnterLameDuckMode() {
 
 // This returns an idle connection, if there is one.
 func (p *SimpleConnectionPool) getIdleConn() net.Conn {
-	now := p.getCurrentTime()
+	now := p.options.getCurrentTime()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -211,7 +211,7 @@ func (p *SimpleConnectionPool) queueIdleConns(conn net.Conn) {
 		return
 	}
 
-	now := p.getCurrentTime()
+	now := p.options.getCurrentTime()
 	var keepUntil *time.Time
 	if p.options.MaxIdleTime != nil {
 		// NOTE: Assign to temp variable first to work around compiler bug
@@ -241,13 +241,5 @@ func (p *SimpleConnectionPool) queueIdleConns(conn net.Conn) {
 func (p *SimpleConnectionPool) closeConns(conns []*idleConn) {
 	for _, conn := range conns {
 		conn.conn.Close()
-	}
-}
-
-func (p *SimpleConnectionPool) getCurrentTime() time.Time {
-	if p.options.NowFunc == nil {
-		return time.Now()
-	} else {
-		return p.options.NowFunc()
 	}
 }
