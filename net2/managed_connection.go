@@ -45,6 +45,7 @@ type ManagedConnImpl struct {
 	conn     net.Conn
 	pool     ConnectionPool
 	isActive int32
+	options  ConnectionOptions
 }
 
 // This creates a managed connection wrapper.
@@ -52,7 +53,8 @@ func NewManagedConn(
 	network string,
 	address string,
 	conn net.Conn,
-	pool ConnectionPool) ManagedConn {
+	pool ConnectionPool,
+	options ConnectionOptions) ManagedConn {
 
 	addr := NetworkAddress{
 		Network: network,
@@ -64,6 +66,7 @@ func NewManagedConn(
 		conn:     conn,
 		pool:     pool,
 		isActive: 1,
+		options:  options,
 	}
 }
 
@@ -103,6 +106,10 @@ func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
 	if atomic.LoadInt32(&c.isActive) != 1 {
 		return 0, errors.New("The connection is no longer active")
 	}
+	if c.options.ReadTimeout > 0 {
+		deadline := c.options.getCurrentTime().Add(c.options.ReadTimeout)
+		c.conn.SetReadDeadline(deadline)
+	}
 	n, err = c.conn.Read(b)
 	if err != nil {
 		err = errors.Wrap(err, "Read error")
@@ -114,6 +121,10 @@ func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
 func (c *ManagedConnImpl) Write(b []byte) (n int, err error) {
 	if atomic.LoadInt32(&c.isActive) != 1 {
 		return 0, errors.New("The connection is no longer active")
+	}
+	if c.options.WriteTimeout > 0 {
+		deadline := c.options.getCurrentTime().Add(c.options.WriteTimeout)
+		c.conn.SetWriteDeadline(deadline)
 	}
 	n, err = c.conn.Write(b)
 	if err != nil {
@@ -141,19 +152,19 @@ func (c *ManagedConnImpl) RemoteAddr() net.Addr {
 }
 
 // SetDeadline is disabled for managed connection (The deadline is set by
-// the owner connection pool).
+// us, with respect to the read/write timeouts specified in ConnectionOptions).
 func (c *ManagedConnImpl) SetDeadline(t time.Time) error {
 	return errors.New("Cannot set deadline for managed connection")
 }
 
 // SetReadDeadline is disabled for managed connection (The deadline is set by
-// the owner connection pool).
+// us with respect to the read timeout specified in ConnectionOptions).
 func (c *ManagedConnImpl) SetReadDeadline(t time.Time) error {
 	return errors.New("Cannot set read deadline for managed connection")
 }
 
 // SetWriteDeadline is disabled for managed connection (The deadline is set by
-// the owner connection pool).
+// us with respect to the write timeout specified in ConnectionOptions).
 func (c *ManagedConnImpl) SetWriteDeadline(t time.Time) error {
 	return errors.New("Cannot set write deadline for managed connection")
 }
