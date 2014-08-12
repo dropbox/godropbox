@@ -29,11 +29,11 @@ var (
 type ValueType byte
 
 const (
-	NullType       = ValueType(0)
-	NumericType    = ValueType(1)
-	FractionalType = ValueType(2)
-	StringType     = ValueType(3)
-	UTF8StringType = ValueType(4)
+	NullType = ValueType(iota)
+	NumericType
+	FractionalType
+	StringType
+	UTF8StringType
 )
 
 // Value can store any SQL value. NULL is stored as nil.
@@ -123,7 +123,6 @@ func (v *Value) UnmarshalBinary(data []byte) error {
 
 	b, err := reader.ReadByte()
 	if err != nil {
-		panic(err)
 		return err
 	}
 
