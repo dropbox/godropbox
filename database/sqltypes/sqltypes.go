@@ -399,12 +399,15 @@ func BuildNumeric(val string) (n Value, err error) {
 	return n, nil
 }
 
-func writeTo(buf *bytes.Buffer, data []byte) {
+func writeBinary(typ ValueType, data []byte) ([]byte, error) {
 	var scratch [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(scratch[:], uint64(len(data)))
 
+	var buf bytes.Buffer
+	buf.WriteByte(byte(typ))
 	buf.Write(scratch[:n])
 	buf.Write(data)
+	return buf.Bytes(), nil
 }
 
 func (n Numeric) raw() []byte {
@@ -424,10 +427,7 @@ func (n Numeric) encodeAscii(b encoding2.BinaryWriter) {
 }
 
 func (n Numeric) MarshalBinary() ([]byte, error) {
-	var data bytes.Buffer
-	data.WriteByte(byte(NumericType))
-	writeTo(&data, n.raw())
-	return data.Bytes(), nil
+	return writeBinary(NumericType, n.raw())
 }
 
 func (f Fractional) raw() []byte {
@@ -447,10 +447,7 @@ func (f Fractional) encodeAscii(b encoding2.BinaryWriter) {
 }
 
 func (f Fractional) MarshalBinary() ([]byte, error) {
-	var data bytes.Buffer
-	data.WriteByte(byte(FractionalType))
-	writeTo(&data, f.raw())
-	return data.Bytes(), nil
+	return writeBinary(FractionalType, f.raw())
 }
 
 func (s String) raw() []byte {
@@ -485,15 +482,11 @@ func (s String) encodeAscii(b encoding2.BinaryWriter) {
 }
 
 func (s String) MarshalBinary() ([]byte, error) {
-	var data bytes.Buffer
 	if s.isUtf8 {
-		data.WriteByte(byte(UTF8StringType))
+		return writeBinary(UTF8StringType, s.raw())
 	} else {
-		data.WriteByte(byte(StringType))
+		return writeBinary(StringType, s.raw())
 	}
-
-	writeTo(&data, s.raw())
-	return data.Bytes(), nil
 }
 
 func writebyte(b encoding2.BinaryWriter, c byte) {
