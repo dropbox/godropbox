@@ -6,7 +6,10 @@ package sqltypes
 
 import (
 	"bytes"
+	"math/rand"
+	"reflect"
 	"testing"
+	"testing/quick"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -33,10 +36,6 @@ func (s *SqlTypesSuite) TestNull(c *C) {
 
 	n.EncodeAscii(b)
 	c.Assert(b.String(), Equals, "nullnull")
-
-	js, err := n.MarshalJSON()
-	c.Assert(err, IsNil)
-	c.Assert(string(js), Equals, "null")
 }
 
 func TestNumeric(t *testing.T) {
@@ -49,13 +48,6 @@ func TestNumeric(t *testing.T) {
 	n.EncodeAscii(b)
 	if b.String() != "12341234" {
 		t.Errorf("Expecting 12341234, got %s", b.String())
-	}
-	js, err := n.MarshalJSON()
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if string(js) != "1234" {
-		t.Errorf("Expecting 1234, received %s", js)
 	}
 }
 
@@ -135,16 +127,9 @@ func TestString(t *testing.T) {
 		t.Errorf("Expecting %s, received %#v", HARDASCII, b.String())
 	}
 	s = MakeString([]byte("abcd"))
-	js, err := s.MarshalJSON()
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if string(js) != "\"YWJjZA==\"" {
-		t.Errorf("Expecting \"YWJjZA==\", received %s", js)
-	}
 
 	// Now, just printable strings.
-	s, err = BuildValue(PRINTABLE)
+	s, err := BuildValue(PRINTABLE)
 	if err != nil {
 		t.Errorf("BuildValue failed on printable: %s", PRINTABLE)
 	}
@@ -372,5 +357,48 @@ func TestEncode(t *testing.T) {
 	}
 	if SqlDecodeMap[DONTESCAPE] != DONTESCAPE {
 		t.Errorf("Decode fail: %v", SqlDecodeMap[DONTESCAPE])
+	}
+}
+
+func (v Value) Generate(rand *rand.Rand, size int) reflect.Value {
+	buildFunc := func(goval interface{}) Value {
+		v, _ := BuildValue(goval)
+		return v
+	}
+
+	switch rand.Intn(5) {
+	case 0:
+		return reflect.ValueOf(buildFunc(nil))
+	case 1:
+		return reflect.ValueOf(buildFunc(rand.Int()))
+	case 2:
+		return reflect.ValueOf(buildFunc(rand.NormFloat64()))
+	case 3:
+		return reflect.ValueOf(buildFunc("string"))
+	case 4:
+		return reflect.ValueOf(buildFunc([]byte("[]byte")))
+	}
+
+	return reflect.ValueOf(buildFunc(nil))
+}
+
+func TestMarshalUnmarshalBinary(t *testing.T) {
+	f := func(v Value) bool {
+		data, err := v.MarshalBinary()
+		if err != nil {
+			return false
+		}
+
+		var v2 Value
+		err = v2.UnmarshalBinary(data)
+		if err != nil {
+			return false
+		}
+
+		return reflect.DeepEqual(v, v2)
+	}
+
+	if err := quick.Check(f, nil); err != nil {
+		t.Error(err)
 	}
 }
