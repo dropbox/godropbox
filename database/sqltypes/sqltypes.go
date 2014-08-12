@@ -9,8 +9,9 @@
 package sqltypes
 
 import (
+	"bytes"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/binary"
 	"reflect"
 	"strconv"
 	"time"
@@ -23,6 +24,16 @@ var (
 	NULL       = Value{}
 	DONTESCAPE = byte(255)
 	nullstr    = []byte("null")
+)
+
+type ValueType byte
+
+const (
+	NullType       = ValueType(0)
+	NumericType    = ValueType(1)
+	FractionalType = ValueType(2)
+	StringType     = ValueType(3)
+	UTF8StringType = ValueType(4)
 )
 
 // Value can store any SQL value. NULL is stored as nil.
@@ -97,6 +108,62 @@ func (v Value) EncodeAscii(b encoding2.BinaryWriter) {
 	}
 }
 
+// MarshalBinary helps implement BinaryMarshaler interface for Value.
+func (v Value) MarshalBinary() ([]byte, error) {
+	if v.IsNull() {
+		return []byte{byte(NullType)}, nil
+	} else {
+		return v.Inner.MarshalBinary()
+	}
+}
+
+// UnmarshalBinary helps implement BinaryUnmarshaler interface for Value.
+func (v *Value) UnmarshalBinary(data []byte) error {
+	reader := bytes.NewReader(data)
+
+	b, err := reader.ReadByte()
+	if err != nil {
+		panic(err)
+		return err
+	}
+
+	typ := ValueType(b)
+	if typ == NullType {
+		*v = Value{}
+		return nil
+	}
+
+	length, err := binary.ReadUvarint(reader)
+	if err != nil {
+		return err
+	}
+
+	raw := make([]byte, length)
+	n, err := reader.Read(raw)
+	if err != nil {
+		return err
+	}
+
+	if uint64(n) != length {
+		return errors.Newf("Not enough bytes to read Value")
+	}
+
+	switch typ {
+	case NumericType:
+		*v = Value{Numeric(raw)}
+	case FractionalType:
+		*v = Value{Fractional(raw)}
+	case StringType:
+		*v = Value{String{raw, false}}
+	case UTF8StringType:
+		*v = Value{String{raw, true}}
+	default:
+		return errors.Newf("Unknown type %d", int(typ))
+	}
+
+	return nil
+}
+
 func (v Value) IsNull() bool {
 	return v.Inner == nil
 }
@@ -125,18 +192,12 @@ func (v Value) IsString() (ok bool) {
 	return ok
 }
 
-func (v Value) MarshalJSON() ([]byte, error) {
-	if v.IsString() {
-		return json.Marshal(v.Inner.(String).data)
-	}
-	return json.Marshal(v.Inner)
-}
-
 // InnerValue defines methods that need to be supported by all non-null value types.
 type InnerValue interface {
 	raw() []byte
 	encodeSql(encoding2.BinaryWriter)
 	encodeAscii(encoding2.BinaryWriter)
+	MarshalBinary() ([]byte, error)
 }
 
 func BuildValue(goval interface{}) (v Value, err error) {
@@ -339,6 +400,14 @@ func BuildNumeric(val string) (n Value, err error) {
 	return n, nil
 }
 
+func writeTo(buf *bytes.Buffer, data []byte) {
+	var scratch [binary.MaxVarintLen64]byte
+	n := binary.PutUvarint(scratch[:], uint64(len(data)))
+
+	buf.Write(scratch[:n])
+	buf.Write(data)
+}
+
 func (n Numeric) raw() []byte {
 	return []byte(n)
 }
@@ -355,8 +424,11 @@ func (n Numeric) encodeAscii(b encoding2.BinaryWriter) {
 	}
 }
 
-func (n Numeric) MarshalJSON() ([]byte, error) {
-	return n.raw(), nil
+func (n Numeric) MarshalBinary() ([]byte, error) {
+	var data bytes.Buffer
+	data.WriteByte(byte(NumericType))
+	writeTo(&data, n.raw())
+	return data.Bytes(), nil
 }
 
 func (f Fractional) raw() []byte {
@@ -373,6 +445,13 @@ func (f Fractional) encodeAscii(b encoding2.BinaryWriter) {
 	if _, err := b.Write(f.raw()); err != nil {
 		panic(err)
 	}
+}
+
+func (f Fractional) MarshalBinary() ([]byte, error) {
+	var data bytes.Buffer
+	data.WriteByte(byte(FractionalType))
+	writeTo(&data, f.raw())
+	return data.Bytes(), nil
 }
 
 func (s String) raw() []byte {
@@ -404,6 +483,18 @@ func (s String) encodeAscii(b encoding2.BinaryWriter) {
 	encoder.Write(s.raw())
 	encoder.Close()
 	writebyte(b, '\'')
+}
+
+func (s String) MarshalBinary() ([]byte, error) {
+	var data bytes.Buffer
+	if s.isUtf8 {
+		data.WriteByte(byte(UTF8StringType))
+	} else {
+		data.WriteByte(byte(StringType))
+	}
+
+	writeTo(&data, s.raw())
+	return data.Bytes(), nil
 }
 
 func writebyte(b encoding2.BinaryWriter, c byte) {
