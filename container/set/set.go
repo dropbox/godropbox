@@ -1,7 +1,7 @@
 package set
 
 // An unordered collection of unique elements which supports lookups, insertions, deletions,
-// iteration, and common binary set operations.  It is not guaranteed to be thred-safe.
+// iteration, and common binary set operations.  It is not guaranteed to be thread-safe.
 type Set interface {
 	// Returns a new Set that contains exactly the same elements as this set.
 	Copy() Set
