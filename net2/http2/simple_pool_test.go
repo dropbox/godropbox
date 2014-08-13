@@ -55,10 +55,12 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 }
 
 func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
-	addr := "127.1.1.254:8000"
+	server, addr := test_utils.SetupTestServer(false)
+	defer server.Close()
+
 	params := ConnectionParams{
 		MaxIdle:        1,
-		ConnectTimeout: 1 * time.Microsecond,
+		ConnectTimeout: 1 * time.Nanosecond,
 	}
 	var pool Pool = NewSimplePool(addr, params)
 
