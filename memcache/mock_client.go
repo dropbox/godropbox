@@ -108,7 +108,7 @@ func (c *MockClient) SetMulti(items []*Item) []MutateResponse {
 }
 
 func (c *MockClient) SetSentinels(items []*Item) []MutateResponse {
-	// TODO: Support state mocking
+	// TODO(patrick): Support state mocking
 	return c.SetMulti(items)
 }
 
@@ -261,7 +261,7 @@ func (c *MockClient) Flush(expiration uint32) Response {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// TODO: Use expiration argument
+	// TODO(patrick): Use expiration argument
 	c.data = make(map[string]*Item)
 	return NewResponse(StatusNoError)
 }

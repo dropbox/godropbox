@@ -29,11 +29,11 @@ var (
 type ValueType byte
 
 const (
-	NullType = ValueType(iota)
-	NumericType
-	FractionalType
-	StringType
-	UTF8StringType
+	NullType       = ValueType(0)
+	NumericType    = ValueType(1)
+	FractionalType = ValueType(2)
+	StringType     = ValueType(3)
+	UTF8StringType = ValueType(4)
 )
 
 // Value can store any SQL value. NULL is stored as nil.
