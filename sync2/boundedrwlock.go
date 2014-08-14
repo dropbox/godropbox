@@ -58,10 +58,10 @@ func (rw *BoundedRWLock) RLock(timeout time.Duration) (err error) {
 		if !woken {
 			return errors.New("Waiter timeout")
 		}
-		rw.control.Lock()
+	} else {
+		rw.readers++
+		rw.control.Unlock()
 	}
-	rw.readers++
-	rw.control.Unlock()
 	return
 }
 
@@ -107,6 +107,9 @@ func (rw *BoundedRWLock) WLock(timeout time.Duration) (err error) {
 		if rw.readers != 0 {
 			panic("readers??")
 		}
+		if rw.nextWriter != me {
+			panic("not me??")
+		}
 	} else {
 		rw.nextWriter = newWait(true)
 	}
@@ -130,14 +133,17 @@ func (rw *BoundedRWLock) WUnlock() {
 //
 // Any writer "stops" the walk of the queue.
 func (rw *BoundedRWLock) processQueue() {
+
+	if rw.readers != 0 {
+		panic("readers??")
+	}
+
 	if rw.nextWriter != nil {
 		if rw.nextWriter.WakeAtomic() {
 			return
 		}
 		rw.nextWriter = nil
 	}
-
-	readersRun := 0
 
 	for {
 		var next *rwwait
@@ -148,7 +154,7 @@ func (rw *BoundedRWLock) processQueue() {
 		}
 		if next.writer {
 			// No readers scheduled yet?
-			if readersRun == 0 {
+			if rw.readers == 0 {
 				// If they wake up, no one else gets to go
 				if next.WakeAtomic() {
 					rw.nextWriter = next
@@ -161,7 +167,7 @@ func (rw *BoundedRWLock) processQueue() {
 		} else {
 			// Reader?  Let them enter now.
 			if next.WakeAtomic() {
-				readersRun++
+				rw.readers++
 			}
 		}
 	}
