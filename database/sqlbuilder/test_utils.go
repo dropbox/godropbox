@@ -9,7 +9,7 @@ var table1 = NewTable(
 	table1Col1,
 	table1Col2,
 	table1Col3,
-    table1Col4)
+	table1Col4)
 
 var table2Col3 = IntColumn("col3", true)
 var table2Col4 = IntColumn("col4", true)
