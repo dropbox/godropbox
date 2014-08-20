@@ -3,11 +3,13 @@ package sqlbuilder
 var table1Col1 = IntColumn("col1", true)
 var table1Col2 = IntColumn("col2", true)
 var table1Col3 = IntColumn("col3", true)
+var table1Col4 = DateTimeColumn("col4", true)
 var table1 = NewTable(
 	"table1",
 	table1Col1,
 	table1Col2,
-	table1Col3)
+	table1Col3,
+    table1Col4)
 
 var table2Col3 = IntColumn("col3", true)
 var table2Col4 = IntColumn("col4", true)

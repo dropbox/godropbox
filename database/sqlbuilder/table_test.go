@@ -16,10 +16,11 @@ var _ = gc.Suite(&TableSuite{})
 func (s *TableSuite) TestBasicColumns(c *gc.C) {
 	cols := table1.Columns()
 
-	c.Assert(len(cols), gc.Equals, 3)
+	c.Assert(len(cols), gc.Equals, 4)
 	c.Assert(cols[0], gc.Equals, table1Col1)
 	c.Assert(cols[1], gc.Equals, table1Col2)
 	c.Assert(cols[2], gc.Equals, table1Col3)
+	c.Assert(cols[3], gc.Equals, table1Col4)
 }
 
 func (s *TableSuite) TestCValidLookup(c *gc.C) {
@@ -121,12 +122,13 @@ func (s *TableSuite) TestJoinColumns(c *gc.C) {
 	join := table1.RightJoinOn(table2, Eq(table1Col3, table2Col3))
 
 	cols := join.Columns()
-	c.Assert(len(cols), gc.Equals, 5)
+	c.Assert(len(cols), gc.Equals, 6)
 	c.Assert(cols[0], gc.Equals, table1Col1)
 	c.Assert(cols[1], gc.Equals, table1Col2)
 	c.Assert(cols[2], gc.Equals, table1Col3)
-	c.Assert(cols[3], gc.Equals, table2Col3)
-	c.Assert(cols[4], gc.Equals, table2Col4)
+	c.Assert(cols[3], gc.Equals, table1Col4)
+	c.Assert(cols[4], gc.Equals, table2Col3)
+	c.Assert(cols[5], gc.Equals, table2Col4)
 }
 
 func (s *TableSuite) TestNestedInnerJoin(c *gc.C) {
