@@ -51,6 +51,20 @@ func TestNumeric(t *testing.T) {
 	}
 }
 
+func TestTime(t *testing.T) {
+	date := time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC)
+	v, _ := BuildValue(date)
+	if v.String() != "1999-01-02 03:04:05" {
+		t.Errorf("Expecting 1999-01-02 03:04:05, got %s", v.String())
+	}
+
+	b := &bytes.Buffer{}
+	v.EncodeSql(b)
+	if b.String() != "'1999-01-02 03:04:05'" {
+		t.Errorf("Expecting '1999-01-02 03:04:05', got %s", b.String())
+	}
+}
+
 const (
 	INVALIDNEG = "-9223372036854775809"
 	MINNEG     = "-9223372036854775808"
@@ -215,7 +229,7 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 	v, err = BuildValue(time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC))
 	c.Assert(err, IsNil)
 	c.Assert(v.IsString(), IsTrue)
-	c.Assert(v.String(), Equals, "'2012-02-24 23:19:43'")
+	c.Assert(v.String(), Equals, "2012-02-24 23:19:43")
 
 	v, err = BuildValue(Numeric([]byte("123")))
 	c.Assert(err, IsNil)
