@@ -6,6 +6,9 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
+	"github.com/dropbox/godropbox/net2/http2/test_utils"
 )
 
 type SimplePoolSuite struct {
@@ -14,7 +17,7 @@ type SimplePoolSuite struct {
 var _ = Suite(&SimplePoolSuite{})
 
 func (s *SimplePoolSuite) TestHTTP(c *C) {
-	server, addr := setupTestServer(false)
+	server, addr := test_utils.SetupTestServer(false)
 	defer server.Close()
 
 	// do single request
@@ -52,10 +55,12 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 }
 
 func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
-	addr := "127.1.1.254:8000"
+	server, addr := test_utils.SetupTestServer(false)
+	defer server.Close()
+
 	params := ConnectionParams{
 		MaxIdle:        1,
-		ConnectTimeout: 1 * time.Microsecond,
+		ConnectTimeout: 1 * time.Nanosecond,
 	}
 	var pool Pool = NewSimplePool(addr, params)
 
@@ -64,13 +69,13 @@ func (s *SimplePoolSuite) TestConnectTimeout(c *C) {
 
 	_, err = pool.Do(req)
 	_, ok := err.(DialError)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 }
 
 func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
-	server, addr := setupTestServer(false)
+	server, addr := test_utils.SetupTestServer(false)
 	defer func() {
-		server.closeChan <- true
+		server.CloseChan <- true
 		time.Sleep(10 * time.Millisecond)
 		server.Close()
 	}()
@@ -87,7 +92,7 @@ func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 }
 
 func (s *SimplePoolSuite) TestSSL(c *C) {
-	server, addr := setupTestServer(true)
+	server, addr := test_utils.SetupTestServer(true)
 	defer server.Close()
 
 	params := ConnectionParams{
@@ -116,5 +121,5 @@ func (s *SimplePoolSuite) TestConnectionRefused(c *C) {
 	_, err = pool.Do(req)
 	c.Assert(err, NotNil)
 	_, ok := err.(DialError)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 }

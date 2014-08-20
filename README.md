@@ -1,4 +1,4 @@
-# godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.png)](https://godoc.org/github.com/dropbox/godropbox)
+# godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.svg)](https://godoc.org/github.com/dropbox/godropbox)
 
 Common libraries for writing go services/applications.
 
@@ -11,15 +11,21 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 
 #### Contributors
 - Adam Faulkner
+- Alex Degtiar
 - Antoine Grondin
+- Arsham F.
 - Christian Ohler
 - Cuong Do
 - Harish Mallipeddi
 - Jack Ferris
+- Jamie Li
 - Jamie Turner
+- Pascal Borreli
 - Patrick Lee
+- Rajat Goel
 - Samir Goel
 - Sujay Jayakar
 - Todd Eisenberger
+- Vadim Graboys
 - Xinyao Hu
 - Zviad Metreveli

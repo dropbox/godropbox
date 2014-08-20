@@ -89,7 +89,7 @@ func (t *Table) getColumn(name string) (NonAliasColumn, error) {
 	return nil, errors.Newf("No such column '%s' in table '%s'", name, t.name)
 }
 
-// Returns a pesudo column representation of the column name.  Error checking
+// Returns a pseudo column representation of the column name.  Error checking
 // is deferred to SerializeSql.
 func (t *Table) C(name string) NonAliasColumn {
 	return &deferredLookupColumn{

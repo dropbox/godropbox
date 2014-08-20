@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -22,22 +24,22 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 	cache.Set("3", 9)
 	c.Assert(cache.Len(), Equals, 2)
 	_, ok := cache.Get("2")
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 	_, ok = cache.Get("3")
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 	_, ok = cache.Get("1")
-	c.Assert(ok, Equals, false)
+	c.Assert(ok, IsFalse)
 
 	_, ok = cache.Get("2")
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 	cache.Set("4", 4)
 	_, ok = cache.Get("1")
-	c.Assert(ok, Equals, false)
+	c.Assert(ok, IsFalse)
 	_, ok = cache.Get("3")
-	c.Assert(ok, Equals, false)
+	c.Assert(ok, IsFalse)
 	_, ok = cache.Get("2")
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 	_, ok = cache.Get("4")
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, IsTrue)
 	c.Assert(cache.Len(), Equals, 2)
 }

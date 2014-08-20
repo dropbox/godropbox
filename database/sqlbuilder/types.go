@@ -33,7 +33,7 @@ type Projection interface {
 }
 
 //
-// Boilder plates ...
+// Boiler plates ...
 //
 
 type isOrderByClauseInterface interface {

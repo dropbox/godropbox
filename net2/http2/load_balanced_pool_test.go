@@ -9,6 +9,9 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
+	"github.com/dropbox/godropbox/net2/http2/test_utils"
 )
 
 func Test(t *testing.T) {
@@ -35,17 +38,17 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 	}
 
 	ports := []int{
-		randomListenPort(c),
-		randomListenPort(c),
-		randomListenPort(c),
-		randomListenPort(c),
-		randomListenPort(c)}
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c)}
 
 	for _, port := range ports {
 		go startHttpServer(port)
 	}
 	for _, port := range ports {
-		ensureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
+		test_utils.EnsureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
 	}
 
 	// create pool
@@ -92,11 +95,11 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 			c.FailNow()
 		}
 	}
-	c.Assert(len(receivedPorts) < len(ports), Equals, false)
+	c.Assert(len(receivedPorts) < len(ports), IsFalse)
 }
 
 func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
-	server, addr := setupTestServer(false)
+	server, addr := test_utils.SetupTestServer(false)
 	defer server.Close()
 
 	params := ConnectionParams{

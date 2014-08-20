@@ -26,6 +26,20 @@ type ConnectionOptions struct {
 	// connection pool will use the specified function instead of time.Now to
 	// generate the current time.
 	NowFunc func() time.Time
+
+	// This specifies the timeout for any Read() operation.
+	ReadTimeout time.Duration
+
+	// This specifies the timeout for any Write() operation.
+	WriteTimeout time.Duration
+}
+
+func (o ConnectionOptions) getCurrentTime() time.Time {
+	if o.NowFunc == nil {
+		return time.Now()
+	} else {
+		return o.NowFunc()
+	}
 }
 
 // A generic interface for managed connection pool.  All connection pool
@@ -54,7 +68,7 @@ type ConnectionPool interface {
 	//  4. pool.Discard(conn)
 	Get(network string, address string) (ManagedConn, error)
 
-	// This releases an active connetion back to the connection pool.
+	// This releases an active connection back to the connection pool.
 	Release(conn ManagedConn) error
 
 	// This discards an active connection from the connection pool.

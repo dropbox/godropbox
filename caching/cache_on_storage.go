@@ -4,7 +4,7 @@ package caching
 // implementation DOES NOT ensure data consistent between cache and storage
 // when setting items.
 //
-// NOTE: Dropbox internally uses a different caching implmentation which
+// NOTE: Dropbox internally uses a different caching implementation which
 // performs two-phase cache invalidation;  this ensures the cached data is
 // consistent with the stored data.
 type CacheOnStorage struct {

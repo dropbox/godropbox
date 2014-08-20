@@ -53,11 +53,17 @@ func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 	transport := new(http.Transport)
 	transport.ResponseHeaderTimeout = params.ResponseTimeout
 	transport.MaxIdleConnsPerHost = params.MaxIdle
-	transport.Proxy = http.ProxyFromEnvironment
+
+	if params.Proxy != nil {
+		transport.Proxy = params.Proxy
+	} else {
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+
 	if params.Dial == nil {
 		// dialTimeout could only be used in none proxy requests since it talks directly
 		// to pool.addr
-		if getenvEitherCase("HTTP_PROXY") == "" {
+		if getenvEitherCase("HTTP_PROXY") == "" && params.Proxy == nil {
 			transport.Dial = pool.dialTimeout
 		}
 	} else {

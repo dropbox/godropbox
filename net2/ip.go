@@ -30,3 +30,10 @@ func GetLocalIPs() ([]*net.IP, error) {
 
 	return ips, nil
 }
+
+// Given a host string, return true if the host is an ip (v4/v6) localhost.
+func IsLocalhost(host string) bool {
+	return host == "localhost" ||
+		host == "ip6-localhost" ||
+		host == "ipv6-localhost"
+}

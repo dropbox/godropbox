@@ -8,7 +8,11 @@ import (
 
 // A shard manager that returns connections from a static list of memcache
 // shards.  NOTE: This is only for illustration purposes.  DO NOT USE IN
-// PRODUCTION.
+// PRODUCTION.  (Dropbox internally uses a different shard manager which is
+// also based on BaseShardManager.  Our memcache config is managed by zookeeper.
+// When our memcache config changes, zookeeper will notify the shard manager of
+// these updates and the shard manager will in turn swap in/out shards via
+// UpdateShardStates.)
 type StaticShardManager struct {
 	BaseShardManager
 }
