@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -36,6 +37,22 @@ func getenvEitherCase(k string) string {
 	return os.Getenv(strings.ToLower(k))
 }
 
+// Go 1.3+ supports specifying a global timeout on the client. See
+// http://golang.org/pkg/net/http/#Client.
+// It's desirable to enforce the timeout at the client-level since it includes
+// the connection time, redirects and the time to finish reading the full response.
+// Unlike ResponseHeaderTimeout supported by `http.Transport` which merely accounts
+// for the timeout to receive the first response header byte. It ignores the time to
+// send the request or the time to read the full response.
+func setClientTimeoutIfSupported(client *http.Client, timeout time.Duration) {
+	v := reflect.ValueOf(client)
+	v = v.Elem()
+	f := v.FieldByName("Timeout")
+	if f.IsValid() && f.CanSet() {
+		f.Set(reflect.ValueOf(timeout))
+	}
+}
+
 // Creates a new HTTP connection pool using the given address and pool parameters.
 //
 // 'addr' is a net.Dial()-style 'host:port' destination for making the TCP connection for
@@ -48,6 +65,8 @@ func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 		params: params,
 		client: new(http.Client),
 	}
+
+	setClientTimeoutIfSupported(pool.client, params.ResponseTimeout)
 
 	// setup HTTP transport
 	transport := new(http.Transport)
