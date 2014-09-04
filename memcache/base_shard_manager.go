@@ -63,7 +63,8 @@ func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
 	}
 
 	for address, state := range diffs {
-		if state == 1 { // New connections
+		if state > 0 { // New connections
+			// State can be greater than 1 for duplicate entries.
 			if err := m.pool.Register("tcp", address); err != nil {
 				m.logError(err)
 			}
