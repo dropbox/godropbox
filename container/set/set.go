@@ -43,6 +43,29 @@ type Set interface {
 	RemoveIf(f func(interface{}) bool)
 }
 
+// Returns a new set which is the union of s1 and s2.  s1 and s2 are unmodified.
+func Union(s1 Set, s2 Set) Set {
+	s3 := s1.Copy()
+	s3.Union(s2)
+	return s3
+}
+
+// Returns a new set which is the intersect of s1 and s2.  s1 and s2 are
+// unmodified.
+func Intersect(s1 Set, s2 Set) Set {
+	s3 := s1.Copy()
+	s3.Intersect(s2)
+	return s3
+}
+
+// Returns a new set which is the difference between s1 and s2.  s1 and s2 are
+// unmodified.
+func Subtract(s1 Set, s2 Set) Set {
+	s3 := s1.Copy()
+	s3.Subtract(s2)
+	return s3
+}
+
 // Returns a new Set pre-populated with the given items
 func NewSet(items ...interface{}) Set {
 	res := setImpl{
