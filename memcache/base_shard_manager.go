@@ -3,6 +3,7 @@ package memcache
 import (
 	"sync"
 
+	"github.com/dropbox/godropbox/errors"
 	"github.com/dropbox/godropbox/net2"
 )
 
@@ -52,18 +53,29 @@ func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
 	m.rwMutex.Lock()
 	defer m.rwMutex.Unlock()
 
-	// Register new connections / Unregister old connections
-	diffs := make(map[string]int)
+	oldAddrs := make(map[string]struct{})
 	for _, state := range m.shardStates {
-		diffs[state.Address] = -1
+		oldAddrs[state.Address] = struct{}{}
 	}
 
+	newAddrs := make(map[string]struct{})
 	for _, state := range shardStates {
-		diffs[state.Address] += 1
+		newAddrs[state.Address] = struct{}{}
+	}
+
+	// Register new connections / Unregister old connections
+	diffs := make(map[string]int)
+
+	for addr, _ := range oldAddrs {
+		diffs[addr] = -1
+	}
+
+	for addr, _ := range newAddrs {
+		diffs[addr] += 1
 	}
 
 	for address, state := range diffs {
-		if state > 0 { // New connections
+		if state == 1 { // New connections
 			// State can be greater than 1 for duplicate entries.
 			if err := m.pool.Register("tcp", address); err != nil {
 				m.logError(err)
@@ -72,6 +84,8 @@ func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
 			if err := m.pool.Unregister("tcp", address); err != nil {
 				m.logError(err)
 			}
+		} else if state != 0 {
+			m.logError(errors.Newf("Unexpected state: %d", state))
 		}
 	}
 
