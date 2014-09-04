@@ -31,6 +31,11 @@ func (p *mockPool) Register(_, address string) error {
 	return nil
 }
 
+func (p *mockPool) Unregister(_, address string) error {
+	p.registered.Remove(address)
+	return nil
+}
+
 func (s *ManagerSuite) SetUpTest(c *C) {
 	s.pool = newMockPool()
 	s.manager = &BaseShardManager{
@@ -47,5 +52,21 @@ func (s *ManagerSuite) TestRegister(c *C) {
 	s.manager.UpdateShardStates(shardStates)
 
 	expectedRegistered := set.NewSet("foo", "bar", "baz")
+	c.Assert(expectedRegistered.IsEqual(s.pool.registered), IsTrue)
+}
+
+func (s *ManagerSuite) TestUnregister(c *C) {
+	shardStates := make([]ShardState, 4)
+	shardStates[0].Address = "foo"
+	shardStates[1].Address = "bar"
+	shardStates[2].Address = "baz"
+	shardStates[3].Address = "foo"
+	s.manager.UpdateShardStates(shardStates)
+
+	shardStates = make([]ShardState, 2)
+	shardStates[0].Address = "bar"
+	shardStates[1].Address = "baz"
+	s.manager.UpdateShardStates(shardStates)
+	expectedRegistered := set.NewSet("bar", "baz")
 	c.Assert(expectedRegistered.IsEqual(s.pool.registered), IsTrue)
 }

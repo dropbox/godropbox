@@ -50,24 +50,19 @@ func (m *BaseShardManager) Init(
 
 // This updates the shard manager to use new shard states.
 func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
-	m.rwMutex.Lock()
-	defer m.rwMutex.Unlock()
-
-	oldAddrs := make(map[string]struct{})
-	for _, state := range m.shardStates {
-		oldAddrs[state.Address] = struct{}{}
-	}
-
 	newAddrs := make(map[string]struct{})
 	for _, state := range shardStates {
 		newAddrs[state.Address] = struct{}{}
 	}
 
+	m.rwMutex.Lock()
+	defer m.rwMutex.Unlock()
+
 	// Register new connections / Unregister old connections
 	diffs := make(map[string]int)
 
-	for addr, _ := range oldAddrs {
-		diffs[addr] = -1
+	for _, state := range m.shardStates {
+		diffs[state.Address] = -1
 	}
 
 	for addr, _ := range newAddrs {
