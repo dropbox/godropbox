@@ -3,7 +3,7 @@ package memcache
 import (
 	"sync"
 
-	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/container/set"
 	"github.com/dropbox/godropbox/net2"
 )
 
@@ -50,37 +50,28 @@ func (m *BaseShardManager) Init(
 
 // This updates the shard manager to use new shard states.
 func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
-	newAddrs := make(map[string]struct{})
+	newAddrs := set.NewSet()
 	for _, state := range shardStates {
-		newAddrs[state.Address] = struct{}{}
+		newAddrs.Add(state.Address)
 	}
 
 	m.rwMutex.Lock()
 	defer m.rwMutex.Unlock()
 
-	// Register new connections / Unregister old connections
-	diffs := make(map[string]int)
-
+	oldAddrs := set.NewSet()
 	for _, state := range m.shardStates {
-		diffs[state.Address] = -1
+		oldAddrs.Add(state.Address)
 	}
 
-	for addr, _ := range newAddrs {
-		diffs[addr] += 1
+	for address := range set.Subtract(newAddrs, oldAddrs).Iter() {
+		if err := m.pool.Register("tcp", address.(string)); err != nil {
+			m.logError(err)
+		}
 	}
 
-	for address, state := range diffs {
-		if state == 1 { // New connections
-			// State can be greater than 1 for duplicate entries.
-			if err := m.pool.Register("tcp", address); err != nil {
-				m.logError(err)
-			}
-		} else if state == -1 { // Old connections
-			if err := m.pool.Unregister("tcp", address); err != nil {
-				m.logError(err)
-			}
-		} else if state != 0 {
-			m.logError(errors.Newf("Unexpected state: %d", state))
+	for address := range set.Subtract(oldAddrs, newAddrs).Iter() {
+		if err := m.pool.Unregister("tcp", address.(string)); err != nil {
+			m.logError(err)
 		}
 	}
 
