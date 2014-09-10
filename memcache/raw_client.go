@@ -282,6 +282,19 @@ func (c *RawClient) Get(key string) GetResponse {
 	return c.receiveGetResponse(key)
 }
 
+func removeDuplicateKeys(slis *[]string) {
+	found := make(map[string]bool)
+	j := 0
+	for i, val := range *slis {
+		if _, ok := found[val]; !ok {
+			found[val] = true
+			(*slis)[j] = (*slis)[i]
+			j++
+		}
+	}
+	*slis = (*slis)[:j]
+}
+
 // See Client interface for documentation.
 func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
 	if keys == nil {
@@ -293,6 +306,7 @@ func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	removeDuplicateKeys(&keys) // remove dup keys , if not ,count(sendGetRequest) !=count(receiveGetResponse)
 	for _, key := range keys {
 		if resp := c.sendGetRequest(key); resp != nil {
 			responses[key] = resp
