@@ -12,12 +12,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"github.com/dropbox/godropbox/encoding2"
+	"github.com/dropbox/godropbox/errors"
 	"reflect"
 	"strconv"
 	"time"
-
-	"github.com/dropbox/godropbox/encoding2"
-	"github.com/dropbox/godropbox/errors"
 )
 
 var (
@@ -457,8 +456,14 @@ func (s String) raw() []byte {
 func (s String) encodeSql(b encoding2.BinaryWriter) {
 	if s.isUtf8 {
 		writebyte(b, '\'')
-		for _, ch := range s.raw() {
+		bytes := s.raw()
+		for i, ch := range bytes {
 			if encodedChar := SqlEncodeMap[ch]; encodedChar == DONTESCAPE {
+				writebyte(b, ch)
+			} else if i < len(bytes)-1 && '\\' == ch && ('%' == bytes[i+1] || '_' == bytes[i+1]) {
+				// Don't escape '\' specifically in the constructions '\%' or
+				// '\_', because those are special to how the RHS of LIKE
+				// clauses are escaped.
 				writebyte(b, ch)
 			} else {
 				writebyte(b, '\\')

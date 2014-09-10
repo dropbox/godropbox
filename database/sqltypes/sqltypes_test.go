@@ -120,12 +120,14 @@ func TestBuildNumeric(t *testing.T) {
 }
 
 const (
-	HARDSQL           = "\x00'\"\b\n\r\t\x1A\\"
-	HARDESCAPED       = "X'002722080a0d091a5c'"
-	HARDASCII         = "'ACciCAoNCRpc'"
-	PRINTABLE         = "workin' hard"
-	PRINTABLE_ESCAPED = "'workin\\' hard'"
-	PRINTABLE_ASCII   = "'d29ya2luJyBoYXJk'"
+	HARDSQL               = "\x00'\"\b\n\r\t\x1A\\"
+	HARDESCAPED           = "X'002722080a0d091a5c'"
+	HARDASCII             = "'ACciCAoNCRpc'"
+	PRINTABLE             = "workin' hard"
+	PRINTABLE_ESCAPED     = "'workin\\' hard'"
+	PRINTABLE_ASCII       = "'d29ya2luJyBoYXJk'"
+	SPECIAL_CASES         = "\\ \\_ \\\\ \\\\_ \\% \\\\%"
+	SPECIAL_CASES_ESCAPED = "'\\\\ \\_ \\\\\\\\ \\\\\\_ \\% \\\\\\%'"
 )
 
 func TestString(t *testing.T) {
@@ -156,6 +158,16 @@ func TestString(t *testing.T) {
 	s.EncodeAscii(b)
 	if b.String() != PRINTABLE_ASCII {
 		t.Errorf("Expecting %s, received %#v", PRINTABLE_ASCII, b.String())
+	}
+
+	s, err = BuildValue(SPECIAL_CASES)
+	if err != nil {
+		t.Errorf("BuildValue failed on special cases: %s", SPECIAL_CASES)
+	}
+	b = bytes.NewBuffer(nil)
+	s.EncodeSql(b)
+	if b.String() != SPECIAL_CASES_ESCAPED {
+		t.Errorf("Expecting %s, received %s", SPECIAL_CASES_ESCAPED, b.String())
 	}
 }
 
