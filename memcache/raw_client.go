@@ -288,6 +288,9 @@ func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
 		return nil
 	}
 
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	keyMap := make(map[string] interface{})
 	for _,key := range keys{
 		keyMap[key]=nil
@@ -300,9 +303,6 @@ func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
 	}
 
 	responses := make(map[string]GetResponse)
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 
 	for _, key := range cacheKeys {
 		if resp := c.sendGetRequest(key); resp != nil {
