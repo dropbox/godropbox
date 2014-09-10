@@ -7,7 +7,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-    . "github.com/dropbox/godropbox/gocheck2"
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 // Constant values used in testing the client.
@@ -474,7 +474,7 @@ func (s *RawClientSuite) TestSetMultiRequest(c *C) {
 func (s *RawClientSuite) TestGetMultiDupKeys(c *C) {
 	expectedFooReq := []byte{
 		reqMagicByte, // magic
-		uint8(opGet),  // op code
+		uint8(opGet), // op code
 		0x00, 0x03,   // key length
 		0x00,       // extra length
 		0x00,       // data type
@@ -486,9 +486,9 @@ func (s *RawClientSuite) TestGetMultiDupKeys(c *C) {
 		'f', 'o', 'o', // key
 	}
 
-	fooResp:= []byte{
+	fooResp := []byte{
 		respMagicByte, // magic
-		uint8(opGet), // op code
+		uint8(opGet),  // op code
 		0x00, 0x03,    // key length
 		0x04,       // extras length
 		0x0,        // data type
@@ -501,12 +501,12 @@ func (s *RawClientSuite) TestGetMultiDupKeys(c *C) {
 		'F', 'O', 'O', // value
 	}
 
-    s.rw.recvBuf.Write(fooResp)
+	s.rw.recvBuf.Write(fooResp)
 
-    results := s.client.GetMulti([]string{"foo", "foo"})
+	results := s.client.GetMulti([]string{"foo", "foo"})
 
-    c.Assert(s.rw.sendBuf.Bytes(), DeepEquals, expectedFooReq)
+	c.Assert(s.rw.sendBuf.Bytes(), DeepEquals, expectedFooReq)
 
-    c.Assert(results, HasKey, "foo")
-    c.Assert(string(results["foo"].Value()), Equals, "FOO")
+	c.Assert(results, HasKey, "foo")
+	c.Assert(string(results["foo"].Value()), Equals, "FOO")
 }
