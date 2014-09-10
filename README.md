@@ -16,6 +16,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Arsham F.
 - Christian Ohler
 - Cuong Do
+- Fanng Yuan
 - Harish Mallipeddi
 - Jack Ferris
 - Jamie Li
