@@ -282,27 +282,31 @@ func (c *RawClient) Get(key string) GetResponse {
 	return c.receiveGetResponse(key)
 }
 
+func (c *RawClient) removeDuplicateKey(keys []string) []string {
+	keyMap := make(map[string]interface{})
+	for _, key := range keys {
+		keyMap[key] = nil
+	}
+	cacheKeys := make([]string, len(keyMap))
+	i := 0
+	for key, _ := range keyMap {
+		cacheKeys[i] = key
+		i = i + 1
+	}
+	return cacheKeys
+}
+
 // See Client interface for documentation.
 func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
 	if keys == nil {
 		return nil
 	}
 
+	responses := make(map[string]GetResponse)
+	cacheKeys := c.removeDuplicateKey(keys)
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-
-	keyMap := make(map[string] interface{})
-	for _,key := range keys{
-		keyMap[key]=nil
-	}
-	cacheKeys := make([]string, len(keyMap))
-	i:=0
-	for key, _ := range keyMap {
-		cacheKeys[i] = key
-		i=i+1
-	}
-
-	responses := make(map[string]GetResponse)
 
 	for _, key := range cacheKeys {
 		if resp := c.sendGetRequest(key); resp != nil {
