@@ -471,7 +471,7 @@ func (s *RawClientSuite) TestSetMultiRequest(c *C) {
 	s.performMutateRequestTest(c, opSet, true)
 }
 
-func (s *RawClientSuite) TestDupGetMultiKeys(c *C) {
+func (s *RawClientSuite) TestGetMultiDupKeys(c *C) {
 	expectedFooReq := []byte{
 		reqMagicByte, // magic
 		uint8(opGet),  // op code
