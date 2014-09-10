@@ -5,4 +5,5 @@ const (
 	AcceptEncodingHeader         = "Accept-Encoding"
 	ContentTypeHeader            = "Content-Type"
 	ContentEncodingHeader        = "Content-Encoding"
+    ConnectionHeader             = "Connection"
 )
