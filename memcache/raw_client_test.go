@@ -6,6 +6,8 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 // Constant values used in testing the client.
@@ -467,4 +469,44 @@ func (s *RawClientSuite) TestSetRequest(c *C) {
 
 func (s *RawClientSuite) TestSetMultiRequest(c *C) {
 	s.performMutateRequestTest(c, opSet, true)
+}
+
+func (s *RawClientSuite) TestGetMultiDupKeys(c *C) {
+	expectedFooReq := []byte{
+		reqMagicByte, // magic
+		uint8(opGet), // op code
+		0x00, 0x03,   // key length
+		0x00,       // extra length
+		0x00,       // data type
+		0x00, 0x00, // v bucket id
+		0x00, 0x00, 0x00, 0x3, // total body length
+		0x00, 0x00, 0x00, 0x00, // opaque
+		0x00, 0x00, 0x00, 0x00, // flags
+		0x00, 0x00, 0x00, 0x00, // expiry
+		'f', 'o', 'o', // key
+	}
+
+	fooResp := []byte{
+		respMagicByte, // magic
+		uint8(opGet),  // op code
+		0x00, 0x03,    // key length
+		0x04,       // extras length
+		0x0,        // data type
+		0x00, 0x00, // status
+		0x00, 0x00, 0x00, 0x0a, // total length
+		0x00, 0x00, 0x00, 0x00, // opaque
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // cas
+		0xde, 0xad, 0xbe, 0xef, // flags
+		'f', 'o', 'o', // key
+		'F', 'O', 'O', // value
+	}
+
+	s.rw.recvBuf.Write(fooResp)
+
+	results := s.client.GetMulti([]string{"foo", "foo"})
+
+	c.Assert(s.rw.sendBuf.Bytes(), DeepEquals, expectedFooReq)
+
+	c.Assert(results, HasKey, "foo")
+	c.Assert(string(results["foo"].Value()), Equals, "FOO")
 }
