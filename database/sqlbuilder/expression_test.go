@@ -42,7 +42,7 @@ func (s *ExprSuite) TestConjunctExprSingleElement(c *gc.C) {
 }
 
 func (s *ExprSuite) TestLikeExpr(c *gc.C) {
-	expr := LikeL(table1Col1, EscapeForLike("my_prefix")+"%")
+	expr := LikeL(table1Col1, EscapeForLike("%my_prefix")+"%")
 
 	buf := &bytes.Buffer{}
 
@@ -53,7 +53,7 @@ func (s *ExprSuite) TestLikeExpr(c *gc.C) {
 	c.Assert(
 		sql,
 		gc.Equals,
-		"`table1`.`col1` LIKE 'my\\_prefix%'")
+		"`table1`.`col1` LIKE '\\%my\\_prefix%'")
 
 }
 
