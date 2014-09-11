@@ -4,6 +4,7 @@ package sqlbuilder
 import (
 	"bytes"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/dropbox/godropbox/database/sqltypes"
@@ -289,6 +290,12 @@ func SqlFunc(funcName string, expressions ...Expression) Expression {
 	return f
 }
 
+var likeEscaper *strings.Replacer = strings.NewReplacer("_", "\\_", "%", "\\%")
+
+func EscapeForLike(s string) string {
+	return likeEscaper.Replace(s)
+}
+
 // Returns an escaped literal string
 func Literal(v interface{}) Expression {
 	value, err := sqltypes.BuildValue(v)
@@ -312,6 +319,14 @@ func Or(expressions ...BoolExpression) BoolExpression {
 		expressions: expressions,
 		conjunction: []byte(" OR "),
 	}
+}
+
+func Like(lhs, rhs Expression) BoolExpression {
+	return newBoolExpression(lhs, rhs, []byte(" LIKE "))
+}
+
+func LikeL(lhs Expression, val string) BoolExpression {
+	return Like(lhs, Literal(val))
 }
 
 // Returns a representation of "c[0] + ... + c[n-1]" for c in clauses
