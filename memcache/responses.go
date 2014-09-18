@@ -150,7 +150,11 @@ func NewGetResponse(
 	}
 	resp.item.Key = key
 	if status == StatusNoError {
-		resp.item.Value = value
+		if value == nil {
+			resp.item.Value = []byte{}
+		} else {
+			resp.item.Value = value
+		}
 		resp.item.Flags = flags
 		resp.item.DataVersionId = version
 	}

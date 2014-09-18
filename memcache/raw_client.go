@@ -13,7 +13,7 @@ const (
 	headerLength = 24
 	maxKeyLength = 250
 	// NOTE: Storing values larger than 1MB requires recompiling memcached.
-	maxValueLenght = 1024 * 1024
+	maxValueLength = 1024 * 1024
 )
 
 func isValidKeyChar(char byte) bool {
@@ -32,6 +32,19 @@ func isValidKeyString(key string) bool {
 	}
 
 	return true
+}
+
+func validateValue(value []byte) error {
+	if value == nil {
+		return errors.New("Invalid value: cannot be nil")
+	}
+
+	if len(value) > maxValueLength {
+		return errors.Newf(
+			"Invalid value: length %d longer than max length %d", len(value), maxValueLength)
+	}
+
+	return nil
 }
 
 type header struct {
@@ -345,6 +358,10 @@ func (c *RawClient) sendMutateRequest(
 		return NewMutateErrorResponse(
 			item.Key,
 			errors.New("Invalid key"))
+	}
+
+	if err := validateValue(item.Value); err != nil {
+		return NewMutateErrorResponse(item.Key, err)
 	}
 
 	extras := make([]interface{}, 0, 2)
