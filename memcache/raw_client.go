@@ -34,16 +34,16 @@ func isValidKeyString(key string) bool {
 	return true
 }
 
-func isValidValue(value []byte) bool {
+func validateValue(value []byte) error {
 	if value == nil {
-		return false
+		return errors.New("Invalid value: cannot be nil")
 	}
 
 	if len(value) > maxValueLength {
-		return false
+		return errors.Newf("Invalid value: longer than max length %d", maxValueLength)
 	}
 
-	return true
+	return nil
 }
 
 type header struct {
@@ -359,10 +359,8 @@ func (c *RawClient) sendMutateRequest(
 			errors.New("Invalid key"))
 	}
 
-	if !isValidValue(item.Value) {
-		return NewMutateErrorResponse(
-			item.Key,
-			errors.New("Invalid value"))
+	if err := validateValue(item.Value); err != nil {
+		return NewMutateErrorResponse(item.Key, err)
 	}
 
 	extras := make([]interface{}, 0, 2)
