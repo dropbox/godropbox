@@ -13,7 +13,7 @@ const (
 	headerLength = 24
 	maxKeyLength = 250
 	// NOTE: Storing values larger than 1MB requires recompiling memcached.
-	maxValueLenght = 1024 * 1024
+	maxValueLength = 1024 * 1024
 )
 
 func isValidKeyChar(char byte) bool {
@@ -29,6 +29,18 @@ func isValidKeyString(key string) bool {
 		if !isValidKeyChar(char) {
 			return false
 		}
+	}
+
+	return true
+}
+
+func isValidValue(value []byte) bool {
+	if value == nil {
+		return false
+	}
+
+	if len(value) > maxValueLength {
+		return false
 	}
 
 	return true
@@ -345,6 +357,12 @@ func (c *RawClient) sendMutateRequest(
 		return NewMutateErrorResponse(
 			item.Key,
 			errors.New("Invalid key"))
+	}
+
+	if !isValidValue(item.Value) {
+		return NewMutateErrorResponse(
+			item.Key,
+			errors.New("Invalid value"))
 	}
 
 	extras := make([]interface{}, 0, 2)
