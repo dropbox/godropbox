@@ -40,7 +40,8 @@ func validateValue(value []byte) error {
 	}
 
 	if len(value) > maxValueLength {
-		return errors.Newf("Invalid value: longer than max length %d", maxValueLength)
+		return errors.Newf(
+			"Invalid value: length %d longer than max length %d", len(value), maxValueLength)
 	}
 
 	return nil
