@@ -14,6 +14,11 @@ func (c *MockClock) Reset() {
 	c.currentTime = time.Time{}
 }
 
+// Set the mock clock to a specific time.
+func (c *MockClock) Set(t time.Time) {
+	c.currentTime = t
+}
+
 // Advances the mock clock by the specified duration.
 func (c *MockClock) Advance(delta time.Duration) {
 	c.currentTime = c.currentTime.Add(delta)
