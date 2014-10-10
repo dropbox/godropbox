@@ -69,7 +69,7 @@ type ResourcePool interface {
 	//  2. handle.Discard()
 	//  3. pool.Release(handle)
 	//  4. pool.Discard(handle)
-	Get(resourceLocation string) (ManagedHandle, error)
+	Get(key string) (ManagedHandle, error)
 
 	// This releases an active resource handle back to the resource pool.
 	Release(handle ManagedHandle) error
