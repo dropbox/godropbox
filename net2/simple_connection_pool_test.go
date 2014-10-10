@@ -17,10 +17,10 @@ func Test(t *testing.T) {
 	TestingT(t)
 }
 
-type SimpleConnectionPoolSuite struct {
+type BaseConnectionPoolSuite struct {
 }
 
-var _ = Suite(&SimpleConnectionPoolSuite{})
+var _ = Suite(&BaseConnectionPoolSuite{})
 
 type mockConn struct {
 	id            int
@@ -99,7 +99,7 @@ func SameConnection(
 	return raw1.Id() == raw2.Id()
 }
 
-func (s *SimpleConnectionPoolSuite) TestRecycleConnections(c *C) {
+func (s *BaseConnectionPoolSuite) TestRecycleConnections(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -109,7 +109,7 @@ func (s *SimpleConnectionPoolSuite) TestRecycleConnections(c *C) {
 		NowFunc:            mockClock.Now,
 	}
 
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c1, err := pool.Get("foo", "bar")
@@ -159,7 +159,7 @@ func (s *SimpleConnectionPoolSuite) TestRecycleConnections(c *C) {
 	c.Assert(n4.RawConn().(*mockConn).Id(), Equals, 5)
 }
 
-func (s *SimpleConnectionPoolSuite) TestDiscardConnections(c *C) {
+func (s *BaseConnectionPoolSuite) TestDiscardConnections(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -168,7 +168,7 @@ func (s *SimpleConnectionPoolSuite) TestDiscardConnections(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -219,7 +219,7 @@ func (s *SimpleConnectionPoolSuite) TestDiscardConnections(c *C) {
 	c.Assert(pool.NumIdle(), Equals, 2)
 }
 
-func (s *SimpleConnectionPoolSuite) TestMaxActiveConnections(c *C) {
+func (s *BaseConnectionPoolSuite) TestMaxActiveConnections(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -275,7 +275,7 @@ func (s *SimpleConnectionPoolSuite) TestMaxActiveConnections(c *C) {
 	c.Assert(pool.NumActive(), Equals, int32(0))
 }
 
-func (s *SimpleConnectionPoolSuite) TestMaxIdleConnections(c *C) {
+func (s *BaseConnectionPoolSuite) TestMaxIdleConnections(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -284,7 +284,7 @@ func (s *SimpleConnectionPoolSuite) TestMaxIdleConnections(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -335,7 +335,7 @@ func (s *SimpleConnectionPoolSuite) TestMaxIdleConnections(c *C) {
 	c.Assert(pool.NumIdle(), Equals, 2)
 }
 
-func (s *SimpleConnectionPoolSuite) TestMaxIdleTime(c *C) {
+func (s *BaseConnectionPoolSuite) TestMaxIdleTime(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -346,7 +346,7 @@ func (s *SimpleConnectionPoolSuite) TestMaxIdleTime(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -421,7 +421,7 @@ func (s *SimpleConnectionPoolSuite) TestMaxIdleTime(c *C) {
 	c.Assert(pool.NumIdle(), Equals, 1)
 }
 
-func (s *SimpleConnectionPoolSuite) TestLameDuckMode(c *C) {
+func (s *BaseConnectionPoolSuite) TestLameDuckMode(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -430,7 +430,7 @@ func (s *SimpleConnectionPoolSuite) TestLameDuckMode(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -488,7 +488,7 @@ func (s *SimpleConnectionPoolSuite) TestLameDuckMode(c *C) {
 	c.Assert(last, IsNil)
 }
 
-func (s *SimpleConnectionPoolSuite) TestReadTimeout(c *C) {
+func (s *BaseConnectionPoolSuite) TestReadTimeout(c *C) {
 	mockClock := time2.MockClock{}
 	dialer := fakeDialer{
 		latency: 10 * time.Nanosecond,
@@ -501,7 +501,7 @@ func (s *SimpleConnectionPoolSuite) TestReadTimeout(c *C) {
 		ReadTimeout: 5 * time.Nanosecond,
 	}
 
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c1, err := pool.Get("foo", "bar")
@@ -519,7 +519,7 @@ func (s *SimpleConnectionPoolSuite) TestReadTimeout(c *C) {
 		NowFunc:     mockClock.Now,
 		ReadTimeout: 20 * time.Nanosecond,
 	}
-	pool = NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool = NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c1, err = pool.Get("foo", "bar")
@@ -532,7 +532,7 @@ func (s *SimpleConnectionPoolSuite) TestReadTimeout(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *SimpleConnectionPoolSuite) TestWriteTimeout(c *C) {
+func (s *BaseConnectionPoolSuite) TestWriteTimeout(c *C) {
 	mockClock := time2.MockClock{}
 	dialer := fakeDialer{
 		latency: 10 * time.Nanosecond,
@@ -545,7 +545,7 @@ func (s *SimpleConnectionPoolSuite) TestWriteTimeout(c *C) {
 		WriteTimeout: 5 * time.Nanosecond,
 	}
 
-	pool := NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c1, err := pool.Get("foo", "bar")
@@ -563,7 +563,7 @@ func (s *SimpleConnectionPoolSuite) TestWriteTimeout(c *C) {
 		NowFunc:      mockClock.Now,
 		WriteTimeout: 20 * time.Nanosecond,
 	}
-	pool = NewSimpleConnectionPool(options).(*SimpleConnectionPool)
+	pool = NewSimpleConnectionPool(options).(*BaseConnectionPool)
 	pool.Register("foo", "bar")
 
 	c1, err = pool.Get("foo", "bar")

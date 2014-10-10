@@ -1,11 +1,12 @@
 package net2
 
+/*
+
 import (
 	"sync"
 
 	"github.com/dropbox/godropbox/errors"
 )
-
 // A connection pool implementation that manages multiple (network, address)
 // entries.  The connections to each (network, address) entry acts
 // independently. For example ("tcp", "localhost:11211") could act as memcache
@@ -184,3 +185,4 @@ func (p *MultiConnectionPool) getPool(key NetworkAddress) ConnectionPool {
 	}
 	return nil
 }
+*/
