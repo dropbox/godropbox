@@ -99,11 +99,6 @@ func SameConnection(
 	return raw1.Id() == raw2.Id()
 }
 
-func closePoolConns(pool *SimpleConnectionPool) {
-	pool.closeConns(pool.idleConns)
-	pool.idleConns = make([]*idleConn, 0, 0)
-}
-
 func (s *SimpleConnectionPoolSuite) TestRecycleConnections(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
