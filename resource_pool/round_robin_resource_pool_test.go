@@ -110,6 +110,10 @@ func (s *RoundRobinResourcePoolSuite) TestGetSkipOver(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(c4.ResourceLocation(), Equals, c6.ResourceLocation())
+
+	_, err = s.pool.Get("")
+	c.Assert(err, NotNil)
+
 }
 
 func (s *RoundRobinResourcePoolSuite) TestUnregistered(c *C) {
