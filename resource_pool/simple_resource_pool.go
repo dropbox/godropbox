@@ -95,8 +95,7 @@ func (p *SimpleResourcePool) ListRegistered() []string {
 // This gets an active resource from the resource pool.  Note that the
 // resourceLocation argument is ignroed (The handles are associated to the
 // resource location provided by the first Register call).
-func (p *SimpleResourcePool) Get(
-	resourceLocation string) (ManagedHandle, error) {
+func (p *SimpleResourcePool) Get(unused string) (ManagedHandle, error) {
 
 	activeCount := atomic.AddInt32(p.numActive, 1)
 	if p.options.MaxActiveHandles > 0 &&
