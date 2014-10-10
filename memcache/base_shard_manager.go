@@ -42,7 +42,7 @@ func (m *BaseShardManager) Init(
 
 	m.shardStates = make([]ShardState, 0, 0)
 	m.getShardId = shardFunc
-	m.pool = net2.NewMultiConnectionPool(options, nil)
+	m.pool = net2.NewMultiConnectionPool(options)
 
 	m.logError = logError
 	m.logInfo = logInfo

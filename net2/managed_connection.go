@@ -2,10 +2,10 @@ package net2
 
 import (
 	"net"
-	"sync/atomic"
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/resource_pool"
 )
 
 // Dial's arguments.
@@ -41,18 +41,17 @@ type ManagedConn interface {
 
 // A physical implementation of ManagedConn
 type ManagedConnImpl struct {
-	addr     NetworkAddress
-	conn     net.Conn
-	pool     ConnectionPool
-	isActive int32
-	options  ConnectionOptions
+	addr    NetworkAddress
+	handle  resource_pool.ManagedHandle
+	pool    ConnectionPool
+	options ConnectionOptions
 }
 
 // This creates a managed connection wrapper.
 func NewManagedConn(
 	network string,
 	address string,
-	conn net.Conn,
+	handle resource_pool.ManagedHandle,
 	pool ConnectionPool,
 	options ConnectionOptions) ManagedConn {
 
@@ -62,17 +61,22 @@ func NewManagedConn(
 	}
 
 	return &ManagedConnImpl{
-		addr:     addr,
-		conn:     conn,
-		pool:     pool,
-		isActive: 1,
-		options:  options,
+		addr:    addr,
+		handle:  handle,
+		pool:    pool,
+		options: options,
 	}
+}
+
+func (c *ManagedConnImpl) rawConn() (net.Conn, error) {
+	h, err := c.handle.Handle()
+	return h.(net.Conn), err
 }
 
 // See ManagedConn for documentation.
 func (c *ManagedConnImpl) RawConn() net.Conn {
-	return c.conn
+	h, _ := c.handle.Handle()
+	return h.(net.Conn)
 }
 
 // See ManagedConn for documentation.
@@ -87,30 +91,26 @@ func (c *ManagedConnImpl) Owner() ConnectionPool {
 
 // See ManagedConn for documentation.
 func (c *ManagedConnImpl) ReleaseConnection() error {
-	if atomic.CompareAndSwapInt32(&c.isActive, 1, 0) {
-		return c.pool.Release(c)
-	}
-	return nil
+	return c.handle.Release()
 }
 
 // See ManagedConn for documentation.
 func (c *ManagedConnImpl) DiscardConnection() error {
-	if atomic.CompareAndSwapInt32(&c.isActive, 1, 0) {
-		return c.pool.Discard(c)
-	}
-	return nil
+	return c.handle.Discard()
 }
 
 // See net.Conn for documentation
 func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
-	if atomic.LoadInt32(&c.isActive) != 1 {
-		return 0, errors.New("The connection is no longer active")
+	conn, err := c.rawConn()
+	if err != nil {
+		return 0, err
 	}
+
 	if c.options.ReadTimeout > 0 {
 		deadline := c.options.getCurrentTime().Add(c.options.ReadTimeout)
-		c.conn.SetReadDeadline(deadline)
+		conn.SetReadDeadline(deadline)
 	}
-	n, err = c.conn.Read(b)
+	n, err = conn.Read(b)
 	if err != nil {
 		err = errors.Wrap(err, "Read error")
 	}
@@ -119,14 +119,16 @@ func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
 
 // See net.Conn for documentation
 func (c *ManagedConnImpl) Write(b []byte) (n int, err error) {
-	if atomic.LoadInt32(&c.isActive) != 1 {
-		return 0, errors.New("The connection is no longer active")
+	conn, err := c.rawConn()
+	if err != nil {
+		return 0, err
 	}
+
 	if c.options.WriteTimeout > 0 {
 		deadline := c.options.getCurrentTime().Add(c.options.WriteTimeout)
-		c.conn.SetWriteDeadline(deadline)
+		conn.SetWriteDeadline(deadline)
 	}
-	n, err = c.conn.Write(b)
+	n, err = conn.Write(b)
 	if err != nil {
 		err = errors.Wrap(err, "Write error")
 	}
@@ -135,20 +137,19 @@ func (c *ManagedConnImpl) Write(b []byte) (n int, err error) {
 
 // See net.Conn for documentation
 func (c *ManagedConnImpl) Close() error {
-	if atomic.LoadInt32(&c.isActive) != 1 {
-		return errors.New("The connection is no longer active")
-	}
-	return c.DiscardConnection()
+	return c.handle.Discard()
 }
 
 // See net.Conn for documentation
 func (c *ManagedConnImpl) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
+	conn, _ := c.rawConn()
+	return conn.LocalAddr()
 }
 
 // See net.Conn for documentation
 func (c *ManagedConnImpl) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+	conn, _ := c.rawConn()
+	return conn.RemoteAddr()
 }
 
 // SetDeadline is disabled for managed connection (The deadline is set by
