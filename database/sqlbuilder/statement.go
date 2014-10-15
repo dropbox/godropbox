@@ -537,7 +537,12 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 
 	buf.WriteString(" SET ")
 	addComma := false
-	for col, val := range u.updateValues {
+	for _, col := range u.table.Columns() {
+		val, inMap := u.updateValues[col]
+		if !inMap {
+			continue
+		}
+
 		if addComma {
 			buf.WriteString(", ")
 		}

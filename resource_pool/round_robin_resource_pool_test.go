@@ -14,7 +14,10 @@ type RoundRobinResourcePoolSuite struct {
 
 var _ = Suite(&RoundRobinResourcePoolSuite{})
 
-func (s *RoundRobinResourcePoolSuite) SetupPool(max int) {
+func (s *RoundRobinResourcePoolSuite) SetupPool(
+	c *C,
+	max int,
+	pools ...*ResourceLocationPool) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -26,11 +29,34 @@ func (s *RoundRobinResourcePoolSuite) SetupPool(max int) {
 		NowFunc:          mockClock.Now,
 	}
 
-	s.pool = NewRoundRobinResourcePool(options, nil).(*RoundRobinResourcePool)
+	p, err := NewRoundRobinResourcePool(options, nil, pools...)
+	c.Assert(err, IsNil)
+
+	s.pool = p.(*RoundRobinResourcePool)
+}
+
+func (s *RoundRobinResourcePoolSuite) CreateResourceLocationPool(
+	location string) *ResourceLocationPool {
+	dialer := fakeDialer{}
+	mockClock := time2.MockClock{}
+
+	options := Options{
+		Open:    dialer.FakeDial,
+		Close:   closeMockConn,
+		NowFunc: mockClock.Now,
+	}
+
+	pool := NewSimpleResourcePool(options)
+	pool.Register(location)
+
+	return &ResourceLocationPool{
+		ResourceLocation: location,
+		Pool:             pool,
+	}
 }
 
 func (s *RoundRobinResourcePoolSuite) TestRegisterAndGet(c *C) {
-	s.SetupPool(10)
+	s.SetupPool(c, 10)
 
 	err := s.pool.Register("foo")
 	c.Assert(err, IsNil)
@@ -74,8 +100,49 @@ func (s *RoundRobinResourcePoolSuite) TestRegisterAndGet(c *C) {
 	}
 }
 
+func (s *RoundRobinResourcePoolSuite) TestInitWithPools(c *C) {
+	foo := s.CreateResourceLocationPool("foo")
+	bar := s.CreateResourceLocationPool("bar")
+	abc := s.CreateResourceLocationPool("abc")
+	zzz := s.CreateResourceLocationPool("zzz")
+
+	s.SetupPool(c, 10, foo, bar, abc, zzz)
+
+	locations := make([]string, 0)
+	locSet := set.NewSet()
+
+	c1, err := s.pool.Get("")
+	c.Assert(err, IsNil)
+	locations = append(locations, c1.ResourceLocation())
+	locSet.Add(c1.ResourceLocation())
+
+	c2, err := s.pool.Get("")
+	c.Assert(err, IsNil)
+	locations = append(locations, c2.ResourceLocation())
+	locSet.Add(c2.ResourceLocation())
+
+	c3, err := s.pool.Get("")
+	c.Assert(err, IsNil)
+	locations = append(locations, c3.ResourceLocation())
+	locSet.Add(c3.ResourceLocation())
+
+	c4, err := s.pool.Get("")
+	c.Assert(err, IsNil)
+	locations = append(locations, c4.ResourceLocation())
+	locSet.Add(c4.ResourceLocation())
+
+	expected := set.NewSet("foo", "bar", "abc", "zzz")
+	c.Assert(locSet.IsEqual(expected), IsTrue)
+
+	for i := 0; i < 20; i++ {
+		h, err := s.pool.Get("")
+		c.Assert(err, IsNil)
+		c.Assert(h.ResourceLocation(), Equals, locations[i%4])
+	}
+}
+
 func (s *RoundRobinResourcePoolSuite) TestGetSkipOver(c *C) {
-	s.SetupPool(1)
+	s.SetupPool(c, 1)
 
 	err := s.pool.Register("foo")
 	c.Assert(err, IsNil)
@@ -117,7 +184,7 @@ func (s *RoundRobinResourcePoolSuite) TestGetSkipOver(c *C) {
 }
 
 func (s *RoundRobinResourcePoolSuite) TestUnregistered(c *C) {
-	s.SetupPool(100)
+	s.SetupPool(c, 100)
 
 	err := s.pool.Register("foo")
 	c.Assert(err, IsNil)
@@ -193,7 +260,7 @@ func (s *RoundRobinResourcePoolSuite) TestUnregistered(c *C) {
 }
 
 func (s *RoundRobinResourcePoolSuite) TestRelease(c *C) {
-	s.SetupPool(100)
+	s.SetupPool(c, 100)
 
 	err := s.pool.Register("foo")
 	c.Assert(err, IsNil)
@@ -216,7 +283,7 @@ func (s *RoundRobinResourcePoolSuite) TestRelease(c *C) {
 }
 
 func (s *RoundRobinResourcePoolSuite) TestDiscard(c *C) {
-	s.SetupPool(100)
+	s.SetupPool(c, 100)
 
 	err := s.pool.Register("foo")
 	c.Assert(err, IsNil)
@@ -239,7 +306,7 @@ func (s *RoundRobinResourcePoolSuite) TestDiscard(c *C) {
 }
 
 func (s *RoundRobinResourcePoolSuite) TestLameDuck(c *C) {
-	s.SetupPool(100)
+	s.SetupPool(c, 100)
 
 	err := s.pool.Register("foo")
 	c.Assert(err, IsNil)
