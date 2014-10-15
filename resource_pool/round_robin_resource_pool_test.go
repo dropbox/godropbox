@@ -15,9 +15,9 @@ type RoundRobinResourcePoolSuite struct {
 var _ = Suite(&RoundRobinResourcePoolSuite{})
 
 func (s *RoundRobinResourcePoolSuite) SetupPool(
-    c *C,
-    max int,
-    pools ...*ResourceLocationPool) {
+	c *C,
+	max int,
+	pools ...*ResourceLocationPool) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
@@ -29,32 +29,31 @@ func (s *RoundRobinResourcePoolSuite) SetupPool(
 		NowFunc:          mockClock.Now,
 	}
 
-    p, err := NewRoundRobinResourcePool(options, nil, pools...)
-    c.Assert(err, IsNil)
+	p, err := NewRoundRobinResourcePool(options, nil, pools...)
+	c.Assert(err, IsNil)
 
 	s.pool = p.(*RoundRobinResourcePool)
 }
 
 func (s *RoundRobinResourcePoolSuite) CreateResourceLocationPool(
-    location string) *ResourceLocationPool {
+	location string) *ResourceLocationPool {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
 
 	options := Options{
-		Open:             dialer.FakeDial,
-		Close:            closeMockConn,
-		NowFunc:          mockClock.Now,
+		Open:    dialer.FakeDial,
+		Close:   closeMockConn,
+		NowFunc: mockClock.Now,
 	}
 
-    pool := NewSimpleResourcePool(options)
-    pool.Register(location)
+	pool := NewSimpleResourcePool(options)
+	pool.Register(location)
 
-    return &ResourceLocationPool{
-        ResourceLocation: location,
-        Pool: pool,
-    }
+	return &ResourceLocationPool{
+		ResourceLocation: location,
+		Pool:             pool,
+	}
 }
-
 
 func (s *RoundRobinResourcePoolSuite) TestRegisterAndGet(c *C) {
 	s.SetupPool(c, 10)
@@ -102,10 +101,10 @@ func (s *RoundRobinResourcePoolSuite) TestRegisterAndGet(c *C) {
 }
 
 func (s *RoundRobinResourcePoolSuite) TestInitWithPools(c *C) {
-    foo := s.CreateResourceLocationPool("foo")
-    bar := s.CreateResourceLocationPool("bar")
-    abc := s.CreateResourceLocationPool("abc")
-    zzz := s.CreateResourceLocationPool("zzz")
+	foo := s.CreateResourceLocationPool("foo")
+	bar := s.CreateResourceLocationPool("bar")
+	abc := s.CreateResourceLocationPool("abc")
+	zzz := s.CreateResourceLocationPool("zzz")
 
 	s.SetupPool(c, 10, foo, bar, abc, zzz)
 

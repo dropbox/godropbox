@@ -27,9 +27,9 @@ type RoundRobinResourcePool struct {
 
 	createPool func(Options) ResourcePool
 
-	rwMutex       sync.RWMutex
-	isLameDuck    bool
-	pools []*ResourceLocationPool
+	rwMutex    sync.RWMutex
+	isLameDuck bool
+	pools      []*ResourceLocationPool
 
 	counter *int64 // atomic counter
 }
@@ -38,16 +38,16 @@ type RoundRobinResourcePool struct {
 func NewRoundRobinResourcePool(
 	options Options,
 	createPool func(Options) ResourcePool,
-    pools ...*ResourceLocationPool) (ResourcePool, error) {
+	pools ...*ResourceLocationPool) (ResourcePool, error) {
 
-    for _, pool := range pools {
-        if pool.ResourceLocation == "" {
-            return nil, errors.New("Invalid resource location")
-        }
-        if pool.Pool == nil {
-            return nil, errors.New("Invalid pool")
-        }
-    }
+	for _, pool := range pools {
+		if pool.ResourceLocation == "" {
+			return nil, errors.New("Invalid resource location")
+		}
+		if pool.Pool == nil {
+			return nil, errors.New("Invalid pool")
+		}
+	}
 
 	if createPool == nil {
 		createPool = NewSimpleResourcePool
@@ -56,15 +56,15 @@ func NewRoundRobinResourcePool(
 	counter := new(int64)
 	atomic.StoreInt64(counter, 0)
 
-    shuffle(pools)
+	shuffle(pools)
 
 	return &RoundRobinResourcePool{
-		options:       options,
-		createPool:    createPool,
-		rwMutex:       sync.RWMutex{},
-		isLameDuck:    false,
-		pools:         pools,
-		counter:       counter,
+		options:    options,
+		createPool: createPool,
+		rwMutex:    sync.RWMutex{},
+		isLameDuck: false,
+		pools:      pools,
+		counter:    counter,
 	}, nil
 }
 
@@ -122,7 +122,7 @@ func (p *RoundRobinResourcePool) Register(resourceLocation string) error {
 		p.pools,
 		&ResourceLocationPool{
 			ResourceLocation: resourceLocation,
-			Pool:     pool,
+			Pool:             pool,
 		})
 
 	shuffle(p.pools)
