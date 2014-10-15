@@ -8,12 +8,12 @@ import (
 	"github.com/dropbox/godropbox/errors"
 )
 
-type locationPool struct {
-	location string
-	pool     ResourcePool
+type ResourceLocationPool struct {
+	ResourceLocation string
+	Pool             ResourcePool
 }
 
-func shuffle(pools []*locationPool) {
+func shuffle(pools []*ResourceLocationPool) {
 	for i := len(pools) - 1; i > 0; i-- {
 		idx := rand.Intn(i + 1)
 		pools[i], pools[idx] = pools[idx], pools[i]
@@ -29,7 +29,7 @@ type RoundRobinResourcePool struct {
 
 	rwMutex       sync.RWMutex
 	isLameDuck    bool
-	locationPools []*locationPool
+	pools []*ResourceLocationPool
 
 	counter *int64 // atomic counter
 }
@@ -37,7 +37,17 @@ type RoundRobinResourcePool struct {
 // This returns a RoundRobinResourcePool.
 func NewRoundRobinResourcePool(
 	options Options,
-	createPool func(Options) ResourcePool) ResourcePool {
+	createPool func(Options) ResourcePool,
+    pools ...*ResourceLocationPool) (ResourcePool, error) {
+
+    for _, pool := range pools {
+        if pool.ResourceLocation == "" {
+            return nil, errors.New("Invalid resource location")
+        }
+        if pool.Pool == nil {
+            return nil, errors.New("Invalid pool")
+        }
+    }
 
 	if createPool == nil {
 		createPool = NewSimpleResourcePool
@@ -46,14 +56,16 @@ func NewRoundRobinResourcePool(
 	counter := new(int64)
 	atomic.StoreInt64(counter, 0)
 
+    shuffle(pools)
+
 	return &RoundRobinResourcePool{
 		options:       options,
 		createPool:    createPool,
 		rwMutex:       sync.RWMutex{},
 		isLameDuck:    false,
-		locationPools: make([]*locationPool, 0),
+		pools:         pools,
 		counter:       counter,
-	}
+	}, nil
 }
 
 // See ResourcePool for documentation.
@@ -62,8 +74,8 @@ func (p *RoundRobinResourcePool) NumActive() int32 {
 	defer p.rwMutex.RUnlock()
 
 	total := int32(0)
-	for _, locPool := range p.locationPools {
-		total += locPool.pool.NumActive()
+	for _, locPool := range p.pools {
+		total += locPool.Pool.NumActive()
 	}
 	return total
 }
@@ -74,8 +86,8 @@ func (p *RoundRobinResourcePool) NumIdle() int {
 	defer p.rwMutex.RUnlock()
 
 	total := 0
-	for _, locPool := range p.locationPools {
-		total += locPool.pool.NumIdle()
+	for _, locPool := range p.pools {
+		total += locPool.Pool.NumIdle()
 	}
 	return total
 }
@@ -95,8 +107,8 @@ func (p *RoundRobinResourcePool) Register(resourceLocation string) error {
 			resourceLocation)
 	}
 
-	for _, locPool := range p.locationPools {
-		if locPool.location == resourceLocation {
+	for _, locPool := range p.pools {
+		if locPool.ResourceLocation == resourceLocation {
 			return nil
 		}
 	}
@@ -106,14 +118,14 @@ func (p *RoundRobinResourcePool) Register(resourceLocation string) error {
 		return err
 	}
 
-	p.locationPools = append(
-		p.locationPools,
-		&locationPool{
-			location: resourceLocation,
-			pool:     pool,
+	p.pools = append(
+		p.pools,
+		&ResourceLocationPool{
+			ResourceLocation: resourceLocation,
+			Pool:     pool,
 		})
 
-	shuffle(p.locationPools)
+	shuffle(p.pools)
 	return nil
 }
 
@@ -123,18 +135,18 @@ func (p *RoundRobinResourcePool) Unregister(resourceLocation string) error {
 	defer p.rwMutex.Unlock()
 
 	idx := -1
-	for i, locPool := range p.locationPools {
-		if locPool.location == resourceLocation {
+	for i, locPool := range p.pools {
+		if locPool.ResourceLocation == resourceLocation {
 			idx = i
 			break
 		}
 	}
 
 	if idx >= 0 {
-		tail := p.locationPools[idx+1:]
-		p.locationPools = p.locationPools[0:idx]
-		p.locationPools = append(p.locationPools, tail...)
-		shuffle(p.locationPools)
+		tail := p.pools[idx+1:]
+		p.pools = p.pools[0:idx]
+		p.pools = append(p.pools, tail...)
+		shuffle(p.pools)
 	}
 	return nil
 }
@@ -143,9 +155,9 @@ func (p *RoundRobinResourcePool) ListRegistered() []string {
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
 
-	result := make([]string, 0, len(p.locationPools))
-	for _, locPool := range p.locationPools {
-		result = append(result, locPool.location)
+	result := make([]string, 0, len(p.pools))
+	for _, locPool := range p.pools {
+		result = append(result, locPool.ResourceLocation)
 	}
 	return result
 }
@@ -159,9 +171,9 @@ func (p *RoundRobinResourcePool) Get(key string) (ManagedHandle, error) {
 	var err error
 	var handle ManagedHandle
 
-	for i := 0; i < len(p.locationPools); i++ {
-		next := int(atomic.AddInt64(p.counter, 1) % int64(len(p.locationPools)))
-		pool := p.locationPools[next].pool
+	for i := 0; i < len(p.pools); i++ {
+		next := int(atomic.AddInt64(p.counter, 1) % int64(len(p.pools)))
+		pool := p.pools[next].Pool
 
 		handle, err = pool.Get(key)
 		if err == nil {
@@ -193,7 +205,7 @@ func (p *RoundRobinResourcePool) EnterLameDuckMode() {
 
 	p.isLameDuck = true
 
-	for _, locPool := range p.locationPools {
-		locPool.pool.EnterLameDuckMode()
+	for _, locPool := range p.pools {
+		locPool.Pool.EnterLameDuckMode()
 	}
 }
