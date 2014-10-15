@@ -40,10 +40,20 @@ func NewRoundRobinResourcePool(
 	createPool func(Options) ResourcePool,
 	pools ...*ResourceLocationPool) (ResourcePool, error) {
 
+	locations := make(map[string]bool)
+
 	for _, pool := range pools {
 		if pool.ResourceLocation == "" {
 			return nil, errors.New("Invalid resource location")
 		}
+
+		if locations[pool.ResourceLocation] {
+			return nil, errors.Newf(
+				"Duplication resource location %s",
+				pool.ResourceLocation)
+		}
+		locations[pool.ResourceLocation] = true
+
 		if pool.Pool == nil {
 			return nil, errors.New("Invalid pool")
 		}
