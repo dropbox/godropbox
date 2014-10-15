@@ -547,6 +547,12 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 			buf.WriteString(", ")
 		}
 
+		if col == nil {
+			return "", errors.Newf(
+				"nil column.  Generated sql: %s",
+				buf.String())
+		}
+
 		if val == nil {
 			return "", errors.Newf(
 				"nil value.  Generated sql: %s",
