@@ -2,6 +2,9 @@
 
 Common libraries for writing go services/applications.
 
+### Requirement
+Go 1.3+
+
 ### Installation
 ``go get github.com/dropbox/godropbox``
 
