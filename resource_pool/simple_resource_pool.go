@@ -143,10 +143,11 @@ func (p *SimpleResourcePool) Release(handle ManagedHandle) error {
 				"by another resource pool")
 	}
 
-	atomic.AddInt32(p.numActive, -1)
-
-	h, _ := handle.Handle()
-	p.queueIdleHandles(h)
+	h := handle.ReleaseUnderlyingHandle()
+	if h != nil {
+		atomic.AddInt32(p.numActive, -1)
+		p.queueIdleHandles(h)
+	}
 
 	return nil
 }
@@ -159,11 +160,12 @@ func (p *SimpleResourcePool) Discard(handle ManagedHandle) error {
 				"by another resource pool")
 	}
 
-	atomic.AddInt32(p.numActive, -1)
-
-	h, _ := handle.Handle()
-	if err := p.options.Close(h); err != nil {
-		return errors.Wrap(err, "Failed to close resource handle")
+	h := handle.ReleaseUnderlyingHandle()
+	if h != nil {
+		atomic.AddInt32(p.numActive, -1)
+		if err := p.options.Close(h); err != nil {
+			return errors.Wrap(err, "Failed to close resource handle")
+		}
 	}
 	return nil
 }

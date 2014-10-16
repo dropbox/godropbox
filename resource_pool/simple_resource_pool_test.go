@@ -148,6 +148,60 @@ func (s *SimpleResourcePoolSuite) TestRecycleHandles(c *C) {
 	CheckId(c, n4, 5)
 }
 
+func (s *SimpleResourcePoolSuite) TestDoubleFree(c *C) {
+	dialer := fakeDialer{}
+	mockClock := time2.MockClock{}
+
+	options := Options{
+		MaxIdleHandles: 10,
+		Open:           dialer.FakeDial,
+		Close:          closeMockConn,
+		NowFunc:        mockClock.Now,
+	}
+
+	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool.Register("bar")
+
+	c1, err := pool.Get("bar")
+	c.Assert(err, IsNil)
+
+	c2, err := pool.Get("bar")
+	c.Assert(err, IsNil)
+
+	c.Assert(dialer.MaxId(), Equals, 2)
+	c.Assert(pool.NumActive(), Equals, int32(2))
+	c.Assert(pool.NumIdle(), Equals, 0)
+
+	err = c1.Release()
+	c.Assert(err, IsNil)
+
+	err = c1.Release()
+	c.Assert(err, IsNil)
+
+	err = c1.Discard()
+	c.Assert(err, IsNil)
+
+	c.Assert(dialer.MaxId(), Equals, 2)
+	c.Assert(pool.NumActive(), Equals, int32(1))
+	c.Assert(pool.NumIdle(), Equals, 1)
+
+	err = c2.Discard()
+	c.Assert(err, IsNil)
+
+	err = c2.Discard()
+	c.Assert(err, IsNil)
+
+	err = c2.Release()
+	c.Assert(err, IsNil)
+
+	c.Assert(dialer.MaxId(), Equals, 2)
+	c.Assert(pool.NumActive(), Equals, int32(0))
+	c.Assert(pool.NumIdle(), Equals, 1)
+
+	c.Assert(c1.ReleaseUnderlyingHandle(), IsNil)
+	c.Assert(c2.ReleaseUnderlyingHandle(), IsNil)
+}
+
 func (s *SimpleResourcePoolSuite) TestDiscards(c *C) {
 	dialer := fakeDialer{}
 	mockClock := time2.MockClock{}
