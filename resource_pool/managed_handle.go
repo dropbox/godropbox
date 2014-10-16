@@ -18,6 +18,12 @@ type ManagedHandle interface {
 	// This returns the resource pool which owns this handle.
 	Owner() ResourcePool
 
+	// The releases the underlying resource handle to the caller and marks the
+	// managed handle as inactive.  The caller is responsible for cleaning up
+	// the released handle.  This returns nil if the managed handle no longer
+	// owns the resource.
+	ReleaseUnderlyingHandle() interface{}
+
 	// This indictes a user is done with the handle and releases the handle
 	// back to the resource pool.
 	Release() error
@@ -73,17 +79,19 @@ func (c *ManagedHandleImpl) Owner() ResourcePool {
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) Release() error {
+func (c *ManagedHandleImpl) ReleaseUnderlyingHandle() interface{} {
 	if atomic.CompareAndSwapInt32(&c.isActive, 1, 0) {
-		return c.pool.Release(c)
+		return c.handle
 	}
 	return nil
 }
 
 // See ManagedHandle for documentation.
+func (c *ManagedHandleImpl) Release() error {
+	return c.pool.Release(c)
+}
+
+// See ManagedHandle for documentation.
 func (c *ManagedHandleImpl) Discard() error {
-	if atomic.CompareAndSwapInt32(&c.isActive, 1, 0) {
-		return c.pool.Discard(c)
-	}
-	return nil
+	return c.pool.Discard(c)
 }
