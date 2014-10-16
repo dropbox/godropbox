@@ -537,20 +537,27 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 
 	buf.WriteString(" SET ")
 	addComma := false
+
+	// Sorting is too hard in go, just create a second map ...
+	updateValues := make(map[string]Expression)
+	for col, expr := range u.updateValues {
+		if col == nil {
+			return "", errors.Newf(
+				"nil column.  Generated sql: %s",
+				buf.String())
+		}
+
+		updateValues[col.Name()] = expr
+	}
+
 	for _, col := range u.table.Columns() {
-		val, inMap := u.updateValues[col]
+		val, inMap := updateValues[col.Name()]
 		if !inMap {
 			continue
 		}
 
 		if addComma {
 			buf.WriteString(", ")
-		}
-
-		if col == nil {
-			return "", errors.Newf(
-				"nil column.  Generated sql: %s",
-				buf.String())
 		}
 
 		if val == nil {

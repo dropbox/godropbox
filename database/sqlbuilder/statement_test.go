@@ -371,6 +371,18 @@ func (s *StmtSuite) TestUpdateSingleValue(c *gc.C) {
 		"UPDATE `db`.`table1` SET `table1`.`col1`=1 WHERE `table1`.`col2`=2")
 }
 
+func (s *StmtSuite) TestUpdateUsingDeferredLookupColumns(c *gc.C) {
+	stmt := table1.Update().Set(table1.C("col1"), Literal(1))
+	stmt.Where(EqL(table1Col2, 2))
+	sql, err := stmt.String("db")
+	c.Assert(err, gc.IsNil)
+
+	c.Assert(
+		sql,
+		gc.Equals,
+		"UPDATE `db`.`table1` SET `table1`.`col1`=1 WHERE `table1`.`col2`=2")
+}
+
 func (s *StmtSuite) TestUpdateMultiValues(c *gc.C) {
 	stmt := table1.Update()
 	stmt.Set(table1Col1, Literal(1))
