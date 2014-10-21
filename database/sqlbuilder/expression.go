@@ -157,6 +157,28 @@ func (arith *arithmeticExpression) SerializeSql(out *bytes.Buffer) (err error) {
 	return nil
 }
 
+type tupleExpression struct {
+	isExpression
+	elements listClause
+}
+
+func (tuple *tupleExpression) SerializeSql(out *bytes.Buffer) error {
+	return tuple.elements.SerializeSql(out)
+}
+
+func Tuple(exprs ...Expression) Expression {
+	clauses := make([]Clause, 0, len(exprs))
+	for _, expr := range exprs {
+		clauses = append(clauses, expr)
+	}
+	return &tupleExpression{
+		elements: listClause{
+			clauses:            clauses,
+			includeParentheses: true,
+		},
+	}
+}
+
 // Representation of a tuple enclosed, comma separated list of clauses
 type listClause struct {
 	clauses            []Clause
