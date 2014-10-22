@@ -1,0 +1,153 @@
+package mysql;
+
+// See sql/log_event.h for details.
+message LogEventType {
+    enum Type {
+        UNKNOWN_EVENT= 0;
+        START_EVENT_V3= 1;
+        QUERY_EVENT= 2;
+        STOP_EVENT= 3;
+        ROTATE_EVENT= 4;
+        INTVAR_EVENT= 5;
+        LOAD_EVENT= 6;
+        SLAVE_EVENT= 7;
+        CREATE_FILE_EVENT= 8;
+        APPEND_BLOCK_EVENT= 9;
+        EXEC_LOAD_EVENT= 10;
+        DELETE_FILE_EVENT= 11;
+        NEW_LOAD_EVENT= 12;
+        RAND_EVENT= 13;
+        USER_VAR_EVENT= 14;
+        FORMAT_DESCRIPTION_EVENT= 15;
+        XID_EVENT= 16;
+        BEGIN_LOAD_QUERY_EVENT= 17;
+        EXECUTE_LOAD_QUERY_EVENT= 18;
+        TABLE_MAP_EVENT = 19;
+        PRE_GA_WRITE_ROWS_EVENT = 20;
+        PRE_GA_UPDATE_ROWS_EVENT = 21;
+        PRE_GA_DELETE_ROWS_EVENT = 22;
+        WRITE_ROWS_EVENT_V1 = 23;
+        UPDATE_ROWS_EVENT_V1 = 24;
+        DELETE_ROWS_EVENT_V1 = 25;
+        INCIDENT_EVENT= 26;
+        HEARTBEAT_LOG_EVENT= 27;
+        IGNORABLE_LOG_EVENT= 28;
+        ROWS_QUERY_LOG_EVENT= 29;
+        WRITE_ROWS_EVENT = 30;
+        UPDATE_ROWS_EVENT = 31;
+        DELETE_ROWS_EVENT = 32;
+        GTID_LOG_EVENT= 33;
+        ANONYMOUS_GTID_LOG_EVENT= 34;
+        PREVIOUS_GTIDS_LOG_EVENT= 35;
+    }
+}
+
+message RowsEventVersion {
+    enum Type {
+        V2 = 1;
+        V1 = 0;
+    }
+}
+
+message ChecksumAlgorithm {
+    enum Type {
+        OFF = 0;
+        CRC32 = 1;
+        UNDEFINED = 255;
+    }
+}
+
+// This is equivalent to Q_<name>(_CODE)? in log_event.h
+message QueryStatusCode {
+    enum Type {
+        FLAGS2 = 0;
+        SQL_MODE = 1;
+        CATALOG = 2;
+        AUTO_INCREMENT = 3;
+        CHARSET = 4;
+        TIME_ZONE = 5;
+        CATALOG_NZ = 6;
+        LC_TIME_NAMES = 7;
+        CHARSET_DATABASE = 8;
+        TABLE_MAP_FOR_UPDATE = 9;
+        MASTER_DATA_WRITTEN = 10;
+        INVOKER = 11;
+        UPDATED_DB_NAMES = 12;
+        MICROSECONDS = 13;
+    }
+}
+
+// This is equivalent to MODE_<name> in sql_class.h.  Note that these are
+// bit positions.
+message SqlMode {
+    enum BitPosition {
+        REAL_AS_FLOAT = 0;
+        PIPES_AS_CONCAT = 1;
+        ANSI_QUOTES = 2;
+        IGNORE_SPACE = 3;
+        NOT_USED = 4;
+        ONLY_FULL_GROUP_BY = 5;
+        NO_UNSIGNED_SUBTRACTION = 6;
+        NO_DIR_IN_CREATE = 7;
+        POSTGRESQL = 8;
+        ORACLE = 9;
+        MSSQL = 10;
+        DB2 = 11;
+        MAXDB = 12;
+        NO_KEY_OPTIONS = 13;
+        NO_TABLE_OPTIONS = 14;
+        NO_FIELD_OPTIONS = 15;
+        MYSQL323 = 16;
+        MYSQL40 = 17;
+        ANSI = 18;
+        NO_AUTO_VALUE_ON_ZERO = 19;
+        NO_BACKSLASH_ESCAPES = 20;
+        STRICT_TRANS_TABLES = 21;
+        STRICT_ALL_TABLES = 22;
+        NO_ZERO_IN_DATE = 23;
+        NO_ZERO_DATE = 24;
+        INVALID_DATES = 25;
+        ERROR_FOR_DIVISION_BY_ZERO = 26;
+        TRADITIONAL = 27;
+        NO_AUTO_CREATE_USER = 28;
+        HIGH_NOT_PRECEDENCE = 29;
+        NO_ENGINE_SUBSTITUTION = 30;
+        PAD_CHAR_TO_FULL_LENGTH = 31;
+    }
+}
+
+message FieldType {
+    enum Type {
+        DECIMAL = 0;
+        TINY = 1;
+        SHORT = 2;
+        LONG = 3;
+        FLOAT = 4;
+        DOUBLE = 5;
+        NULL = 6;
+        TIMESTAMP = 7;
+        LONGLONG = 8;
+        INT24 = 9;
+        DATE = 10;
+        TIME = 11;
+        DATETIME = 12;
+        YEAR = 13;
+        NEWDATE = 14;
+        VARCHAR = 15;
+        BIT = 16;
+        TIMESTAMP2 = 17;
+        DATETIME2 = 18;
+        TIME2 = 19;
+        NEWDECIMAL = 246;
+        ENUM = 247;
+        SET = 248;
+        TINY_BLOB = 249;
+        MEDIUM_BLOB = 250;
+        LONG_BLOB = 251;
+        BLOB = 252;
+        VAR_STRING = 253;
+        STRING = 254;
+        GEOMETRY = 255;
+    }
+}
+
