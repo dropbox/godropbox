@@ -17,6 +17,7 @@ type SelectStatement interface {
 	Statement
 
 	Where(expression BoolExpression) SelectStatement
+	AndWhere(expression BoolExpression) SelectStatement
 	GroupBy(expressions ...Expression) SelectStatement
 	OrderBy(clauses ...OrderByClause) SelectStatement
 	Limit(limit int64) SelectStatement
@@ -24,6 +25,7 @@ type SelectStatement interface {
 	ForUpdate() SelectStatement
 	Offset(offset int64) SelectStatement
 	Comment(comment string) SelectStatement
+	Copy() SelectStatement
 }
 
 type InsertStatement interface {
@@ -142,6 +144,17 @@ type selectStatementImpl struct {
 	limit, offset  int64
 	withSharedLock bool
 	forUpdate      bool
+}
+
+func (s *selectStatementImpl) Copy() SelectStatement {
+	ret := *s
+	return &ret
+}
+
+// Further filter the query, instead of replacing the filter
+func (q *selectStatementImpl) AndWhere(expression BoolExpression) SelectStatement {
+	q.where = And(q.where, expression)
+	return q
 }
 
 func (q *selectStatementImpl) Where(expression BoolExpression) SelectStatement {
