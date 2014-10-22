@@ -153,6 +153,9 @@ func (s *selectStatementImpl) Copy() SelectStatement {
 
 // Further filter the query, instead of replacing the filter
 func (q *selectStatementImpl) AndWhere(expression BoolExpression) SelectStatement {
+	if q.where == nil {
+		return q.Where(expression)
+	}
 	q.where = And(q.where, expression)
 	return q
 }

@@ -69,7 +69,7 @@ func (s *StmtSuite) TestSelectWhereDate(c *gc.C) {
 }
 
 func (s *StmtSuite) TestSelectAndWhere(c *gc.C) {
-	q := table1.Select(table1Col1).Where(GtL(table1Col1, 123))
+	q := table1.Select(table1Col1).AndWhere(GtL(table1Col1, 123))
 	q.AndWhere(LtL(table1Col1, 321))
 	sql, err := q.String("db")
 
