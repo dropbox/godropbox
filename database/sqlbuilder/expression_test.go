@@ -41,6 +41,25 @@ func (s *ExprSuite) TestConjunctExprSingleElement(c *gc.C) {
 	c.Assert(sql, gc.Equals, "`table1`.`col1`=1")
 }
 
+func (s *ExprSuite) TestTupleExpr(c *gc.C) {
+
+	expr := Tuple()
+	buf := &bytes.Buffer{}
+	err := expr.SerializeSql(buf)
+	c.Assert(err, gc.NotNil)
+
+	expr = Tuple(table1Col1, Literal(1), Literal("five"))
+	err = expr.SerializeSql(buf)
+	c.Assert(err, gc.IsNil)
+
+	sql := buf.String()
+	c.Assert(
+		sql,
+		gc.Equals,
+		"(`table1`.`col1`,1,'five')")
+
+}
+
 func (s *ExprSuite) TestLikeExpr(c *gc.C) {
 	expr := LikeL(table1Col1, EscapeForLike("%my_prefix")+"%")
 
