@@ -68,6 +68,39 @@ func (s *StmtSuite) TestSelectWhereDate(c *gc.C) {
 			"WHERE `table1`.`col4`>'1999-01-02 03:04:05'")
 }
 
+func (s *StmtSuite) TestSelectAndWhere(c *gc.C) {
+	q := table1.Select(table1Col1).AndWhere(GtL(table1Col1, 123))
+	q.AndWhere(LtL(table1Col1, 321))
+	sql, err := q.String("db")
+
+	c.Assert(err, gc.IsNil)
+	c.Assert(
+		sql,
+		gc.Equals,
+		"SELECT `table1`.`col1` FROM `db`.`table1` WHERE (`table1`.`col1`>123 AND `table1`.`col1`<321)")
+}
+
+func (s *StmtSuite) TestSelectCopy(c *gc.C) {
+	q := table1.Select(table1Col1).Where(GtL(table1Col1, 123))
+	qq := q.Copy().Where(GtL(table1Col1, 321)).OrderBy(table1Col1)
+
+	// Initial query unchanged
+	sql, err := q.String("db")
+	c.Assert(err, gc.IsNil)
+	c.Assert(
+		sql,
+		gc.Equals,
+		"SELECT `table1`.`col1` FROM `db`.`table1` WHERE `table1`.`col1`>123")
+	// New query changed
+	sql, err = qq.String("db")
+	c.Assert(err, gc.IsNil)
+	c.Assert(
+		sql,
+		gc.Equals,
+		"SELECT `table1`.`col1` FROM `db`.`table1` WHERE `table1`.`col1`>321 ORDER BY `table1`.`col1`")
+
+}
+
 func (s *StmtSuite) TestSelectLimitWithoutOffset(c *gc.C) {
 	q := table1.Select(table1Col1).Limit(5)
 	sql, err := q.String("db")
