@@ -1,0 +1,2 @@
+// Protobuf definitions
+package proto
