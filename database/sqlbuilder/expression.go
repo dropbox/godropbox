@@ -163,6 +163,9 @@ type tupleExpression struct {
 }
 
 func (tuple *tupleExpression) SerializeSql(out *bytes.Buffer) error {
+	if len(tuple.elements.clauses) < 1 {
+		return errors.Newf("Tuples must include at least one element")
+	}
 	return tuple.elements.SerializeSql(out)
 }
 

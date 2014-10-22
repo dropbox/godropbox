@@ -42,11 +42,14 @@ func (s *ExprSuite) TestConjunctExprSingleElement(c *gc.C) {
 }
 
 func (s *ExprSuite) TestTupleExpr(c *gc.C) {
-	expr := Tuple(table1Col1, Literal(1), Literal("five"))
 
+	expr := Tuple()
 	buf := &bytes.Buffer{}
-
 	err := expr.SerializeSql(buf)
+	c.Assert(err, gc.NotNil)
+
+	expr = Tuple(table1Col1, Literal(1), Literal("five"))
+	err = expr.SerializeSql(buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
