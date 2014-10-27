@@ -1,7 +1,6 @@
 package binlog
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 
@@ -10,20 +9,20 @@ import (
 
 type MockMultifileReader struct {
 	reader           EventReader
-	files            [][]byte
+	files            []*MockLogFile
 	currentFileIndex int
 	isClosed         bool
 }
 
 var _ EventReader = &MockMultifileReader{}
 
-func newMockReader(file []byte) EventReader {
+func newMockReader(file *MockLogFile) EventReader {
 	return NewParsedV4EventReader(
-		NewRawV4EventReader(bytes.NewBuffer(file), "fake"),
+		NewRawV4EventReader(file.GetReader(), "fake"),
 		NewV4EventParserMap())
 }
 
-func NewMockMultifileReader(files [][]byte) *MockMultifileReader {
+func NewMockMultifileReader(files []*MockLogFile) *MockMultifileReader {
 	var reader EventReader
 	if len(files) == 0 {
 		reader = nil
