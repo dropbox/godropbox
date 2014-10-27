@@ -17,18 +17,17 @@ const testRelayPrefix = "relay."
 const testBinPrefix = "bin."
 
 type LogStreamV4EventReaderSuite struct {
-	files map[string]*FakeLogFile
+	files map[string]*MockLogFile
 }
 
 var _ = Suite(&LogStreamV4EventReaderSuite{})
 
 func (s *LogStreamV4EventReaderSuite) SetUpTest(c *C) {
-	s.files = make(map[string]*FakeLogFile)
+	s.files = make(map[string]*MockLogFile)
 }
 
 func (s *LogStreamV4EventReaderSuite) GetFile(
-	prefix string,
-	num int) *FakeLogFile {
+	prefix string, num int) *MockLogFile {
 
 	path := logName(prefix, num)
 	f, ok := s.files[path]
@@ -36,7 +35,7 @@ func (s *LogStreamV4EventReaderSuite) GetFile(
 		return f
 	}
 
-	f = NewFakeLogFile()
+	f = NewMockLogFile()
 	f.WriteLogFileMagic()
 	f.WriteFDE()
 	s.files[path] = f
@@ -77,7 +76,7 @@ func (s *LogStreamV4EventReaderSuite) newFakeLogReader(
 	delete(s.files, filename)
 
 	return NewLogFileV4EventReader(
-		buf,
+		buf.GetReader(),
 		filename,
 		parsers,
 		Logger{
