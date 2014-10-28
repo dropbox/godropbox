@@ -44,6 +44,23 @@ func (s *TableSuite) TestCInvalidLookup(c *gc.C) {
 	c.Assert(err, gc.NotNil)
 }
 
+func (s *TableSuite) TestValidForcedIndex(c *gc.C) {
+	t := table1.ForceIndex("foo")
+	buf := &bytes.Buffer{}
+	err := t.SerializeSql("db", buf)
+	c.Assert(err, gc.IsNil)
+
+	sql := buf.String()
+	c.Assert(sql, gc.Equals, "`db`.`table1` FORCE INDEX (`foo`)")
+}
+
+func (s *TableSuite) TestInvalidForcedIndex(c *gc.C) {
+	t := table1.ForceIndex("foo\x00")
+	buf := &bytes.Buffer{}
+	err := t.SerializeSql("db", buf)
+	c.Assert(err, gc.NotNil)
+}
+
 func (s *TableSuite) TestJoinNilLeftTable(c *gc.C) {
 	join := InnerJoinOn(nil, table2, EqL(table2Col3, 123))
 
