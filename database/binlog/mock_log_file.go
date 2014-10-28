@@ -34,7 +34,8 @@ func (mlf *MockLogFile) GetReader() *MockLogFileReader {
 	return newMockLogFileReader(mlf)
 }
 
-// Every function for writing into the MockLogFile should acquire the lock via either Write() or writeWithHeader().
+// Every function for writing into the MockLogFile should acquire the lock via either Write()
+// or writeWithHeader().
 func (mlf *MockLogFile) Write(contents []byte) {
 	mlf.mu.Lock()
 	defer mlf.mu.Unlock()
@@ -42,7 +43,9 @@ func (mlf *MockLogFile) Write(contents []byte) {
 	mlf.logBuffer = append(mlf.logBuffer, contents...)
 }
 
-func (mlf *MockLogFile) writeWithHeader(contents []byte, logEventType mysql_proto.LogEventType_Type) {
+func (mlf *MockLogFile) writeWithHeader(
+	contents []byte, logEventType mysql_proto.LogEventType_Type) {
+
 	mlf.mu.Lock()
 	defer mlf.mu.Unlock()
 
