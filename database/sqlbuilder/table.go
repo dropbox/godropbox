@@ -79,6 +79,8 @@ type Table struct {
 	name         string
 	columns      []NonAliasColumn
 	columnLookup map[string]NonAliasColumn
+	// If not empty, the name of the index to force
+	forcedIndex string
 }
 
 // Returns the specified column, or errors if it doesn't exist in the table
@@ -120,6 +122,13 @@ func (t *Table) Columns() []NonAliasColumn {
 	return t.columns
 }
 
+// Returns a copy of this table, but with the specified index forced.
+func (t *Table) ForceIndex(index string) *Table {
+	newTable := *t
+	newTable.forcedIndex = index
+	return &newTable
+}
+
 // Generates the sql string for the current table expression.  Note: the
 // generated string may not be a valid/executable sql statement.
 func (t *Table) SerializeSql(database string, out *bytes.Buffer) error {
@@ -128,6 +137,16 @@ func (t *Table) SerializeSql(database string, out *bytes.Buffer) error {
 	out.WriteString("`.`")
 	out.WriteString(t.Name())
 	out.WriteString("`")
+
+	if t.forcedIndex != "" {
+		if !validIdentifierName(t.forcedIndex) {
+			return errors.Newf("'%s' is not a valid identifier for an index", t.forcedIndex)
+		}
+		out.WriteString(" FORCE INDEX (`")
+		out.WriteString(t.forcedIndex)
+		out.WriteString("`)")
+	}
+
 	return nil
 }
 
