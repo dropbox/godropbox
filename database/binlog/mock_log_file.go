@@ -34,21 +34,35 @@ func (mlf *MockLogFile) GetReader() *MockLogFileReader {
 	return newMockLogFileReader(mlf)
 }
 
+// Every function for writing into the MockLogFile should acquire the lock via either Write() or writeWithHeader().
 func (mlf *MockLogFile) Write(contents []byte) {
-	mlf.logBuffer = append(mlf.logBuffer, contents...)
-}
-
-func (mlf *MockLogFile) WriteLogFileMagic() {
 	mlf.mu.Lock()
 	defer mlf.mu.Unlock()
 
+	mlf.logBuffer = append(mlf.logBuffer, contents...)
+}
+
+func (mlf *MockLogFile) writeWithHeader(contents []byte, logEventType mysql_proto.LogEventType_Type) {
+	mlf.mu.Lock()
+	defer mlf.mu.Unlock()
+
+	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + len(contents)
+
+	e, _ := CreateEventBytes(
+		uint32(0),
+		uint8(logEventType),
+		uint32(1),
+		uint32(nextPosition),
+		uint16(1),
+		contents)
+	mlf.logBuffer = append(mlf.logBuffer, e...)
+}
+
+func (mlf *MockLogFile) WriteLogFileMagic() {
 	mlf.Write(logFileMagic)
 }
 
 func (mlf *MockLogFile) WriteFDE() {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	data := []byte{
 		// binlog version
 		4, 0,
@@ -66,63 +80,27 @@ func (mlf *MockLogFile) WriteFDE() {
 		56, 13, 0, 8, 0, 18, 0, 4, 4, 4, 4, 18, 0, 0, 84, 0, 4,
 		26, 8, 0, 0, 0, 8, 8, 8, 2, 0}
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + len(data)
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_FORMAT_DESCRIPTION_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data)
-	mlf.Write(e)
+	mlf.writeWithHeader(data, mysql_proto.LogEventType_FORMAT_DESCRIPTION_EVENT)
 }
 
 func (mlf *MockLogFile) WriteXid(id uint64) {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	data := &bytes.Buffer{}
 	binary.Write(data, binary.LittleEndian, id)
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_XID_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_XID_EVENT)
 }
 
 func (mlf *MockLogFile) WriteRotate(prefix string, num int) {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	pos := uint64(4)
 
 	data := &bytes.Buffer{}
 	binary.Write(data, binary.LittleEndian, pos)
 	data.WriteString(logName(prefix, num))
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_ROTATE_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_ROTATE_EVENT)
 }
 
 func (mlf *MockLogFile) WriteQueryWithParam(query string, dbName string) {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	data := &bytes.Buffer{}
 	data.Write([]byte{
 		0, 0, 0, 0, // thread id
@@ -135,16 +113,7 @@ func (mlf *MockLogFile) WriteQueryWithParam(query string, dbName string) {
 	data.WriteByte(0)
 	data.Write([]byte(query))
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_QUERY_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_QUERY_EVENT)
 }
 
 func (mlf *MockLogFile) WriteQuery(query string) {
@@ -156,32 +125,17 @@ func (mlf *MockLogFile) WriteBegin() {
 }
 
 func (mlf *MockLogFile) WriteRowsQuery(query string) {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	data := &bytes.Buffer{}
 	data.WriteByte(byte(len(query)))
 	data.WriteString(query) // Note: this mimics bug in mysql 5.6
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_ROWS_QUERY_LOG_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_ROWS_QUERY_LOG_EVENT)
 }
 
 func (mlf *MockLogFile) WriteTableMapWithParams(
 	tableId int8,
 	dbName string,
 	tableName string) {
-
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
 
 	buf := &bytes.Buffer{}
 	buf.Write([]byte{
@@ -210,16 +164,7 @@ func (mlf *MockLogFile) WriteTableMapWithParams(
 		2,
 	})
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + buf.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_TABLE_MAP_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		buf.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(buf.Bytes(), mysql_proto.LogEventType_TABLE_MAP_EVENT)
 }
 
 func (mlf *MockLogFile) WriteTableMap() {
@@ -230,9 +175,6 @@ func (mlf *MockLogFile) WriteTableMap() {
 }
 
 func (mlf *MockLogFile) WriteInsertWithParam(value int, tableId int8) {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	data := &bytes.Buffer{}
 	data.Write([]byte{
 		// table id
@@ -250,16 +192,7 @@ func (mlf *MockLogFile) WriteInsertWithParam(value int, tableId int8) {
 	})
 	binary.Write(data, binary.LittleEndian, uint32(value))
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_WRITE_ROWS_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_WRITE_ROWS_EVENT)
 }
 
 func (mlf *MockLogFile) WriteInsert(value int) {
@@ -267,9 +200,6 @@ func (mlf *MockLogFile) WriteInsert(value int) {
 }
 
 func (mlf *MockLogFile) WriteDeleteWithParam(value int, tableId int8) {
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
-
 	data := &bytes.Buffer{}
 	data.Write([]byte{
 		// table id
@@ -287,16 +217,7 @@ func (mlf *MockLogFile) WriteDeleteWithParam(value int, tableId int8) {
 	})
 	binary.Write(data, binary.LittleEndian, uint32(value))
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_DELETE_ROWS_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_DELETE_ROWS_EVENT)
 }
 
 func (mlf *MockLogFile) WriteDelete(value int) {
@@ -307,9 +228,6 @@ func (mlf *MockLogFile) WriteUpdateWithParam(
 	before int,
 	after int,
 	tableId int8) {
-
-	mlf.mu.Lock()
-	defer mlf.mu.Unlock()
 
 	data := &bytes.Buffer{}
 	data.Write([]byte{
@@ -333,16 +251,7 @@ func (mlf *MockLogFile) WriteUpdateWithParam(
 	data.WriteByte(0)
 	binary.Write(data, binary.LittleEndian, uint32(after))
 
-	nextPosition := len(mlf.logBuffer) + sizeOfBasicV4EventHeader + data.Len()
-
-	e, _ := CreateEventBytes(
-		uint32(0),
-		uint8(mysql_proto.LogEventType_UPDATE_ROWS_EVENT),
-		uint32(1),
-		uint32(nextPosition),
-		uint16(1),
-		data.Bytes())
-	mlf.Write(e)
+	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_UPDATE_ROWS_EVENT)
 }
 
 func (mlf *MockLogFile) WriteUpdate(before int, after int) {
