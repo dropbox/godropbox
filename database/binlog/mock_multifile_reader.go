@@ -100,7 +100,8 @@ func (r *MockMultifileReader) NextEvent() (Event, error) {
 		event, err := reader.NextEvent()
 		if err == nil {
 			return event, nil
-		} else if err == io.EOF {
+		} else if err == io.EOF && r.currentFileIndex+1 < len(r.files) {
+			// There's another file, so we'll try again.
 			r.currentFileIndex++
 			r.reader = nil
 		} else {
