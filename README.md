@@ -24,6 +24,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Jack Ferris
 - Jamie Li
 - Jamie Turner
+- Kerry Xing
 - Naomi Seyfer
 - Pascal Borreli
 - Patrick Lee
