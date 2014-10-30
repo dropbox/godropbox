@@ -7,9 +7,14 @@ import (
 	"github.com/dropbox/godropbox/errors"
 )
 
+// Assumes that all files returned by successive calls to MockFileFetcher are the same,
+// except perhaps the last MockLogFile may have additional content in a later call, and later calls
+// may return more mock files. These assumptions should be reasonable for an append-only log model.
+type MockFileFetcher func() []*MockLogFile
+
 type MockMultifileReader struct {
 	reader           EventReader
-	files            []*MockLogFile
+	fetchFiles       MockFileFetcher
 	currentFileIndex int
 	isClosed         bool
 }
@@ -22,8 +27,11 @@ func newMockReader(file *MockLogFile) EventReader {
 		NewV4EventParserMap())
 }
 
-func NewMockMultifileReader(files []*MockLogFile) *MockMultifileReader {
+// There may be more files over time, so the MockFileFetcher is used instead of a static slice of
+// *MockLogFile.
+func NewMockMultifileReader(fetchFiles MockFileFetcher) *MockMultifileReader {
 	var reader EventReader
+	files := fetchFiles()
 	if len(files) == 0 {
 		reader = nil
 	} else {
@@ -32,7 +40,7 @@ func NewMockMultifileReader(files []*MockLogFile) *MockMultifileReader {
 
 	return &MockMultifileReader{
 		reader:           reader,
-		files:            files,
+		fetchFiles:       fetchFiles,
 		currentFileIndex: 0,
 		isClosed:         false,
 	}
@@ -44,8 +52,10 @@ func (r *MockMultifileReader) getReader() (EventReader, error) {
 	}
 
 	if r.reader == nil {
-		if r.currentFileIndex < len(r.files) {
-			r.reader = newMockReader(r.files[r.currentFileIndex])
+		files := r.fetchFiles()
+
+		if r.currentFileIndex < len(files) {
+			r.reader = newMockReader(files[r.currentFileIndex])
 		} else {
 			return nil, io.EOF
 		}
@@ -100,7 +110,7 @@ func (r *MockMultifileReader) NextEvent() (Event, error) {
 		event, err := reader.NextEvent()
 		if err == nil {
 			return event, nil
-		} else if err == io.EOF && r.currentFileIndex+1 < len(r.files) {
+		} else if err == io.EOF && r.currentFileIndex+1 < len(r.fetchFiles()) {
 			// There's another file, so we'll try again.
 			r.currentFileIndex++
 			r.reader = nil
