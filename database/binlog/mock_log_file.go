@@ -9,6 +9,7 @@ import (
 	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
 )
 
+// MockLogFile is thread-safe.
 type MockLogFile struct {
 	logBuffer []byte
 
