@@ -1,6 +1,7 @@
 package sort2
 
 import (
+	"bytes"
 	"sort"
 )
 
@@ -236,4 +237,30 @@ func (s Float32Slice) Sort() {
 
 func Float32s(s []float32) {
 	sort.Sort(Float32Slice(s))
+}
+
+//
+// BytesSlice -----------------------------------------------------------------
+//
+
+type ByteArraySlice [][]byte
+
+func (s ByteArraySlice) Len() int {
+	return len(s)
+}
+
+func (s ByteArraySlice) Less(i, j int) bool {
+	return bytes.Compare(s[i], s[j]) < 0
+}
+
+func (s ByteArraySlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s ByteArraySlice) Sort() {
+	sort.Sort(s)
+}
+
+func ByteArrays(s [][]byte) {
+	sort.Sort(ByteArraySlice(s))
 }
