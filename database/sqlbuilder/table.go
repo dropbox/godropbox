@@ -105,8 +105,7 @@ func (t *Table) Projections() []Projection {
 	result := make([]Projection, 0)
 
 	for _, col := range t.columns {
-		projection := t.C(col.Name())
-		result = append(result, projection)
+		result = append(result, col)
 	}
 
 	return result
