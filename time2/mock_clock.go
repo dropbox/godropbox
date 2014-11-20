@@ -29,6 +29,11 @@ func (c *MockClock) Now() time.Time {
 	return c.currentTime
 }
 
+// Returns the fake current time in epoch seconds.
+func (c *MockClock) NowFloat() float64 {
+	return TimeToFloat(c.currentTime)
+}
+
 // Returns the time elapsed since the fake current time.
 func (c *MockClock) Since(t time.Time) time.Duration {
 	return c.currentTime.Sub(t)
