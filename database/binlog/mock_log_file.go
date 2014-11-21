@@ -104,6 +104,10 @@ func (mlf *MockLogFile) WriteRotate(prefix string, num int) {
 	mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_ROTATE_EVENT)
 }
 
+func (mlf *MockLogFile) WriteStop() {
+	mlf.writeWithHeader([]byte{}, mysql_proto.LogEventType_STOP_EVENT)
+}
+
 func (mlf *MockLogFile) WriteQueryWithParam(query string, dbName string) {
 	data := &bytes.Buffer{}
 	data.Write([]byte{
