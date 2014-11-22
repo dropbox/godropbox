@@ -124,10 +124,14 @@ func (r *logStreamV4EventReader) getLogFileReader() (EventReader, error) {
 		}
 		derr, ok := err.(errors.DropboxError)
 		if ok {
-			return nil, &FailedToOpenFileError{derr}
+			return nil, &FailedToOpenFileError{
+				DropboxError: derr,
+				LogFileNum:   r.nextLogFileNum,
+			}
 		}
 		return nil, &FailedToOpenFileError{
-			errors.Wrap(err, "Failed to open file"),
+			DropboxError: errors.Wrap(err, "Failed to open file"),
+			LogFileNum:   r.nextLogFileNum,
 		}
 	}
 
@@ -187,84 +191,104 @@ func (r *logStreamV4EventReader) NextEvent() (Event, error) {
 		}
 	}
 
-	rotate, ok := event.(*RotateEvent)
-	if !ok {
+	rotate, isRotate := event.(*RotateEvent)
+	_, isStop := event.(*StopEvent)
+	if !isStop && !isRotate {
 		return event, nil
 	}
 
 	nextFileNum := -1
-	if len(rotate.NewLogName())-logFileNumberLength == len(r.logPrefix) &&
-		string(rotate.NewLogName()[:len(r.logPrefix)]) == r.logPrefix {
+	if isRotate {
+		// In case of rotate event we can do extra verification
+		if len(rotate.NewLogName())-logFileNumberLength == len(r.logPrefix) &&
+			string(rotate.NewLogName()[:len(r.logPrefix)]) == r.logPrefix {
 
-		numString := string(rotate.NewLogName()[len(r.logPrefix):])
-		nextFileNum, err = strconv.Atoi(numString)
-		if err != nil {
+			numString := string(rotate.NewLogName()[len(r.logPrefix):])
+			nextFileNum, err = strconv.Atoi(numString)
+			if err != nil {
+				return event, &InvalidRotationError{
+					errors.Newf(
+						"Invalid log rotation.  Failed to parse log number.  "+
+							"Rotate event log file: %s (curent file: %s%06d)",
+						string(rotate.NewLogName()),
+						r.logPrefix,
+						r.nextLogFileNum),
+				}
+			}
+		}
+
+		if nextFileNum < 0 {
+			if r.isRelayLog {
+				// Relay log contains rotate events from the master's binlog.
+				r.logger.Infof(
+					"Ignored master's rotate event. "+
+						"Rotate event log file: %s (curent file: %s%06d)",
+					string(rotate.NewLogName()),
+					r.logPrefix,
+					r.nextLogFileNum)
+				return event, nil
+			}
+
 			return event, &InvalidRotationError{
 				errors.Newf(
-					"Invalid log rotation.  Failed to parse log number.  "+
-						"Rotate event log file: %s (curent file: %s%06d)",
+					"Invalid log rotation.  Unexpected new log file.  "+
+						"New log file: %s (current file: %s%06d)",
 					string(rotate.NewLogName()),
 					r.logPrefix,
 					r.nextLogFileNum),
 			}
 		}
-	}
 
-	if nextFileNum < 0 {
-		if r.isRelayLog {
-			// Relay log contains rotate events from the master's binlog.
-			r.logger.Infof(
-				"Ignored master's rotate event. "+
-					"Rotate event log file: %s (curent file: %s%06d)",
-				string(rotate.NewLogName()),
-				r.logPrefix,
-				r.nextLogFileNum)
-			return event, nil
+		logNumJumped := false
+		if r.nextLogFileNum < maxLogFileNum {
+			if nextFileNum != int(r.nextLogFileNum+1) {
+				logNumJumped = true
+			}
+		} else {
+			if nextFileNum != 0 {
+				logNumJumped = true
+			}
 		}
 
-		return event, &InvalidRotationError{
-			errors.Newf(
-				"Invalid log rotation.  Unexpected new log file.  "+
-					"New log file: %s (current file: %s%06d)",
-				string(rotate.NewLogName()),
-				r.logPrefix,
-				r.nextLogFileNum),
-		}
-	}
-
-	logNumJumped := false
-	if r.nextLogFileNum < maxLogFileNum {
-		if nextFileNum != int(r.nextLogFileNum+1) {
-			logNumJumped = true
+		if logNumJumped {
+			return event, &InvalidRotationError{
+				errors.Newf(
+					"Invalid log rotation.  Unexpected log file number.  "+
+						"New log file: %s (current file: %s%06d)",
+					string(rotate.NewLogName()),
+					r.logPrefix,
+					r.nextLogFileNum),
+			}
 		}
 	} else {
-		if nextFileNum != 0 {
-			logNumJumped = true
+		// We need to manually compute next filenum
+		if r.nextLogFileNum < maxLogFileNum {
+			nextFileNum = int(r.nextLogFileNum + 1)
+		} else {
+			nextFileNum = 0
 		}
 	}
 
-	if logNumJumped {
-		return event, &InvalidRotationError{
-			errors.Newf(
-				"Invalid log rotation.  Unexpected log file number.  "+
-					"New log file: %s (current file: %s%06d)",
-				string(rotate.NewLogName()),
-				r.logPrefix,
-				r.nextLogFileNum),
-		}
+	if isRotate {
+		r.logger.Infof(
+			"Rotate log file from %s%d to: %s",
+			r.logPrefix,
+			r.nextLogFileNum,
+			string(rotate.NewLogName()))
+	} else {
+		r.logger.Infof(
+			"Found stop event. Rotating log file from %s%d to : %s%d",
+			r.logPrefix,
+			r.nextLogFileNum,
+			r.logPrefix,
+			nextFileNum)
 	}
-
-	r.logger.Infof(
-		"Rotate log file from %s%d to: %s",
-		r.logPrefix,
-		r.nextLogFileNum,
-		string(rotate.NewLogName()))
 
 	err = r.reader.Close()
 	r.reader = nil
 	r.nextLogFileNum = uint(nextFileNum)
 
-	if r.isRelayLog {
+	if r.isRelayLog && isRotate {
 		// Skip the relay log wrapper rotation event.
 		return r.NextEvent()
 	}
