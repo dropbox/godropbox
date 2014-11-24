@@ -5,7 +5,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -16,6 +16,10 @@ type SetSuite struct {
 }
 
 var _ = Suite(&SetSuite{})
+
+func identity(v interface{}) interface{} {
+	return v
+}
 
 func (suite *SetSuite) TestBasicSetOps(c *C) {
 	s := NewSet()
@@ -32,6 +36,21 @@ func (suite *SetSuite) TestBasicSetOps(c *C) {
 	c.Assert(s.Len(), Equals, 1)
 	c.Assert(s.Contains(1), IsFalse)
 	c.Assert(s.Contains(2), IsTrue)
+
+	s2 := NewKeyedSet(identity)
+	c.Assert(s2.Contains(1), IsFalse)
+	c.Assert(s2.Contains(2), IsFalse)
+	c.Assert(s2.Len(), Equals, 0)
+	s2.Add(1)
+	c.Assert(s2.Len(), Equals, 1)
+	s2.Add(2)
+	c.Assert(s2.Len(), Equals, 2)
+	c.Assert(s2.Contains(1), IsTrue)
+	c.Assert(s2.Contains(2), IsTrue)
+	s2.Remove(1)
+	c.Assert(s2.Len(), Equals, 1)
+	c.Assert(s2.Contains(1), IsFalse)
+	c.Assert(s2.Contains(2), IsTrue)
 }
 
 func (suite *SetSuite) TestUnion(c *C) {
@@ -59,7 +78,7 @@ func (suite *SetSuite) TestIntersect(c *C) {
 	s1.Add(1)
 	s1.Add(2)
 
-	s2 := NewSet()
+	s2 := NewKeyedSet(identity)
 	s2.Add(2)
 	s2.Add(4)
 
@@ -75,7 +94,7 @@ func (suite *SetSuite) TestIntersect(c *C) {
 }
 
 func (suite *SetSuite) TestSubtract(c *C) {
-	s1 := NewSet()
+	s1 := NewKeyedSet(identity)
 	s1.Add(1)
 	s1.Add(2)
 
@@ -98,7 +117,7 @@ func (suite *SetSuite) TestSubsets(c *C) {
 	s1 := NewSet()
 	c.Assert(s1.IsSubset(s1), IsTrue)
 	c.Assert(s1.IsSuperset(s1), IsTrue)
-	s2 := NewSet()
+	s2 := NewKeyedSet(identity)
 
 	c.Assert(s1.IsSubset(s2), IsTrue)
 	c.Assert(s2.IsSubset(s1), IsTrue)
@@ -126,7 +145,7 @@ func (suite *SetSuite) TestSubsets(c *C) {
 
 func (suit *SetSuite) TestEquality(c *C) {
 	s1 := NewSet()
-	s2 := NewSet()
+	s2 := NewKeyedSet(identity)
 
 	s1.Add(1)
 	s2.Add(1)
@@ -141,8 +160,42 @@ func (suit *SetSuite) TestEquality(c *C) {
 	c.Assert(s2.IsEqual(s1), IsTrue)
 }
 
-func (suite *SetSuite) TestRemoveIf(c *C) {
-	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+func byte2string(v interface{}) (s interface{}) {
+	b, _ := v.([]byte)
+	g := string(b)
+	return g
+}
+
+func matchBar(i interface{}) bool {
+	b, _ := i.([]byte)
+	if string(b) == "bar" {
+		return true
+	}
+	return false
+}
+
+func (suit *SetSuite) TestKeyedSet(c *C) {
+	ks := NewKeyedSet(byte2string)
+
+	m := []byte("foo")
+	ks.Add(m)
+	c.Assert(ks.Contains(m), IsTrue)
+
+	ks.Remove(m)
+	c.Assert(ks.Contains(m), IsFalse)
+
+	n := []byte("bar")
+	ks2 := NewKeyedSet(byte2string, m, n)
+
+	c.Assert(ks2.Contains(n), IsTrue)
+
+	ks2.RemoveIf(matchBar)
+	c.Assert(ks2.Contains(n), IsFalse)
+	c.Assert(ks2.Contains(m), IsTrue)
+
+}
+
+func testRemoveIfHelper(c *C, s Set) {
 	expected := NewSet(0, 2, 4, 6, 8)
 
 	s.RemoveIf(func(i interface{}) bool {
@@ -152,10 +205,16 @@ func (suite *SetSuite) TestRemoveIf(c *C) {
 	c.Assert(s.IsEqual(expected), IsTrue)
 }
 
-func (suite *SetSuite) TestIter(c *C) {
-	elements := map[int]bool{1: true, 2: true, 3: true}
-	s := NewSet()
+func (suite *SetSuite) TestRemoveIf(c *C) {
+	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+	testRemoveIfHelper(c, s)
 
+	s = NewKeyedSet(identity, 0, 1, 2, 3, 4, 5, 6, 7, 8)
+	testRemoveIfHelper(c, s)
+}
+
+func testIterHelper(c *C, s Set) {
+	elements := map[int]bool{1: true, 2: true, 3: true}
 	for key := range elements {
 		s.Add(key)
 	}
@@ -165,4 +224,12 @@ func (suite *SetSuite) TestIter(c *C) {
 	}
 
 	c.Assert(len(elements), Equals, 0)
+}
+
+func (suite *SetSuite) TestIter(c *C) {
+	s := NewSet()
+	testIterHelper(c, s)
+
+	s = NewKeyedSet(identity)
+	testIterHelper(c, s)
 }
