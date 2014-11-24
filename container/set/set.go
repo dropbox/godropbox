@@ -77,6 +77,18 @@ func NewSet(items ...interface{}) Set {
 	return res
 }
 
+// Returns a new Set pre-populated with the given items
+func NewKeyedSet(keyf func(interface{}) interface{}, items ...interface{}) Set {
+	res := keyedSetImpl{
+		data:    make(map[interface{}]interface{}),
+		keyfunc: keyf,
+	}
+	for _, item := range items {
+		res.Add(item)
+	}
+	return res
+}
+
 type setImpl struct {
 	data map[interface{}]struct{}
 }
@@ -138,7 +150,7 @@ func (s setImpl) Iter() <-chan interface{} {
 }
 
 func (s setImpl) Union(s2 Set) {
-	s2.Do(func(item interface{}) { s.Add(item) })
+	union(s, s2)
 }
 
 func (s setImpl) Intersect(s2 Set) {
@@ -155,30 +167,19 @@ func (s setImpl) Intersect(s2 Set) {
 }
 
 func (s setImpl) Subtract(s2 Set) {
-	s2.Do(func(item interface{}) { s.Remove(item) })
+	subtract(s, s2)
 }
 
 func (s setImpl) IsSubset(s2 Set) (isSubset bool) {
-	isSubset = true
-	s.DoWhile(func(item interface{}) bool {
-		if !s2.Contains(item) {
-			isSubset = false
-		}
-		return isSubset
-	})
-	return
+	return subset(s, s2)
 }
 
 func (s setImpl) IsSuperset(s2 Set) bool {
-	return s2.IsSubset(s)
+	return superset(s, s2)
 }
 
 func (s setImpl) IsEqual(s2 Set) bool {
-	if s.Len() != s2.Len() {
-		return false
-	}
-
-	return s.IsSubset(s2)
+	return equal(s, s2)
 }
 
 func (s setImpl) RemoveIf(f func(interface{}) bool) {
@@ -192,4 +193,149 @@ func (s setImpl) RemoveIf(f func(interface{}) bool) {
 	for _, item := range toRemove {
 		s.Remove(item)
 	}
+}
+
+// keyedSetImpl implementation below here
+
+type keyedSetImpl struct {
+	data    map[interface{}]interface{}
+	keyfunc (func(interface{}) interface{})
+}
+
+func (s keyedSetImpl) Len() int {
+	return len(s.data)
+}
+
+func (s keyedSetImpl) Copy() Set {
+	res := NewKeyedSet(s.keyfunc)
+	res.Union(s)
+	return res
+}
+
+func (s keyedSetImpl) Init() {
+	s.data = make(map[interface{}]interface{})
+}
+
+func (s keyedSetImpl) Contains(v interface{}) bool {
+	_, ok := s.data[s.keyfunc(v)]
+	return ok
+}
+
+func (s keyedSetImpl) Add(v interface{}) {
+	s.data[s.keyfunc(v)] = v
+}
+
+func (s keyedSetImpl) Remove(v interface{}) bool {
+	key := s.keyfunc(v)
+	_, ok := s.data[key]
+	if ok {
+		delete(s.data, key)
+	}
+	return ok
+
+}
+
+func (s keyedSetImpl) Do(f func(interface{})) {
+	for _, v := range s.data {
+		f(v)
+	}
+}
+
+func (s keyedSetImpl) DoWhile(f func(interface{}) bool) {
+	for _, v := range s.data {
+		if !f(v) {
+			break
+		}
+	}
+}
+
+func (s keyedSetImpl) Iter() <-chan interface{} {
+	iter := make(chan interface{})
+	go func() {
+		for _, v := range s.data {
+			iter <- v
+		}
+		close(iter)
+	}()
+	return iter
+}
+
+func (s keyedSetImpl) Union(s2 Set) {
+	union(s, s2)
+}
+
+func (s keyedSetImpl) Intersect(s2 Set) {
+	var toRemove []interface{} = nil
+	for _, v := range s.data {
+		if !s2.Contains(v) {
+			toRemove = append(toRemove, v)
+		}
+	}
+
+	for _, v := range toRemove {
+		s.Remove(v)
+	}
+}
+
+func (s keyedSetImpl) Subtract(s2 Set) {
+	subtract(s, s2)
+}
+
+func (s keyedSetImpl) IsSubset(s2 Set) (isSubset bool) {
+	return subset(s, s2)
+}
+
+func (s keyedSetImpl) IsSuperset(s2 Set) bool {
+	return superset(s, s2)
+}
+
+func (s keyedSetImpl) IsEqual(s2 Set) bool {
+	return equal(s, s2)
+}
+
+func (s keyedSetImpl) RemoveIf(f func(interface{}) bool) {
+	var toRemove []interface{}
+	for _, item := range s.data {
+		if f(item) {
+			toRemove = append(toRemove, item)
+		}
+	}
+
+	for _, item := range toRemove {
+		s.Remove(item)
+	}
+}
+
+// Common functions between the two implementations, since go
+// does not allow for any inheritance. 
+
+func equal(s Set, s2 Set) bool {
+	if s.Len() != s2.Len() {
+		return false
+	}
+
+	return s.IsSubset(s2)
+}
+
+func superset(s Set, s2 Set) bool {
+	return s2.IsSubset(s)
+}
+
+func subset(s Set, s2 Set) (isSubset bool) {
+	isSubset = true
+	s.DoWhile(func(item interface{}) bool {
+		if !s2.Contains(item) {
+			isSubset = false
+		}
+		return isSubset
+	})
+	return
+}
+
+func subtract(s Set, s2 Set) {
+	s2.Do(func(item interface{}) { s.Remove(item) })
+}
+
+func union(s Set, s2 Set) {
+	s2.Do(func(item interface{}) { s.Add(item) })
 }
