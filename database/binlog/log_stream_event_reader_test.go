@@ -181,6 +181,63 @@ func (s *LogStreamV4EventReaderSuite) TestRotateBasic(c *C) {
 	c.Check(err, Equals, io.EOF)
 }
 
+func (s *LogStreamV4EventReaderSuite) TestStopBasic(c *C) {
+	prefix := testBinPrefix
+
+	f0 := s.GetFile(prefix, 0)
+	f0.WriteXid(0)
+	f0.WriteStop()
+
+	f1 := s.GetFile(prefix, 1)
+	f1.WriteXid(1)
+	f1.WriteStop()
+
+	stream := s.NewStream(prefix, 0)
+
+	Next := func() Event {
+		e, err := stream.NextEvent()
+		c.Assert(err, IsNil)
+		c.Assert(e, NotNil)
+		return e
+	}
+
+	// log file 0
+	e := Next()
+	_, ok := e.(*FormatDescriptionEvent)
+	c.Assert(ok, IsTrue)
+
+	e = Next()
+	x, ok := e.(*XidEvent)
+	c.Assert(ok, IsTrue)
+	c.Check(x.Xid(), Equals, uint64(0))
+
+	e = Next()
+	_, ok = e.(*StopEvent)
+	c.Assert(ok, IsTrue)
+
+	// log file 1
+	e = Next()
+	_, ok = e.(*FormatDescriptionEvent)
+	c.Assert(ok, IsTrue)
+
+	e = Next()
+	x, ok = e.(*XidEvent)
+	c.Assert(ok, IsTrue)
+	c.Check(x.Xid(), Equals, uint64(1))
+
+	e = Next()
+	_, ok = e.(*StopEvent)
+	c.Assert(ok, IsTrue)
+
+	// since next file is missing, opening next file should return error.
+	e, err := stream.NextEvent()
+	c.Assert(e, IsNil)
+	c.Assert(err, NotNil)
+	ferr, ok := err.(*FailedToOpenFileError)
+	c.Assert(ok, IsTrue)
+	c.Assert(ferr.LogFileNum, Equals, uint(2))
+}
+
 func (s *LogStreamV4EventReaderSuite) TestRotateRollOver(c *C) {
 	prefix := testBinPrefix
 

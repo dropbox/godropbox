@@ -45,6 +45,7 @@ type EventReader interface {
 // probably safe to retry when this occurs (before quitting).
 type FailedToOpenFileError struct {
 	errors.DropboxError
+	LogFileNum uint
 }
 
 // This returns true if the error returned by the event parser is retryable.
