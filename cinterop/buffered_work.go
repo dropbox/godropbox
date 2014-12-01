@@ -44,10 +44,20 @@ func writeBuffer(copyFrom <-chan []byte, socketWrite io.Writer) {
 
 // this function takes data from socketRead and calls processBatch on a batch of it at a time
 // then the resulting bytes are written to wocketWrite as fast as possible
-func ProcessBufferedData(socketRead io.Reader, socketWrite io.Writer,
-	makeProcessBatch func() (func(input []byte) []byte,
+func ProcessBufferedData(
+        socketRead io.Reader,
+        socketWrite io.Writer,
+        // The caller must pass in a factory that returns a pair of functions.
+        // The first processes a batch of []bytes and returns the processed bytes
+        // The second is called with the same input and the result from the first function after
+        // those results have been queued for streaming back to the client,
+        // The second function makes it possible to prefetch another batch of data for the client
+	makeProcessBatch func() (
+                func(input []byte) []byte,
 		func(lastInput []byte, lastOutput []byte)),
-	batchSize, workItemSize int) {
+	batchSize int,
+        workItemSize int) {
+
 	readChan := make(chan []byte, 2)
 	writeChan := make(chan []byte, 1+batchSize/workItemSize)
 	go readBuffer(readChan, socketRead, batchSize, workItemSize)
