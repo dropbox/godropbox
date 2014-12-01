@@ -12,12 +12,17 @@ func readBuffer(copyTo chan<- []byte, socketRead io.Reader, batchSize int, workS
 	for {
 		batch := make([]byte, batchSize)
 		size, err := socketRead.Read(batch)
-		if err == nil && size%workSize != 0 {
+		if err == nil && workSize != 0 && size % workSize != 0 {
 			var lsize int
-			lsize, err = io.ReadFull(socketRead, batch[size:size+workSize-(size%workSize)])
+			lsize, err = io.ReadFull(
+				socketRead,
+				batch[size : size + workSize - (size % workSize)])
 			size += lsize
 		}
 		if size > 0 {
+			if err != nil && workSize != 0 {
+				size -= (size % workSize)
+			}
 			copyTo <- batch[:size]
 		}
 		if err != nil {

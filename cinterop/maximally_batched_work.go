@@ -68,6 +68,9 @@ func readBatch(copyTo chan<- []byte, socketRead io.Reader, batchSize int, workSi
 		batch := make([]byte, batchSize)
 		size, err := readUntilNullWorkSizeBatch(socketRead, batch, workSize)
 		if size > 0 {
+			if err != nil && workSize != 0 {
+				size -= (size % workSize)
+			}
 			copyTo <- batch[:size]
 		}
 		if err != nil {
