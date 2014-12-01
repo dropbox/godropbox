@@ -57,6 +57,7 @@ struct GoChannel clone_go_channel(struct GoChannel parent) {
     parent.stdin = socket_fd;
     return parent;
 }
+#define GO_CHANNEL_HEADER ("58000000" "0100" "60c1" "00000000" "00000000")
 struct GoChannel launch_go_subprocess(const char* path_to_exe, char *const argv[]) {
     struct GoChannel ret;
     int subprocess_stdin[2];
@@ -76,9 +77,13 @@ struct GoChannel launch_go_subprocess(const char* path_to_exe, char *const argv[
     }else {
         close(subprocess_stdin[0]);
         close(subprocess_stdout[1]);
+        char header[] = GO_CHANNEL_HEADER;
+        int header_status = read_until(ret.stdout, header, strlen(GO_CHANNEL_HEADER));
+        assert(memcmp(header, GO_CHANNEL_HEADER, strlen(GO_CHANNEL_HEADER)) == 0);
         int path_status = read_until(ret.stdout, (unsigned char*)ret.path, sizeof(ret.path));
         ret.path[sizeof(ret.path) - 1] = '\0';
         int token_status = read_until(ret.stdout, ret.token, sizeof(ret.token));
+        assert(header_status != -1);
         assert(path_status != -1);
         assert(token_status != -1);
     }

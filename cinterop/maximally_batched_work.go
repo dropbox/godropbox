@@ -60,7 +60,7 @@ func readUntilNullWorkSizeBatch(socketRead io.Reader,
 // this reads in a loop from socketRead putting batchSize bytes of work to copyTo until
 // the socketRead is empty.
 // Batches may be shorter than batchSize if a whole workSize element is all zeros
-// If workSize of zero is passed in, then the entire batchSize will be filled up regardless, 
+// If workSize of zero is passed in, then the entire batchSize will be filled up regardless,
 // unless socketRead returns an error when Read
 func readBatch(copyTo chan<- []byte, socketRead io.Reader, batchSize int, workSize int) {
 	defer close(copyTo)

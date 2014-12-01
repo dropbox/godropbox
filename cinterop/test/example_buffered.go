@@ -1,9 +1,9 @@
 package main
 
 import (
+	"godropbox/cinterop"
 	"io"
 	"log"
-	"godropbox/cinterop"
 )
 
 func processBatch(data []byte) []byte {

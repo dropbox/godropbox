@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"godropbox/cinterop"
 	"io"
 	"log"
 	"net"
@@ -28,11 +31,14 @@ func main() {
 	srv.Stderr = os.Stderr
 	srv.Start()
 
-	filePathAndToken := make([]byte, 64)
+	filePathAndToken := make([]byte, 96)
 	_, err := io.ReadFull(srvout, filePathAndToken)
-
-	filePath := filePathAndToken[:32]
-	token := filePathAndToken[32:]
+	header := filePathAndToken[:32]
+	if !bytes.Equal(header, []byte(cinterop.Header)) {
+		panic(errors.New("CInterop header mismatch"))
+	}
+	filePath := filePathAndToken[32:64]
+	token := filePathAndToken[64:]
 	if err != nil {
 		panic(err)
 	}

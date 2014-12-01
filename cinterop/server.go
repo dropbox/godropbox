@@ -39,6 +39,11 @@ func listenAccept(newConnection chan<- net.Conn, l net.Listener) {
 	}
 }
 
+// header structure
+// 58000000 <-- 88 bytes past this hex encoded size; 0100 major version 1 minor 0; 60c1 magic num
+// 00000000 reserved 0000000 reserved
+const Header = "58000000" + "0100" + "60c1" + "00000000" + "00000000"
+
 func StartServer(process func(io.Reader, io.Writer)) {
 	uuid := make([]byte, 16)
 	rand.Read(uuid)
@@ -48,6 +53,7 @@ func StartServer(process func(io.Reader, io.Writer)) {
 		rand.Read(token)
 		hex.Encode(hexToken, token)
 	}
+
 	filePathReturn := []byte("/tmp/go-" + base64.URLEncoding.EncodeToString(uuid))
 	if len(filePathReturn) != 32 {
 		log.Fatal("File path is not 32 bytes " + string(filePathReturn))
@@ -60,8 +66,8 @@ func StartServer(process func(io.Reader, io.Writer)) {
 		log.Print("listen error:", err)
 	}
 	defer os.Remove(filePath)
-	pathAndToken := string(filePathReturn) + string(hexToken)
-	_, err = os.Stdout.Write([]byte(pathAndToken))
+	headerPathAndToken := Header + string(filePathReturn) + string(hexToken)
+	_, err = os.Stdout.Write([]byte(headerPathAndToken))
 	if err != nil {
 		panic(err)
 	}

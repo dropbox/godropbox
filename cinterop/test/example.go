@@ -1,9 +1,9 @@
 package main
 
 import (
+	"godropbox/cinterop"
 	"io"
 	"log"
-	"godropbox/cinterop"
 )
 
 func processData(socketRead io.Reader, socketWrite io.Writer) {
