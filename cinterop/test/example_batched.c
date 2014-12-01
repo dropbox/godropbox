@@ -1,4 +1,4 @@
-#include "gochannel.h"
+#include "goipcchannel.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@
 
 int main(int argc, char **argv) {
     char * args[2]={argv[1], NULL};
-    struct GoChannel chan = launch_go_subprocess(argv[1], args), cloned_chan;
+    struct GoIPCChannel chan = launch_go_subprocess(argv[1], args), cloned_chan;
     char buf[9]={0};
     int i;
     for (i = 0; i < 4; ++i) {

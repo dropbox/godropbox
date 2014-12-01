@@ -14,7 +14,7 @@ func zeroWorkItem(data []byte, workItemSize int) bool {
 	dataLen := len(data)
 	for i := 0; i < dataLen; i += workItemSize {
 		j := 0
-		for j != workItemSize && data[i+j] == 0 {
+		for j < workItemSize && data[i+j] == 0 {
 			j += 1
 		}
 		if j == workItemSize {

@@ -29,7 +29,6 @@
 // The prefetching function gets the last returned key and last data as input
 // and it is called as data is being written back to the forkexec caller.
 
-
 // The maximally_batched_work.go class waits until at least batch_size of an
 // input is full and delivers it all at once to the callee, so that the callee
 // is guaranteed to operate on a batch at a time.
@@ -39,5 +38,7 @@
 // example_batched.c verifies that even if the buffer is flushed every 2 bytes,
 // a full batch of (in this case) 8 bytes is required to invoke the function
 // unless a full work item of zeros or the end of batch are detected.
-package cinterop
+// Thus, in summary the caller waits to fill up the full batch unless an error is encountered or
+// workSize zeros in a row are discovered, aligned with WorkSize, causing a flush
 
+package cinterop
