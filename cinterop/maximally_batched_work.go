@@ -1,6 +1,7 @@
 package cinterop
 
 import (
+	"errors"
 	"io"
 	"log"
 )
@@ -86,10 +87,12 @@ func readBatch(copyTo chan<- []byte, socketRead io.Reader, batchSize int, workSi
 func writeBatch(copyFrom <-chan []byte, socketWrite io.Writer) {
 	for buf := range copyFrom {
 		if len(buf) > 0 {
-			_, err := socketWrite.Write(buf)
+			size, err := socketWrite.Write(buf)
 			if err != nil {
 				log.Print("Error encountered in writeBatch:", err)
 				return
+			} else if size != len(buf) {
+				panic(errors.New("Short Write: io.Writer not compliant"))
 			}
 		}
 	}

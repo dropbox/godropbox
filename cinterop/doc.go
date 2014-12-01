@@ -40,5 +40,4 @@
 // unless a full work item of zeros or the end of batch are detected.
 // Thus, in summary the caller waits to fill up the full batch unless an error is encountered or
 // workSize zeros in a row are discovered, aligned with WorkSize, causing a flush
-
 package cinterop

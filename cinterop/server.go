@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -67,9 +68,12 @@ func StartServer(process func(io.Reader, io.Writer)) {
 	}
 	defer os.Remove(filePath)
 	headerPathAndToken := Header + string(filePathReturn) + string(hexToken)
-	_, err = os.Stdout.Write([]byte(headerPathAndToken))
+	var size int
+	size, err = os.Stdout.Write([]byte(headerPathAndToken))
 	if err != nil {
 		panic(err)
+	} else if size != len([]byte(headerPathAndToken)) {
+		panic(errors.New("Short Write: io.Writer not compliant with the golang contract"))
 	}
 	exitChan := make(chan bool)
 	connectionChan := make(chan net.Conn)
