@@ -10,8 +10,8 @@
 
 
 int main(int argc, char **argv) {
-    char * args[2]={argv[1], NULL};
-    struct GoIPCChannel chan = launch_go_subprocess(argv[1], args), cloned_chan;
+    const char * args[2]={argv[1], NULL};
+    struct GoIPCChannel chan = launch_go_subprocess(args, 1), cloned_chan;
     char buf[3]={0};
     write(chan.stdin, "hi", 2);
     read_until(chan.stdout, buf, 2);

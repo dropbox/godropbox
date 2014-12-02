@@ -21,10 +21,10 @@ struct GoIPCChannel{
     int stdin;
 };
 
-// This runs a go binary at path_to_exe with the argv terminated with NULL, just like execvp
+// This runs a go binary at argv[0] with the argv passed in and num_args
 // This function starts the go binary and establishes a communication channel to it.
 // The channel's file descriptors may be read + written with the standard UNIX read/write syscalls
-struct GoIPCChannel launch_go_subprocess(const char* path_to_exe, char *const argv[]);
+struct GoIPCChannel launch_go_subprocess(const char *const argv[], size_t num_args);
 // this is a simple helper function that reads from a file descriptor until size bytes are read
 ptrdiff_t read_until(int fd, void *buf, int size);
 // this is a simple helper function that writes to a file descriptor until size bytes are written

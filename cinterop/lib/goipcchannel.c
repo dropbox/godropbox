@@ -74,7 +74,7 @@ struct GoIPCChannel clone_go_channel(struct GoIPCChannel parent) {
     return parent;
 }
 
-struct GoIPCChannel launch_go_subprocess(const char* path_to_exe, char *const argv[]) {
+struct GoIPCChannel launch_go_subprocess(const char *const argv[], size_t num_args) {
     struct GoIPCChannel ret;
     int subprocess_stdin[2];
     int subprocess_stdout[2];
@@ -97,8 +97,17 @@ struct GoIPCChannel launch_go_subprocess(const char* path_to_exe, char *const ar
         } while (status == -1 && errno == EINTR); // can only fail with retry on EINTR
         assert (status >= 0);
         close(subprocess_stdout[0]);
-        execvp(path_to_exe, argv);
-    }else {
+        char ** new_argv = (char**)malloc((num_args + 1) * sizeof(char*));
+        new_argv[num_args] = NULL;
+        for (size_t i = 0; i < num_args; ++i) {
+            size_t len = strlen(argv[i]);
+            new_argv[i] = (char *)malloc(len + 1);
+            memcpy(new_argv[i], argv[i], len + 1);
+        }
+        execvp(argv[0], new_argv);
+        assert(0 && "spawning subprocess failed");
+        exit(0);
+    } else {
         close(subprocess_stdin[0]);
         close(subprocess_stdout[1]);
         char header[] = GO_IPC_CHANNEL_HEADER;

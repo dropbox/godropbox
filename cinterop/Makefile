@@ -6,6 +6,12 @@ all:
 	cd test && gcc -Wall -o example_batched_exec -std=c99 example_batched.c -I../lib ../lib/goipcchannel.c; cd ..
 	cd ..
 
+valgrind:
+	valgrind test/forkexec test/example_buffered
+	valgrind test/forkexec test/example
+	echo "hello" | test/example_buffered
+	valgrind test/example_batched_exec test/example_batched
+
 unittest:
 	test/forkexec test/example_buffered
 	test/forkexec test/example
