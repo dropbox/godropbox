@@ -27,7 +27,7 @@ func zeroWorkItem(data []byte, workItemSize int) bool {
 
 // this reads socketRead to fill up the given buffer unless an error is encountered or
 // workSize zeros in a row are discovered, aligned with WorkSize, causing a flush
-func readUntilNullWorkSizeBatch(socketRead io.Reader,
+func readUntilNullWorkSizeBatch(socketRead io.ReadCloser,
 	batch []byte, workSize int) (size int, err error) {
 	err = nil
 	size = 0
@@ -63,7 +63,7 @@ func readUntilNullWorkSizeBatch(socketRead io.Reader,
 // Batches may be shorter than batchSize if a whole workSize element is all zeros
 // If workSize of zero is passed in, then the entire batchSize will be filled up regardless,
 // unless socketRead returns an error when Read
-func readBatch(copyTo chan<- []byte, socketRead io.Reader, batchSize int, workSize int) {
+func readBatch(copyTo chan<- []byte, socketRead io.ReadCloser, batchSize int, workSize int) {
 	defer close(copyTo)
 	for {
 		batch := make([]byte, batchSize)
@@ -100,7 +100,7 @@ func writeBatch(copyFrom <-chan []byte, socketWrite io.Writer) {
 
 // this function takes data from socketRead and calls processBatch on a batch of it at a time
 // then the resulting bytes are written to wocketWrite as fast as possible
-func ProcessBatchedData(socketRead io.Reader, socketWrite io.Writer,
+func ProcessBatchedData(socketRead io.ReadCloser, socketWrite io.Writer,
 	makeProcessBatch func() (func([]byte) []byte, func([]byte, []byte)),
 	batchSize int, workItemSize int) {
 	readChan := make(chan []byte, 2)

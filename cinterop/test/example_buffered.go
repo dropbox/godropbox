@@ -22,7 +22,7 @@ const numBatchWorkUnits = 4
 const workSize = 2
 
 func main() {
-	processData := func(r io.Reader, w io.Writer) {
+	processData := func(r io.ReadCloser, w io.Writer) {
 		cinterop.ProcessBufferedData(r, w, makeEcho, numBatchWorkUnits*workSize, workSize)
 	}
 	cinterop.StartServer(processData)

@@ -33,7 +33,7 @@ ptrdiff_t write_until(int fd, void *buf, int size) {
 }
 
 // the header, as defined in server.go
-#define GO_IPC_CHANNEL_HEADER ("58000000" "0100" "60c1" "00000000" "00000000")
+#define GO_IPC_CHANNEL_HEADER ("58000000" "0100" "60c1" "00000000" "0000000\n")
 
 // static assert that we have sufficient room in our struct
 static char static_assert[sizeof((struct sockaddr_un*)0)->sun_path - GO_IPC_CHANNEL_PATH_LENGTH];

@@ -13,13 +13,13 @@ import (
 )
 
 func messageOnCloseAndRun(exitChan chan<- bool,
-	socketRead io.Reader, socketWrite io.Writer, process func(io.Reader, io.Writer)) {
+	socketRead io.ReadCloser, socketWrite io.Writer, process func(io.ReadCloser, io.Writer)) {
 	process(socketRead, socketWrite)
 	exitChan <- true
 }
 
 func validateAndRun(token []byte,
-	socketRead io.Reader, socketWrite io.Writer, process func(io.Reader, io.Writer)) {
+	socketRead io.ReadCloser, socketWrite io.Writer, process func(io.ReadCloser, io.Writer)) {
 	test := make([]byte, len(token))
 	_, token_err := io.ReadFull(socketRead, test[:])
 	if token_err == nil && bytes.Equal(token, test[:]) {
@@ -42,10 +42,10 @@ func listenAccept(newConnection chan<- net.Conn, l net.Listener) {
 
 // header structure
 // 58000000 <-- 88 bytes past this hex encoded size; 0100 major version 1 minor 0; 60c1 magic num
-// 00000000 reserved 0000000 reserved
-const Header = "58000000" + "0100" + "60c1" + "00000000" + "00000000"
+// 00000000 reserved 000000\n reserved
+const Header = "58000000" + "0100" + "60c1" + "00000000" + "0000000\n"
 
-func StartServer(process func(io.Reader, io.Writer)) {
+func StartServer(process func(io.ReadCloser, io.Writer)) {
 	uuid := make([]byte, 16)
 	rand.Read(uuid)
 	hexToken := make([]byte, 32)

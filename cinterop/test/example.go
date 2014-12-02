@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-func processData(socketRead io.Reader, socketWrite io.Writer) {
+func processData(socketRead io.ReadCloser, socketWrite io.Writer) {
 	buf := make([]byte, 32)
 	for {
 		nr, err := socketRead.Read(buf)

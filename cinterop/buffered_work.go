@@ -8,7 +8,7 @@ import (
 
 // this reads in a loop from socketRead putting batchSize bytes of work to copyTo until
 // the socketRead is empty. Will always block until a full workSize of units have been copied
-func readBuffer(copyTo chan<- []byte, socketRead io.Reader, batchSize int, workSize int) {
+func readBuffer(copyTo chan<- []byte, socketRead io.ReadCloser, batchSize int, workSize int) {
 	defer close(copyTo)
 	for {
 		batch := make([]byte, batchSize)
@@ -53,7 +53,7 @@ func writeBuffer(copyFrom <-chan []byte, socketWrite io.Writer) {
 // this function takes data from socketRead and calls processBatch on a batch of it at a time
 // then the resulting bytes are written to wocketWrite as fast as possible
 func ProcessBufferedData(
-	socketRead io.Reader,
+	socketRead io.ReadCloser,
 	socketWrite io.Writer,
 	// The caller must pass in a factory that returns a pair of functions.
 	// The first processes a batch of []bytes and returns the processed bytes
@@ -77,6 +77,7 @@ func ProcessBufferedData(
 				log.Print("Error in makeProcessBatch ", r)
 			}
 		}
+		socketRead.Close()
 		close(writeChan)
 	}()
 	processBatch, prefetchBatch := makeProcessBatch()
