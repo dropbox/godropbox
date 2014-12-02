@@ -7,15 +7,19 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include "goipcchannel.h"
+#include <errno.h>
 
 ptrdiff_t read_until(int fd, void *buf, int size) {
     size_t progress = 0;
     while (progress < size) {
         ptrdiff_t status = read(fd, (char*)buf + progress, size - progress);
         if (status == -1) {
-            return -1;
+            if (errno != EINTR) {
+                return -1;
+            }
+        } else {
+            progress += status;
         }
-        progress += status;
     }
     return progress;
 }
@@ -25,9 +29,12 @@ ptrdiff_t write_until(int fd, void *buf, int size) {
     while (progress < size) {
         ptrdiff_t status = write(fd, (char*)buf + progress, size - progress);
         if (status == -1) {
-            return -1;
+            if (errno != EINTR) {
+                return -1;
+            }
+        } else {
+            progress += status;
         }
-        progress += status;
     }
     return progress;
 }
@@ -39,6 +46,7 @@ ptrdiff_t write_until(int fd, void *buf, int size) {
 static char static_assert[sizeof((struct sockaddr_un*)0)->sun_path - GO_IPC_CHANNEL_PATH_LENGTH];
 
 struct GoIPCChannel clone_go_channel(struct GoIPCChannel parent) {
+    assert(sizeof(static_assert) >= 0);
     parent.stdout = -1;
     parent.stdin = -1;
 
@@ -64,16 +72,24 @@ struct GoIPCChannel launch_go_subprocess(const char* path_to_exe, char *const ar
     struct GoIPCChannel ret;
     int subprocess_stdin[2];
     int subprocess_stdout[2];
-    pipe(subprocess_stdin);
-    pipe(subprocess_stdout);
+    int status = pipe(subprocess_stdin);
+    assert(status == 0);
+    status = pipe(subprocess_stdout);
+    assert(status == 0);
     ret.stdin = subprocess_stdin[1];
     ret.stdout = subprocess_stdout[0];
     if (fork() == 0) {
         fclose(stdin);
-        dup(subprocess_stdin[0]);
+        do {
+            status = dup(subprocess_stdin[0]);
+        } while (status == -1 && errno == EINTR);
+        assert (status >= 0);
         close(subprocess_stdin[1]);
         fclose(stdout);
-        dup(subprocess_stdout[1]);
+        do {
+            status = dup(subprocess_stdout[1]);
+        } while (status == -1 && errno == EINTR); // can only fail with retry on EINTR
+        assert (status >= 0);
         close(subprocess_stdout[0]);
         execvp(path_to_exe, argv);
     }else {
