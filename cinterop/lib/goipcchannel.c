@@ -13,6 +13,9 @@ ptrdiff_t read_until(int fd, void *buf, int size) {
     size_t progress = 0;
     while (progress < size) {
         ptrdiff_t status = read(fd, (char*)buf + progress, size - progress);
+        if (status == 0) { // EOF
+            return 0;
+        }
         if (status == -1) {
             if (errno != EINTR) {
                 return -1;
@@ -29,6 +32,9 @@ ptrdiff_t write_until(int fd, void *buf, int size) {
     while (progress < size) {
         ptrdiff_t status = write(fd, (char*)buf + progress, size - progress);
         if (status == -1) {
+            if (status == 0) { // EOF
+                return 0;
+            }
             if (errno != EINTR) {
                 return -1;
             }
