@@ -27,7 +27,7 @@ ptrdiff_t read_until(int fd, void *buf, int size) {
     return progress;
 }
 
-ptrdiff_t write_until(int fd, void *buf, int size) {
+ptrdiff_t write_until(int fd, const void *buf, int size) {
     size_t progress = 0;
     while (progress < size) {
         ptrdiff_t status = write(fd, (char*)buf + progress, size - progress);
