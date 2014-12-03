@@ -26,9 +26,9 @@ struct GoIPCChannel{
 // The channel's file descriptors may be read + written with the standard UNIX read/write syscalls
 struct GoIPCChannel launch_go_subprocess(const char *const argv[], size_t num_args);
 // this is a simple helper function that reads from a file descriptor until size bytes are read
-ptrdiff_t read_until(int fd, void *buf, int size);
+ptrdiff_t read_until(int fd, void *buf, size_t size);
 // this is a simple helper function that writes to a file descriptor until size bytes are written
-ptrdiff_t write_until(int fd, const void *buf, int size);
+ptrdiff_t write_until(int fd, const void *buf, size_t size);
 // this creates a new goroutine in the go program and returns a new pair of unix filedescriptors
 // to call the new go program with
 struct GoIPCChannel clone_go_channel(struct GoIPCChannel parent);

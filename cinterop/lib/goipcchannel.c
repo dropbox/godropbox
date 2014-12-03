@@ -1,15 +1,17 @@
-#include <stddef.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "goipcchannel.h"
+
+#define _GNU_SOURCE // for strdup
 #include <assert.h>
-#include <unistd.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include "goipcchannel.h"
-#include <errno.h>
+#include <unistd.h>
 
-ptrdiff_t read_until(int fd, void *buf, int size) {
+ptrdiff_t read_until(int fd, void *buf, size_t size) {
     size_t progress = 0;
     while (progress < size) {
         ptrdiff_t status = read(fd, (char*)buf + progress, size - progress);
@@ -27,7 +29,7 @@ ptrdiff_t read_until(int fd, void *buf, int size) {
     return progress;
 }
 
-ptrdiff_t write_until(int fd, const void *buf, int size) {
+ptrdiff_t write_until(int fd, const void *buf, size_t size) {
     size_t progress = 0;
     while (progress < size) {
         ptrdiff_t status = write(fd, (char*)buf + progress, size - progress);
@@ -100,9 +102,7 @@ struct GoIPCChannel launch_go_subprocess(const char *const argv[], size_t num_ar
         char ** new_argv = (char**)malloc((num_args + 1) * sizeof(char*));
         new_argv[num_args] = NULL;
         for (size_t i = 0; i < num_args; ++i) {
-            size_t len = strlen(argv[i]);
-            new_argv[i] = (char *)malloc(len + 1);
-            memcpy(new_argv[i], argv[i], len + 1);
+            new_argv[i] = strdup(argv[i]);
         }
         execvp(argv[0], new_argv);
         assert(0 && "spawning subprocess failed");
