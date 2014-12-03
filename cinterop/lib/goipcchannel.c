@@ -1,6 +1,5 @@
 #include "goipcchannel.h"
 
-#define _GNU_SOURCE // for strdup
 #include <assert.h>
 #include <errno.h>
 #include <stddef.h>
@@ -11,10 +10,10 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-ptrdiff_t read_until(int fd, void *buf, size_t size) {
+ssize_t read_until(int fd, void *buf, size_t size) {
     size_t progress = 0;
     while (progress < size) {
-        ptrdiff_t status = read(fd, (char*)buf + progress, size - progress);
+        ssize_t status = read(fd, (char*)buf + progress, size - progress);
         if (status == 0) { // EOF
             return 0;
         }
@@ -29,10 +28,10 @@ ptrdiff_t read_until(int fd, void *buf, size_t size) {
     return progress;
 }
 
-ptrdiff_t write_until(int fd, const void *buf, size_t size) {
+ssize_t write_until(int fd, const void *buf, size_t size) {
     size_t progress = 0;
     while (progress < size) {
-        ptrdiff_t status = write(fd, (char*)buf + progress, size - progress);
+        ssize_t status = write(fd, (char*)buf + progress, size - progress);
         if (status == -1) {
             if (status == 0) { // EOF
                 return 0;
@@ -101,8 +100,9 @@ struct GoIPCChannel launch_go_subprocess(const char *const argv[], size_t num_ar
         assert (status >= 0);
         close(subprocess_stdout[0]);
         char ** new_argv = (char**)malloc((num_args + 1) * sizeof(char*));
+        size_t i;
         new_argv[num_args] = NULL;
-        for (size_t i = 0; i < num_args; ++i) {
+        for (i = 0; i < num_args; ++i) {
             new_argv[i] = strdup(argv[i]);
         }
         execvp(argv[0], new_argv);

@@ -2,8 +2,8 @@ all:
 	cd test && go build unbuffered/example.go; cd ..
 	cd test && go build buffered/example_buffered.go; cd ..
 	cd test && go build batched/example_batched.go; cd ..
-	cd test && gcc -Wall -o forkexec -std=c99 example.c -I../lib ../lib/goipcchannel.c; cd ..
-	cd test && gcc -Wall -o example_batched_exec -std=c99 example_batched.c -I../lib ../lib/goipcchannel.c; cd ..
+	cd test && gcc -Wall -o forkexec example.c -I../lib ../lib/goipcchannel.c; cd ..
+	cd test && gcc -Wall -o example_batched_exec example_batched.c -I../lib ../lib/goipcchannel.c; cd ..
 	cd ..
 
 valgrind:
