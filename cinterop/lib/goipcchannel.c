@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // needed for ssize_t and strdup
 #include "goipcchannel.h"
 
 #include <assert.h>
