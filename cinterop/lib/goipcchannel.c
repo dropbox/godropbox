@@ -51,10 +51,11 @@ ptrdiff_t write_until(int fd, const void *buf, size_t size) {
 #define GO_IPC_CHANNEL_HEADER ("58000000" "0100" "60c1" "00000000" "0000000\n")
 
 // static assert that we have sufficient room in our struct
-static char static_assert[sizeof((struct sockaddr_un*)0)->sun_path - GO_IPC_CHANNEL_PATH_LENGTH];
+static char static_assert_sockaddr_un_has_sufficient_size[sizeof((struct sockaddr_un*)0)->sun_path
+                                                          - GO_IPC_CHANNEL_PATH_LENGTH];
 
 struct GoIPCChannel clone_go_channel(struct GoIPCChannel parent) {
-    assert(sizeof(static_assert) >= 0);
+    assert(sizeof(static_assert_sockaddr_un_has_sufficient_size) >= 0);
     parent.stdout = -1;
     parent.stdin = -1;
 
