@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
-	"godropbox/cinterop"
+	"github.com/dropbox/godropbox/cinterop"
 	"io"
 	"log"
 	"net"

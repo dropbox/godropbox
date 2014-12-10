@@ -1,3 +1,5 @@
+#ifdef __STDC__
+// go 6c compiler does not define __STDC__
 #include "goipcchannel.h"
 
 #include <stdlib.h>
@@ -31,3 +33,4 @@ int main(int argc, char **argv) {
     close_go_channel(&chan);
     return 0;
 }
+#endif

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"godropbox/cinterop"
+	"github.com/dropbox/godropbox/cinterop"
 	"io"
 	"log"
 )
