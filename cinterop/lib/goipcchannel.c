@@ -1,3 +1,5 @@
+// +build none
+
 #ifdef __STDC__
 #define _GNU_SOURCE // needed for ssize_t and strdup
 #include "goipcchannel.h"

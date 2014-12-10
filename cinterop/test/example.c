@@ -1,3 +1,5 @@
+// +build none
+
 #ifdef __STDC__
 // go 6c compiler does not define __STDC__
 #include "goipcchannel.h"
