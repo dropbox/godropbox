@@ -5,7 +5,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	. "godropbox/gocheck2"
+	. "github.com/dropbox/godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
