@@ -97,7 +97,17 @@ func (c *RawClient) sendRequest(
 	dataVersionId uint64, // aka CAS
 	key []byte, // may be nil
 	value []byte, // may be nil
-	extras ...interface{}) error {
+	extras ...interface{}) (err error) {
+
+	if !c.validState {
+		// An error has occurred previously.  It's not safe to continue sending.
+		return errors.New("Skipping due to previous error")
+	}
+	defer func() {
+		if err != nil {
+			c.validState = false
+		}
+	}()
 
 	extrasBuffer := new(bytes.Buffer)
 	for _, extra := range extras {
@@ -173,8 +183,18 @@ func (c *RawClient) receiveResponse(
 	value []byte, // is nil when the value length is zero
 	err error) {
 
-	hdr := header{}
+	if !c.validState {
+		// An error has occurred previously.  It's not safe to continue sending.
+		err = errors.New("Skipping due to previous error")
+		return
+	}
+	defer func() {
+		if err != nil {
+			c.validState = false
+		}
+	}()
 
+	hdr := header{}
 	if err = binary.Read(c.channel, binary.BigEndian, &hdr); err != nil {
 		err = errors.Wrap(err, "Failed to read header")
 		return
@@ -251,13 +271,6 @@ func (c *RawClient) receiveResponse(
 }
 
 func (c *RawClient) sendGetRequest(key string) GetResponse {
-	if !c.validState {
-		// An error has occurred previously.  It's not safe to continue sending.
-		return NewGetErrorResponse(
-			key,
-			errors.New("Skipping due to previous error"))
-	}
-
 	if !isValidKeyString(key) {
 		return NewGetErrorResponse(
 			key,
@@ -266,7 +279,6 @@ func (c *RawClient) sendGetRequest(key string) GetResponse {
 
 	err := c.sendRequest(opGet, 0, []byte(key), nil)
 	if err != nil {
-		c.validState = false
 		return NewGetErrorResponse(key, err)
 	}
 
@@ -277,7 +289,6 @@ func (c *RawClient) receiveGetResponse(key string) GetResponse {
 	var flags uint32
 	status, version, _, value, err := c.receiveResponse(opGet, &flags)
 	if err != nil {
-		c.validState = false
 		return NewGetErrorResponse(key, err)
 	}
 	return NewGetResponse(key, status, flags, value, version)
@@ -346,14 +357,6 @@ func (c *RawClient) sendMutateRequest(
 		return NewMutateErrorResponse("", errors.New("item is nil"))
 	}
 
-	if !c.validState {
-		// An error has occurred in one of the previous requests.  It's not
-		// safe to continue sending.
-		return NewMutateErrorResponse(
-			item.Key,
-			errors.New("Skipping due to previous error"))
-	}
-
 	if !isValidKeyString(item.Key) {
 		return NewMutateErrorResponse(
 			item.Key,
@@ -377,7 +380,6 @@ func (c *RawClient) sendMutateRequest(
 		item.Value,
 		extras...)
 	if err != nil {
-		c.validState = false
 		return NewMutateErrorResponse(item.Key, err)
 	}
 	return nil
@@ -389,7 +391,6 @@ func (c *RawClient) receiveMutateResponse(
 
 	status, version, _, _, err := c.receiveResponse(code)
 	if err != nil {
-		c.validState = false
 		return NewMutateErrorResponse(key, err)
 	}
 	return NewMutateResponse(key, status, version)
@@ -486,14 +487,6 @@ func (c *RawClient) Replace(item *Item) MutateResponse {
 }
 
 func (c *RawClient) sendDeleteRequest(key string) MutateResponse {
-	if !c.validState {
-		// An error has occurred in one of the previous requests.  It's not
-		// safe to continue sending.
-		return NewMutateErrorResponse(
-			key,
-			errors.New("Skipping due to previous error"))
-	}
-
 	if !isValidKeyString(key) {
 		return NewMutateErrorResponse(
 			key,
@@ -501,7 +494,6 @@ func (c *RawClient) sendDeleteRequest(key string) MutateResponse {
 	}
 
 	if err := c.sendRequest(opDelete, 0, []byte(key), nil); err != nil {
-		c.validState = false
 		return NewMutateErrorResponse(key, err)
 	}
 	return nil
@@ -585,14 +577,6 @@ func (c *RawClient) sendCountRequest(
 	initValue uint64,
 	expiration uint32) CountResponse {
 
-	if !c.validState {
-		// An error has occurred in one of the previous requests.  It's not
-		// safe to continue sending.
-		return NewCountErrorResponse(
-			key,
-			errors.New("Skipping due to previous error"))
-	}
-
 	if !isValidKeyString(key) {
 		return NewCountErrorResponse(
 			key,
@@ -608,7 +592,6 @@ func (c *RawClient) sendCountRequest(
 		initValue,
 		expiration)
 	if err != nil {
-		c.validState = false
 		return NewCountErrorResponse(key, err)
 	}
 	return nil
@@ -620,7 +603,6 @@ func (c *RawClient) receiveCountResponse(
 
 	status, _, _, value, err := c.receiveResponse(code)
 	if err != nil {
-		c.validState = false
 		return NewCountErrorResponse(key, err)
 	}
 
@@ -676,14 +658,6 @@ func (c *RawClient) Stat(statsKey string) StatResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if !c.validState {
-		// An error has occurred in one of the previous requests.  It's not
-		// safe to continue sending.
-		return NewStatErrorResponse(
-			errors.New("Skipping due to previous error"),
-			shardEntries)
-	}
-
 	if !isValidKeyString(statsKey) {
 		return NewStatErrorResponse(
 			errors.Newf("Invalid key: %s", statsKey),
@@ -692,14 +666,12 @@ func (c *RawClient) Stat(statsKey string) StatResponse {
 
 	err := c.sendRequest(opStat, 0, []byte(statsKey), nil)
 	if err != nil {
-		c.validState = false
 		return NewStatErrorResponse(err, shardEntries)
 	}
 
 	for true {
 		status, _, key, value, err := c.receiveResponse(opStat)
 		if err != nil {
-			c.validState = false
 			return NewStatErrorResponse(err, shardEntries)
 		}
 		if status != StatusNoError {
@@ -723,23 +695,13 @@ func (c *RawClient) Version() VersionResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if !c.validState {
-		// An error has occurred in one of the previous requests.  It's not
-		// safe to continue sending.
-		return NewVersionErrorResponse(
-			errors.New("Skipping due to previous error"),
-			versions)
-	}
-
 	err := c.sendRequest(opVersion, 0, nil, nil)
 	if err != nil {
-		c.validState = false
 		return NewVersionErrorResponse(err, versions)
 	}
 
 	status, _, _, value, err := c.receiveResponse(opVersion)
 	if err != nil {
-		c.validState = false
 		return NewVersionErrorResponse(err, versions)
 	}
 
@@ -751,22 +713,13 @@ func (c *RawClient) genericOp(code opCode, extras ...interface{}) Response {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if !c.validState {
-		// An error has occurred in one of the previous requests.  It's not
-		// safe to continue sending.
-		return NewErrorResponse(
-			errors.New("Skipping due to previous error"))
-	}
-
 	err := c.sendRequest(code, 0, nil, nil, extras...)
 	if err != nil {
-		c.validState = false
 		return NewErrorResponse(err)
 	}
 
 	status, _, _, _, err := c.receiveResponse(code)
 	if err != nil {
-		c.validState = false
 		return NewErrorResponse(err)
 	}
 	return NewResponse(status)
