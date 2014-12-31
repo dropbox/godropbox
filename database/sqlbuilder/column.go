@@ -245,8 +245,7 @@ func Alias(name string, c Expression) Column {
 	return ac
 }
 
-// This is a strict subset of the actual restrictions, because
-// teisenberger is lazy
+// This is a strict subset of the actual allowed identifiers
 var validIdentifierRegexp *regexp.Regexp = regexp.MustCompile("^[a-zA-Z_]\\w*$")
 
 // Returns true if the given string is suitable as an identifier.
