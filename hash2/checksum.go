@@ -16,7 +16,7 @@ func ComputeMd5Checksum(data []byte) []byte {
 	return h.Sum(nil)
 }
 
-// This returns true iff the data matches the provided checksum.
+// This returns true if the data matches the provided checksum.
 func ValidateMd5Checksum(data []byte, sum []byte) bool {
 	ourSum := ComputeMd5Checksum(data)
 	return bytes.Equal(ourSum, sum)
