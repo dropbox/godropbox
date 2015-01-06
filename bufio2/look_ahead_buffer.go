@@ -11,7 +11,7 @@ import (
 // functionality as bufio.Reader.  However, unlike bufio.Reader,
 // LookAheadBuffer's raw buffer size will EXACTLY match the specified size
 // (whereas bufio.Reader's buffer size may differ from the specified size).
-// This property ensures the buffer will not accidently read beyond the
+// This property ensures the buffer will not accidentally read beyond the
 // expected size.
 type LookAheadBuffer struct {
 	src           io.Reader
