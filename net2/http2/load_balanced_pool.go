@@ -41,7 +41,7 @@ type LoadBalancedPool struct {
 	instanceIdx uint64
 
 	// UNIX epoch time in seconds that represents time till address is considered
-	// as down and unusuable.
+	// as down and unusable.
 	markDownUntil []int64
 
 	params   ConnectionParams // Parameters for creating SimplePool-s.

@@ -62,7 +62,7 @@ type Event interface {
 
 const sizeOfBasicV4EventHeader = 19 // sizeof(basicV4EventHeader)
 
-// Fixed-length portion of the v4 event header as discribed in
+// Fixed-length portion of the v4 event header as described in
 // http://dev.mysql.com/doc/internals/en/event-structure.html
 type basicV4EventHeader struct {
 	Timestamp    uint32
