@@ -1,9 +1,10 @@
 # godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.svg)](https://godoc.org/github.com/dropbox/godropbox) [![Build Status](https://travis-ci.org/dropbox/godropbox.svg)](https://travis-ci.org/dropbox/godropbox)
 
-Common libraries for writing go services/applications.
+Common libraries for writing go services/applications on Linux servers.
 
-### Requirement
-Go 1.3+
+### Requirements
+ * Go 1.3+
+ * Linux/x64
 
 ### Installation
 ``go get github.com/dropbox/godropbox``
