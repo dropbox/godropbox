@@ -15,7 +15,7 @@ func TestStackTrace(t *testing.T) {
 		t.Error("error message %s != expected %s", e.Msg, testMsg)
 	}
 
-	if strings.Index(e.Stack, "dropbox/util/errors/errors.go") != -1 {
+	if strings.Index(e.Stack, "godropbox/errors/errors.go") != -1 {
 		t.Error("stack trace generation code should not be in the error stack trace")
 	}
 
