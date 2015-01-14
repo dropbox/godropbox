@@ -19,11 +19,11 @@ It has these top-level messages:
 */
 package mysql
 
-import proto "code.google.com/p/gogoprotobuf/proto"
+import proto "github.com/gogo/protobuf/proto"
 import math "math"
 
 import io "io"
-import code_google_com_p_gogoprotobuf_proto "code.google.com/p/gogoprotobuf/proto"
+import github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -630,7 +630,7 @@ func (m *LogEventType) Unmarshal(data []byte) error {
 				}
 			}
 			index -= sizeOfWire
-			skippy, err := code_google_com_p_gogoprotobuf_proto.Skip(data[index:])
+			skippy, err := github_com_gogo_protobuf_proto.Skip(data[index:])
 			if err != nil {
 				return err
 			}
@@ -671,7 +671,7 @@ func (m *RowsEventVersion) Unmarshal(data []byte) error {
 				}
 			}
 			index -= sizeOfWire
-			skippy, err := code_google_com_p_gogoprotobuf_proto.Skip(data[index:])
+			skippy, err := github_com_gogo_protobuf_proto.Skip(data[index:])
 			if err != nil {
 				return err
 			}
@@ -712,7 +712,7 @@ func (m *ChecksumAlgorithm) Unmarshal(data []byte) error {
 				}
 			}
 			index -= sizeOfWire
-			skippy, err := code_google_com_p_gogoprotobuf_proto.Skip(data[index:])
+			skippy, err := github_com_gogo_protobuf_proto.Skip(data[index:])
 			if err != nil {
 				return err
 			}
@@ -753,7 +753,7 @@ func (m *QueryStatusCode) Unmarshal(data []byte) error {
 				}
 			}
 			index -= sizeOfWire
-			skippy, err := code_google_com_p_gogoprotobuf_proto.Skip(data[index:])
+			skippy, err := github_com_gogo_protobuf_proto.Skip(data[index:])
 			if err != nil {
 				return err
 			}
@@ -794,7 +794,7 @@ func (m *SqlMode) Unmarshal(data []byte) error {
 				}
 			}
 			index -= sizeOfWire
-			skippy, err := code_google_com_p_gogoprotobuf_proto.Skip(data[index:])
+			skippy, err := github_com_gogo_protobuf_proto.Skip(data[index:])
 			if err != nil {
 				return err
 			}
@@ -835,7 +835,7 @@ func (m *FieldType) Unmarshal(data []byte) error {
 				}
 			}
 			index -= sizeOfWire
-			skippy, err := code_google_com_p_gogoprotobuf_proto.Skip(data[index:])
+			skippy, err := github_com_gogo_protobuf_proto.Skip(data[index:])
 			if err != nil {
 				return err
 			}
@@ -856,6 +856,7 @@ func (m *LogEventType) ProtoSize() (n int) {
 	}
 	return n
 }
+
 func (m *RowsEventVersion) ProtoSize() (n int) {
 	var l int
 	_ = l
@@ -864,6 +865,7 @@ func (m *RowsEventVersion) ProtoSize() (n int) {
 	}
 	return n
 }
+
 func (m *ChecksumAlgorithm) ProtoSize() (n int) {
 	var l int
 	_ = l
@@ -872,6 +874,7 @@ func (m *ChecksumAlgorithm) ProtoSize() (n int) {
 	}
 	return n
 }
+
 func (m *QueryStatusCode) ProtoSize() (n int) {
 	var l int
 	_ = l
@@ -880,6 +883,7 @@ func (m *QueryStatusCode) ProtoSize() (n int) {
 	}
 	return n
 }
+
 func (m *SqlMode) ProtoSize() (n int) {
 	var l int
 	_ = l
@@ -888,6 +892,7 @@ func (m *SqlMode) ProtoSize() (n int) {
 	}
 	return n
 }
+
 func (m *FieldType) ProtoSize() (n int) {
 	var l int
 	_ = l
@@ -930,6 +935,7 @@ func (m *LogEventType) MarshalTo(data []byte) (n int, err error) {
 	}
 	return i, nil
 }
+
 func (m *RowsEventVersion) Marshal() (data []byte, err error) {
 	size := m.ProtoSize()
 	data = make([]byte, size)
@@ -950,6 +956,7 @@ func (m *RowsEventVersion) MarshalTo(data []byte) (n int, err error) {
 	}
 	return i, nil
 }
+
 func (m *ChecksumAlgorithm) Marshal() (data []byte, err error) {
 	size := m.ProtoSize()
 	data = make([]byte, size)
@@ -970,6 +977,7 @@ func (m *ChecksumAlgorithm) MarshalTo(data []byte) (n int, err error) {
 	}
 	return i, nil
 }
+
 func (m *QueryStatusCode) Marshal() (data []byte, err error) {
 	size := m.ProtoSize()
 	data = make([]byte, size)
@@ -990,6 +998,7 @@ func (m *QueryStatusCode) MarshalTo(data []byte) (n int, err error) {
 	}
 	return i, nil
 }
+
 func (m *SqlMode) Marshal() (data []byte, err error) {
 	size := m.ProtoSize()
 	data = make([]byte, size)
@@ -1010,6 +1019,7 @@ func (m *SqlMode) MarshalTo(data []byte) (n int, err error) {
 	}
 	return i, nil
 }
+
 func (m *FieldType) Marshal() (data []byte, err error) {
 	size := m.ProtoSize()
 	data = make([]byte, size)
@@ -1030,6 +1040,7 @@ func (m *FieldType) MarshalTo(data []byte) (n int, err error) {
 	}
 	return i, nil
 }
+
 func encodeFixed64Binlog(data []byte, offset int, v uint64) int {
 	data[offset] = uint8(v)
 	data[offset+1] = uint8(v >> 8)
