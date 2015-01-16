@@ -13,6 +13,7 @@ const (
 	ActiveServer    = MemcachedState(0)
 	WriteOnlyServer = MemcachedState(1)
 	DownServer      = MemcachedState(2)
+	WarmUpServer    = MemcachedState(4)
 )
 
 type ShardState struct {
@@ -200,7 +201,8 @@ func (m *BaseShardManager) GetShardsForSentinels(
 			if shardId != -1 {
 				state := m.shardStates[shardId]
 				if state.State == ActiveServer ||
-					state.State == WriteOnlyServer {
+					state.State == WriteOnlyServer ||
+					state.State == WarmUpServer {
 
 					conn, err := m.pool.Get("tcp", state.Address)
 					if err != nil {
@@ -208,6 +210,10 @@ func (m *BaseShardManager) GetShardsForSentinels(
 						entry.ConnErr = err
 					} else {
 						entry.Connection = conn
+					}
+
+					if state.State == WarmUpServer {
+						entry.WarmingUp = true
 					}
 				}
 			}
