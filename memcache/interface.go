@@ -242,6 +242,7 @@ type ShardMapping struct {
 	ConnErr    error
 	Keys       []string // Populated for GetShardsForKeys
 	Items      []*Item  // Populated for GetShardsForItems
+	WarmingUp  bool     // Populated for GetShardsForSentinels
 }
 
 // The ShardManager decides which memcache shard a key/item belongs to, and

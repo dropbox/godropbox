@@ -155,6 +155,7 @@ func (c *ShardedClient) mutateMultiHelper(
 	conn net2.ManagedConn,
 	connErr error,
 	items []*Item,
+	warmingUp bool,
 	resultsChannel chan []MutateResponse) {
 
 	var results []MutateResponse
@@ -188,6 +189,16 @@ func (c *ShardedClient) mutateMultiHelper(
 
 		results = mutateMultiFunc(client, items)
 	}
+
+	// If server is warming up, we override all failures with success message.
+	if warmingUp {
+		for idx, item := range items {
+			if results[idx].Error() != nil {
+				results[idx] = NewMutateResponse(item.Key, StatusNoError, 0)
+			}
+		}
+	}
+
 	resultsChannel <- results
 }
 
@@ -205,6 +216,7 @@ func (c *ShardedClient) mutateMulti(
 			mapping.Connection,
 			mapping.ConnErr,
 			mapping.Items,
+			false,
 			resultsChannel)
 	}
 
@@ -237,6 +249,7 @@ func (c *ShardedClient) SetSentinels(items []*Item) []MutateResponse {
 			mapping.Connection,
 			mapping.ConnErr,
 			mapping.Items,
+			mapping.WarmingUp,
 			resultsChannel)
 	}
 
