@@ -133,6 +133,12 @@ func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
 	for found := 0; found < 1000; found++ {
 		<-c
 	}
+
+	select {
+	case <-c:
+		t.FailNow()
+	default:
+	}
 }
 
 func (suite *SemaphoreSuite) TestWaitWithTimeout(t *C) {
