@@ -38,5 +38,6 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Sujay Jayakar
 - Todd Eisenberger
 - Vadim Graboys
+- Vladislav Supalov
 - Xinyao Hu
 - Zviad Metreveli
