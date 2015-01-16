@@ -130,6 +130,7 @@ func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
 	}
 
 	s.Increment(2000)
+	time.Sleep(time.Duration(1)*time.Nanosecond)
 
 	for found := 0; found < 1000; found++ {
 		select {
