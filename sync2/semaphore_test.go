@@ -119,7 +119,7 @@ func (suite *SemaphoreSuite) TestMultipleWaiters(t *C) {
 }
 
 func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
-	c := make(chan bool)
+	c := make(chan bool, 1000)
 	s := NewSemaphore(0)
 	waiter := func() {
 		s.Wait(2)
@@ -130,8 +130,13 @@ func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
 	}
 
 	s.Increment(2000)
+
 	for found := 0; found < 1000; found++ {
-		<-c
+		select {
+		case <-c:
+		default:
+			t.FailNow()
+		}
 	}
 
 	select {
