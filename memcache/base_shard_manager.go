@@ -212,6 +212,10 @@ func (m *BaseShardManager) GetShardsForSentinels(
 						entry.Connection = conn
 					}
 
+					// During WARM_UP state, we do try to write sentinels to
+					// memcache but any failures are ignored. We run memcache
+					// server in this mode for sometime to prime our memcache
+					// and warm up memcache server.
 					if state.State == WarmUpServer {
 						entry.WarmingUp = true
 					}
