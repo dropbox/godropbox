@@ -15,12 +15,15 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 
 #### Contributors
 - Adam Faulkner
+- Alan Jeon
 - Alex Degtiar
+- Anthony Ross
 - Antoine Grondin
 - Arsham F.
 - Christian Ohler
 - Cuong Do
 - Daniel Reiter Horn
+- Daniel Hauenstein
 - Fanng Yuan
 - Harish Mallipeddi
 - Jack Ferris
