@@ -2,6 +2,7 @@ package singleton
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type SingletonInitFunc func() (interface{}, error)
@@ -36,20 +37,20 @@ type singletonImpl struct {
 	data interface{}
 	// Constructor for the singleton object
 	init SingletonInitFunc
-	// True if init was run without error
-	initialized bool
+	// Non-zero if init was run without error
+	initialized int32
 }
 
 func (s *singletonImpl) Get() (interface{}, error) {
 	// Don't lock in the common case
-	if s.initialized {
+	if atomic.LoadInt32(&s.initialized) > 0 {
 		return s.data, nil
 	}
 
 	s.Lock()
 	defer s.Unlock()
 
-	if s.initialized {
+	if atomic.LoadInt32(&s.initialized) > 0 {
 		return s.data, nil
 	}
 
@@ -59,6 +60,6 @@ func (s *singletonImpl) Get() (interface{}, error) {
 		return nil, err
 	}
 
-	s.initialized = true
+	atomic.StoreInt32(&s.initialized, 1)
 	return s.data, nil
 }
