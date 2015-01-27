@@ -4,7 +4,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/dropbox/godropbox/errors"
 	rp "github.com/dropbox/godropbox/resource_pool"
 )
 
@@ -97,12 +96,9 @@ func (p *BaseConnectionPool) Register(network string, address string) error {
 	return p.pool.Register(network + " " + address)
 }
 
-// BaseConnectionPool does not support Unregister.
-func (p *BaseConnectionPool) Unregister(
-	network string,
-	address string) error {
-
-	return errors.New("BaseConnectionPool does not support Unregister")
+// BaseConnectionPool has nothing to do on Unregister.
+func (p *BaseConnectionPool) Unregister(network string, address string) error {
+	return nil
 }
 
 func (p *BaseConnectionPool) ListRegistered() []NetworkAddress {
