@@ -41,9 +41,22 @@ func (m *BaseShardManager) Init(
 	logInfo func(v ...interface{}),
 	options net2.ConnectionOptions) {
 
+	m.InitWithPool(
+		shardFunc,
+		logError,
+		logInfo,
+		net2.NewMultiConnectionPool(options))
+}
+
+func (m *BaseShardManager) InitWithPool(
+	shardFunc func(key string, numShard int) (shard int),
+	logError func(err error),
+	logInfo func(v ...interface{}),
+	pool net2.ConnectionPool) {
+
 	m.shardStates = make([]ShardState, 0, 0)
 	m.getShardId = shardFunc
-	m.pool = net2.NewMultiConnectionPool(options)
+	m.pool = pool
 
 	m.logError = logError
 	m.logInfo = logInfo
