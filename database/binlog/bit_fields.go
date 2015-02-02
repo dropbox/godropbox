@@ -25,7 +25,7 @@ type bitFieldDescriptor struct {
 }
 
 // This returns a field descriptor for FieldType_BIT (i.e., Field_bit_as_char)
-func NewBitFieldDescriptor(nullable bool, metadata []byte) (
+func NewBitFieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {

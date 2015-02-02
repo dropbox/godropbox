@@ -4,6 +4,13 @@ import (
 	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
 )
 
+type NullableColumn bool
+
+const (
+	Nullable    NullableColumn = true
+	NotNullable NullableColumn = false
+)
+
 // FieldDescriptor defines the common interface for interpreting all mysql
 // field types.
 type FieldDescriptor interface {
@@ -23,7 +30,7 @@ type FieldDescriptor interface {
 // NOTE: ParseValue is left unimplemented.
 type baseFieldDescriptor struct {
 	fieldType  mysql_proto.FieldType_Type
-	isNullable bool
+	isNullable NullableColumn
 }
 
 func (d *baseFieldDescriptor) Type() mysql_proto.FieldType_Type {
@@ -31,7 +38,7 @@ func (d *baseFieldDescriptor) Type() mysql_proto.FieldType_Type {
 }
 
 func (d *baseFieldDescriptor) IsNullable() bool {
-	return d.isNullable
+	return d.isNullable == Nullable
 }
 
 type ColumnDescriptor interface {
@@ -72,7 +79,7 @@ type fixedLengthFieldDescriptor struct {
 
 func newFixedLengthFieldDescriptor(
 	fieldType mysql_proto.FieldType_Type,
-	nullable bool,
+	nullable NullableColumn,
 	numBytes int,
 	parseFunc func([]byte) interface{}) FieldDescriptor {
 

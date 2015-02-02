@@ -26,6 +26,13 @@ type Column interface {
 	setTableName(table string) error
 }
 
+type NullableColumn bool
+
+const (
+	Nullable    NullableColumn = true
+	NotNullable NullableColumn = false
+)
+
 // A column that can be refer to outside of the projection list
 type NonAliasColumn interface {
 	Column
@@ -52,7 +59,7 @@ type baseColumn struct {
 	isProjection
 	isExpression
 	name     string
-	nullable bool
+	nullable NullableColumn
 	table    string
 }
 
@@ -88,7 +95,7 @@ type bytesColumn struct {
 
 // Representation of VARBINARY/BLOB columns
 // This function will panic if name is not valid
-func BytesColumn(name string, nullable bool) NonAliasColumn {
+func BytesColumn(name string, nullable NullableColumn) NonAliasColumn {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in bytes column")
 	}
@@ -111,7 +118,7 @@ func StrColumn(
 	name string,
 	charset Charset,
 	collation Collation,
-	nullable bool) NonAliasColumn {
+	nullable NullableColumn) NonAliasColumn {
 
 	if !validIdentifierName(name) {
 		panic("Invalid column name in str column")
@@ -129,7 +136,7 @@ type dateTimeColumn struct {
 
 // Representation of DateTime columns
 // This function will panic if name is not valid
-func DateTimeColumn(name string, nullable bool) NonAliasColumn {
+func DateTimeColumn(name string, nullable NullableColumn) NonAliasColumn {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in datetime column")
 	}
@@ -146,7 +153,7 @@ type integerColumn struct {
 
 // Representation of any integer column
 // This function will panic if name is not valid
-func IntColumn(name string, nullable bool) NonAliasColumn {
+func IntColumn(name string, nullable NullableColumn) NonAliasColumn {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in int column")
 	}
@@ -163,7 +170,7 @@ type doubleColumn struct {
 
 // Representation of any double column
 // This function will panic if name is not valid
-func DoubleColumn(name string, nullable bool) NonAliasColumn {
+func DoubleColumn(name string, nullable NullableColumn) NonAliasColumn {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in int column")
 	}
@@ -183,7 +190,7 @@ type booleanColumn struct {
 
 // Representation of TINYINT used as a bool
 // This function will panic if name is not valid
-func BoolColumn(name string, nullable bool) NonAliasColumn {
+func BoolColumn(name string, nullable NullableColumn) NonAliasColumn {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in bool column")
 	}
