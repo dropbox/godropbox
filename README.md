@@ -24,6 +24,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Cuong Do
 - Daniel Hauenstein
 - Daniel Reiter Horn
+- Daniel Sommermann
 - Fanng Yuan
 - Harish Mallipeddi
 - Jack Ferris
