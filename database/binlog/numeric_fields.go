@@ -29,7 +29,7 @@ import (
 // NOTE: Field_year is grouped with other temporal fields.
 
 // This returns a field descriptor for FieldType_TINY (i.e., Field_tiny).
-func NewTinyFieldDescriptor(nullable bool) FieldDescriptor {
+func NewTinyFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_TINY,
 		nullable,
@@ -38,7 +38,7 @@ func NewTinyFieldDescriptor(nullable bool) FieldDescriptor {
 }
 
 // This returns a field descriptor for FieldType_SHORT (i.e., Field_shart)
-func NewShortFieldDescriptor(nullable bool) FieldDescriptor {
+func NewShortFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_SHORT,
 		nullable,
@@ -47,7 +47,7 @@ func NewShortFieldDescriptor(nullable bool) FieldDescriptor {
 }
 
 // This returns a field descriptor for FieldType_INT24 (i.e., Field_medium)
-func NewInt24FieldDescriptor(nullable bool) FieldDescriptor {
+func NewInt24FieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_INT24,
 		nullable,
@@ -56,7 +56,7 @@ func NewInt24FieldDescriptor(nullable bool) FieldDescriptor {
 }
 
 // This returns a field descriptor for FieldType_LONG (i.e., Field_long)
-func NewLongFieldDescriptor(nullable bool) FieldDescriptor {
+func NewLongFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_LONG,
 		nullable,
@@ -65,7 +65,7 @@ func NewLongFieldDescriptor(nullable bool) FieldDescriptor {
 }
 
 // This returns a field descriptor for FieldType_LONGLONG (i.e., Field_longlong)
-func NewLongLongFieldDescriptor(nullable bool) FieldDescriptor {
+func NewLongLongFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_LONGLONG,
 		nullable,
@@ -74,7 +74,7 @@ func NewLongLongFieldDescriptor(nullable bool) FieldDescriptor {
 }
 
 // This returns a field descriptor for FieldType_FLOAT (i.e., Field_float)
-func NewFloatFieldDescriptor(nullable bool, metadata []byte) (
+func NewFloatFieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {
@@ -100,7 +100,7 @@ func NewFloatFieldDescriptor(nullable bool, metadata []byte) (
 }
 
 // This returns a field descriptor for FieldType_DOUBLE (i.e., Field_double)
-func NewDoubleFieldDescriptor(nullable bool, metadata []byte) (
+func NewDoubleFieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {
@@ -128,7 +128,7 @@ type decimalFieldDescriptor struct {
 }
 
 // This returns a field descriptor for FieldType_DECIMAL (i.e., Field_decimal)
-func NewDecimalFieldDescriptor(nullable bool) FieldDescriptor {
+func NewDecimalFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return &decimalFieldDescriptor{
 		baseFieldDescriptor: baseFieldDescriptor{
 			fieldType:  mysql_proto.FieldType_DECIMAL,
@@ -154,7 +154,7 @@ type newDecimalFieldDescriptor struct {
 
 // This returns a field descriptor for FieldType_NEWDECIMAL (i.e.,
 // Field_newdecimal)
-func NewNewDecimalFieldDescriptor(nullable bool, metadata []byte) (
+func NewNewDecimalFieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {

@@ -229,7 +229,7 @@ func (p *TableMapEventParser) parseColumns(t *TableMapEvent) error {
 
 		var fd FieldDescriptor
 
-		nullable := nullVector[idx]
+		nullable := NullableColumn(nullVector[idx])
 
 		switch realType {
 		case mysql_proto.FieldType_DECIMAL:

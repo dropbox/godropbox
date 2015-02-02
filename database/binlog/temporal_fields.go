@@ -31,7 +31,7 @@ import (
 //             +--Field_datetimef
 
 // This returns a field descriptor for FieldType_YEAR (i.e., Field_year)
-func NewYearFieldDescriptor(nullable bool) FieldDescriptor {
+func NewYearFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_YEAR,
 		nullable,
@@ -43,7 +43,7 @@ func NewYearFieldDescriptor(nullable bool) FieldDescriptor {
 
 // This returns a fields descriptor for FieldType_TIMESTAMP
 // (i.e., Field_timestamp)
-func NewTimestampFieldDescriptor(nullable bool) FieldDescriptor {
+func NewTimestampFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_TIMESTAMP,
 		nullable,
@@ -56,7 +56,7 @@ func NewTimestampFieldDescriptor(nullable bool) FieldDescriptor {
 // This returns a fields descriptor for FieldType_DATETIME
 // (i.e., Field_datetime).  See number_to_datetime (in sql-common/my_time.c)
 // for encoding detail.
-func NewDateTimeFieldDescriptor(nullable bool) FieldDescriptor {
+func NewDateTimeFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_DATETIME,
 		nullable,
@@ -88,7 +88,7 @@ type usecTemporalFieldDescriptor struct {
 
 func (d *usecTemporalFieldDescriptor) init(
 	fieldType mysql_proto.FieldType_Type,
-	nullable bool,
+	nullable NullableColumn,
 	fixedSize int,
 	metadata []byte) (
 	remaining []byte,
@@ -155,7 +155,7 @@ type timestamp2FieldDescriptor struct {
 // This returns a field descriptor for FieldType_TIMESTAMP2
 // (i.e., Field_timestampf).  See my_timestamp_from_binary (in
 // sql-common/my_time.c) for encoding detail.
-func NewTimestamp2FieldDescriptor(nullable bool, metadata []byte) (
+func NewTimestamp2FieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {
@@ -199,7 +199,7 @@ type datetime2FieldDescriptor struct {
 // This returns a field descriptor for FieldType_DATETIME2
 // (i.e., Field_datetimef).  See TIME_from_longlong_datetime_packed (
 // in sql-common/my_time.c) for encoding detail.
-func NewDateTime2FieldDescriptor(nullable bool, metadata []byte) (
+func NewDateTime2FieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	reamining []byte,
 	err error) {

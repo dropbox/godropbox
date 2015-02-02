@@ -65,7 +65,7 @@ func parseTypeAndLength(metadata []byte) (
 }
 
 // This returns a field descriptor for FieldType_NULL (i.e., Field_null)
-func NewNullFieldDescriptor(nullable bool) FieldDescriptor {
+func NewNullFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 	// A null field can be nullable ...
 	return newFixedLengthFieldDescriptor(
 		mysql_proto.FieldType_NULL,
@@ -117,7 +117,7 @@ type stringFieldDescriptor struct {
 }
 
 // This returns a field descriptor for FieldType_VARCHAR (i.e., Field_varstring)
-func NewVarcharFieldDescriptor(nullable bool, metadata []byte) (
+func NewVarcharFieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {
@@ -136,7 +136,7 @@ func NewVarcharFieldDescriptor(nullable bool, metadata []byte) (
 
 func NewStringFieldDescriptor(
 	fieldType mysql_proto.FieldType_Type,
-	nullable bool,
+	nullable NullableColumn,
 	maxLen int) FieldDescriptor {
 
 	packedLen := 2
@@ -173,7 +173,7 @@ type blobFieldDescriptor struct {
 }
 
 // This returns a field descriptor for FieldType_BLOB (i.e., Field_blob)
-func NewBlobFieldDescriptor(nullable bool, metadata []byte) (
+func NewBlobFieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
 	remaining []byte,
 	err error) {
