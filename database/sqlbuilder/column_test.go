@@ -21,13 +21,13 @@ var _ = gc.Suite(&ColumnSuite{})
 //
 
 func (s *ColumnSuite) TestRealColumnName(c *gc.C) {
-	col := IntColumn("col", true)
+	col := IntColumn("col", Nullable)
 
 	c.Assert(col.Name(), gc.Equals, "col")
 }
 
 func (s *ColumnSuite) TestRealColumnSerializeSqlForColumnList(c *gc.C) {
-	col := IntColumn("col", true)
+	col := IntColumn("col", Nullable)
 
 	// Without table name
 	buf := &bytes.Buffer{}
@@ -52,7 +52,7 @@ func (s *ColumnSuite) TestRealColumnSerializeSqlForColumnList(c *gc.C) {
 }
 
 func (s *ColumnSuite) TestRealColumnSerializeSql(c *gc.C) {
-	col := IntColumn("col", true)
+	col := IntColumn("col", Nullable)
 
 	// Without table name
 	buf := &bytes.Buffer{}
