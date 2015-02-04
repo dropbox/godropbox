@@ -9,23 +9,23 @@ import (
 func Example() {
 	t1 := sb.NewTable(
 		"parent_prefix",
-		sb.IntColumn("ns_id", false),
-		sb.IntColumn("hash", false),
+		sb.IntColumn("ns_id", sb.NotNullable),
+		sb.IntColumn("hash", sb.NotNullable),
 		sb.StrColumn(
 			"prefix",
 			sb.UTF8,
 			sb.UTF8CaseInsensitive,
-			false))
+			sb.NotNullable))
 
 	t2 := sb.NewTable(
 		"sfj",
-		sb.IntColumn("ns_id", false),
-		sb.IntColumn("sjid", false),
+		sb.IntColumn("ns_id", sb.NotNullable),
+		sb.IntColumn("sjid", sb.NotNullable),
 		sb.StrColumn(
 			"filename",
 			sb.UTF8,
 			sb.UTF8CaseInsensitive,
-			false))
+			sb.NotNullable))
 
 	ns_id1 := t1.C("ns_id")
 	prefix := t1.C("prefix")
