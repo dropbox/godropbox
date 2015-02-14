@@ -99,7 +99,7 @@ func (c *ShardedClient) getMultiHelper(
 func (c *ShardedClient) GetMulti(keys []string) map[string]GetResponse {
 	shardMapping := c.manager.GetShardsForKeys(keys)
 
-	resultsChannel := make(chan map[string]GetResponse)
+	resultsChannel := make(chan map[string]GetResponse, len(shardMapping))
 	for shard, mapping := range shardMapping {
 		go c.getMultiHelper(
 			shard,
@@ -208,7 +208,7 @@ func (c *ShardedClient) mutateMulti(
 	items []*Item) []MutateResponse {
 	shardMapping := c.manager.GetShardsForItems(items)
 
-	resultsChannel := make(chan []MutateResponse)
+	resultsChannel := make(chan []MutateResponse, len(shardMapping))
 	for shard, mapping := range shardMapping {
 		go c.mutateMultiHelper(
 			mutateMultiFunc,
@@ -241,7 +241,7 @@ func (c *ShardedClient) SetMulti(items []*Item) []MutateResponse {
 func (c *ShardedClient) SetSentinels(items []*Item) []MutateResponse {
 	shardMapping := c.manager.GetShardsForSentinels(items)
 
-	resultsChannel := make(chan []MutateResponse)
+	resultsChannel := make(chan []MutateResponse, len(shardMapping))
 	for shard, mapping := range shardMapping {
 		go c.mutateMultiHelper(
 			setMultiMutator,
@@ -365,7 +365,7 @@ func (c *ShardedClient) deleteMultiHelper(
 func (c *ShardedClient) DeleteMulti(keys []string) []MutateResponse {
 	shardMapping := c.manager.GetShardsForKeys(keys)
 
-	resultsChannel := make(chan []MutateResponse)
+	resultsChannel := make(chan []MutateResponse, len(shardMapping))
 	for shard, mapping := range shardMapping {
 		go c.deleteMultiHelper(
 			shard,
