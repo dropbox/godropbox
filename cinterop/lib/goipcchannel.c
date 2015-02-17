@@ -132,7 +132,9 @@ void close_go_channel(struct GoIPCChannel *channel) {
     if (channel->stdout != -1) {
         close(channel->stdout);
     }
-    if (channel->stdin != -1) {
+    if (channel->stdin != channel->stdout && channel->stdin != -1) {
+        // only close if stdout is not the same file descriptor as stdin
+        // (they are the same for sockets, but different for pipes)
         close(channel->stdin);
     }
     channel->stdout = -1;
