@@ -514,7 +514,7 @@ func (s *RowsEventSuite) TestRealWriteRowsV1(c *C) {
 			3, 254, 1, 252, 1, 1, 252,
 			// metadata
 			4,
-			254, 129, 2, 3,
+			254, 45, 2, 3,
 			// null bits
 			8})
 
@@ -576,7 +576,7 @@ func (s *RowsEventSuite) TestRealWriteRowsV1(c *C) {
 	// dump from mysqlbinlog -vv
 	expected := RowValues{
 		uint64(204330793),
-		[]byte("8ascWI_Bj9cIvktEYOUf001nbZMOgY6TkWeOXmPK0zs"),
+		[]byte("8ascWI_Bj9cIvktEYOUf001nbZMOgY6TkWeOXmPK0zs\x00\x00"),
 		uint64(29),
 		nil,
 		uint64(1),
@@ -867,7 +867,7 @@ func (s *RowsEventSuite) TestRealUpdateRowsV2(c *C) {
 		nil,
 		// '?IoF\x0b?\x1ab\x141\x14?='
 		[]byte{
-			215, 73, 111, 70, 11, 242, 132, 150, 26, 98, 20, 49, 20, 209, 61},
+			215, 73, 111, 70, 11, 242, 132, 150, 26, 98, 20, 49, 20, 209, 61, 0},
 		uint64(1),
 	}
 	expectedAfter := RowValues{
@@ -885,7 +885,7 @@ func (s *RowsEventSuite) TestRealUpdateRowsV2(c *C) {
 		nil,
 		// '?IoF\x0b?\x1ab\x141\x14?='
 		[]byte{
-			215, 73, 111, 70, 11, 242, 132, 150, 26, 98, 20, 49, 20, 209, 61},
+			215, 73, 111, 70, 11, 242, 132, 150, 26, 98, 20, 49, 20, 209, 61, 0},
 		uint64(3),
 	}
 	c.Check(rows[0].BeforeImage, DeepEquals, expectedBefore)
