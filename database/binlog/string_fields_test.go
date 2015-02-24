@@ -24,13 +24,13 @@ func (s *StringFieldsSuite) TestNullParseValue(c *C) {
 }
 
 func (s *StringFieldsSuite) TestStringParseValueOneByteLength(c *C) {
-	d := NewStringFieldDescriptor(mysql_proto.FieldType_STRING, true, 255)
+	d := NewStringFieldDescriptor(mysql_proto.FieldType_STRING, true, 5)
 	c.Check(d.IsNullable(), IsTrue)
 	c.Check(d.Type(), Equals, mysql_proto.FieldType_STRING)
 
 	sd, ok := d.(*stringFieldDescriptor)
 	c.Check(ok, IsTrue)
-	c.Check(sd.maxLength, Equals, 255)
+	c.Check(sd.maxLength, Equals, 5)
 	c.Check(sd.packedLength, Equals, 1)
 
 	val, remaining, err := d.ParseValue(
@@ -39,7 +39,7 @@ func (s *StringFieldsSuite) TestStringParseValueOneByteLength(c *C) {
 	c.Check(string(remaining), Equals, "rest")
 	real, ok := val.([]byte)
 	c.Check(ok, IsTrue)
-	c.Check(string(real), Equals, "foo")
+	c.Check(string(real), Equals, "foo\x00\x00")
 }
 
 func (s *StringFieldsSuite) TestStringParseValueTwoByteLength(c *C) {

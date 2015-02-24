@@ -1,6 +1,7 @@
 package binlog
 
 import (
+	"bytes"
 	"math"
 
 	"github.com/dropbox/godropbox/errors"
@@ -161,7 +162,25 @@ func (d *stringFieldDescriptor) ParseValue(data []byte) (
 	remaining []byte,
 	err error) {
 
-	return d.parseValue(data)
+	value, remaining, err = d.parseValue(data)
+	if d.fieldType != mysql_proto.FieldType_STRING || err != nil {
+		return value, remaining, err
+	}
+
+	bytesValue, ok := value.([]byte)
+	if !ok {
+		return value, remaining, nil
+	}
+
+	if len(bytesValue) < d.maxLength {
+		// NOTE: We have to allocate a new copy instead of padding it in place
+		// since it is a slice pointing to same backing array as remaining.
+		newBytesValue := bytes.Repeat([]byte("\x00"), d.maxLength)
+		copy(newBytesValue, bytesValue)
+		bytesValue = newBytesValue
+	}
+
+	return bytesValue, remaining, nil
 }
 
 //
