@@ -104,6 +104,7 @@ func NewV4EventParserMap() V4EventParserMap {
 	m.set(&XidEventParser{})
 	m.set(&RowsQueryEventParser{})
 	m.set(&GtidLogEventParser{})
+	m.set(&PreviousGtidsLogEventParser{})
 
 	m.set(newWriteRowsEventV1Parser())
 	m.set(newWriteRowsEventV2Parser())
