@@ -27,8 +27,8 @@ func (e *GtidLogEvent) IsCommit() bool {
 	return e.commit
 }
 
-func (e *GtidLogEvent) Sid() [16]byte {
-	return e.sid
+func (e *GtidLogEvent) Sid() []byte {
+	return e.sid[:]
 }
 
 func (e *GtidLogEvent) Gno() uint64 {
