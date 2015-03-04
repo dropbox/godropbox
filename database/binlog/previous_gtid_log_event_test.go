@@ -54,7 +54,7 @@ func (s *PreviousGtidsLogEventSuite) TestSuccess(c *C) {
 
 // Not enough bytes to read n_sids
 func (s *PreviousGtidsLogEventSuite) TestFailure(c *C) {
-	data := serializeGtidTest(testCases[2])
+	data := serializeGtidSet(testCases[2])
 
 	testCases := [][]byte{
 		// Not enough bytes to read n_sids
