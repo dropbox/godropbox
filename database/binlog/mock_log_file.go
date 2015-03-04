@@ -87,6 +87,38 @@ func (mlf *MockLogFile) WriteFDE() {
 	mlf.writeWithHeader(data, mysql_proto.LogEventType_FORMAT_DESCRIPTION_EVENT)
 }
 
+func serializeGtidSet(set GtidSet) []byte {
+        data := &bytes.Buffer{}
+
+        // n_sids
+        binary.Write(data, LittleEndian, uint64(len(set)))
+        for sid, intervals := range set {
+                // sid + n_intervals
+                data.WriteString(sid)
+                binary.Write(data, LittleEndian, uint64(len(intervals)))
+                for _, interval := range intervals {
+                        // start + end
+                        binary.Write(data, LittleEndian, interval.Start)
+                        binary.Write(data, LittleEndian, interval.End)
+                }
+        }
+
+        return data.Bytes()
+}
+
+func (mlf *MockLogFile) WritePGLE(set GtidSet) {
+        data := serializeGtidSet(set)
+        mlf.writeWithHeader(data, mysql_proto.LogEventType_PREVIOUS_GTIDS_LOG_EVENT)
+}
+
+func (mlf *MockLogFile) WriteGtid(sid []byte, gno uint64) {
+        data := &bytes.Buffer{}
+        data.WriteByte(1)
+        data.Write(sid)
+        binary.Write(data, LittleEndian, gno)
+        mlf.writeWithHeader(data.Bytes(), mysql_proto.LogEventType_GTID_LOG_EVENT)
+}
+
 func (mlf *MockLogFile) WriteXid(id uint64) {
 	data := &bytes.Buffer{}
 	binary.Write(data, binary.LittleEndian, id)
