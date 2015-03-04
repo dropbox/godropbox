@@ -1,8 +1,6 @@
 package binlog
 
 import (
-	"bytes"
-	"encoding/binary"
 	"reflect"
 	"strings"
 
