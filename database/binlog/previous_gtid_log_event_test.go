@@ -1,8 +1,6 @@
 package binlog
 
 import (
-	"bytes"
-	"encoding/binary"
 	"reflect"
 	"strings"
 
@@ -16,25 +14,6 @@ type PreviousGtidsLogEventSuite struct {
 }
 
 var _ = Suite(&PreviousGtidsLogEventSuite{})
-
-func (s *PreviousGtidsLogEventSuite) serialize(set GtidSet) []byte {
-	data := &bytes.Buffer{}
-
-	// n_sids
-	binary.Write(data, LittleEndian, uint64(len(set)))
-	for sid, intervals := range set {
-		// sid + n_intervals
-		data.WriteString(sid)
-		binary.Write(data, LittleEndian, uint64(len(intervals)))
-		for _, interval := range intervals {
-			// start + end
-			binary.Write(data, LittleEndian, interval.Start)
-			binary.Write(data, LittleEndian, interval.End)
-		}
-	}
-
-	return data.Bytes()
-}
 
 var testCases = []GtidSet{
 	GtidSet{},
@@ -57,7 +36,7 @@ var testCases = []GtidSet{
 
 func (s *PreviousGtidsLogEventSuite) TestSuccess(c *C) {
 	for _, test := range testCases {
-		s.WriteEvent(mysql_proto.LogEventType_PREVIOUS_GTIDS_LOG_EVENT, 0, s.serialize(test))
+		s.WriteEvent(mysql_proto.LogEventType_PREVIOUS_GTIDS_LOG_EVENT, 0, serializeGtidSet(test))
 		event, err := s.NextEvent()
 		c.Assert(err, IsNil)
 
@@ -75,7 +54,7 @@ func (s *PreviousGtidsLogEventSuite) TestSuccess(c *C) {
 
 // Not enough bytes to read n_sids
 func (s *PreviousGtidsLogEventSuite) TestFailure(c *C) {
-	data := s.serialize(testCases[2])
+	data := serializeGtidSet(testCases[2])
 
 	testCases := [][]byte{
 		// Not enough bytes to read n_sids
