@@ -131,3 +131,26 @@ func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
 		c.Assert(err, IsNil)
 	}
 }
+
+func (s *LoadBalancedPoolSuite) TestConnectTimeout(c *C) {
+	params := ConnectionParams{
+		MaxIdle:        1,
+		ConnectTimeout: 100 * time.Millisecond,
+	}
+	pool := NewLoadBalancedPool(params)
+	infos := []LBPoolInstanceInfo{
+		LBPoolInstanceInfo{
+			Addr:       "128.0.0.1:1111", // Unreachable IP.
+			InstanceId: 1,
+		},
+	}
+	pool.Update(infos)
+
+	req, err := http.NewRequest("GET", "/", nil)
+	c.Assert(err, IsNil)
+
+	stTime := time.Now()
+	_, err = pool.Do(req)
+	c.Assert(err, NotNil)
+	c.Assert(time.Now().Sub(stTime) < params.ConnectTimeout*2, Equals, true)
+}
