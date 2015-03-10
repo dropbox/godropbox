@@ -129,10 +129,17 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 
 // Issues an HTTP request, distributing more load to relatively unloaded instances.
 func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
+	var requestErr error = nil
 	for i := 0; ; i++ {
-		idx, instance, err := pool.getInstance()
+		idx, instance, isDown, err := pool.getInstance()
 		if err != nil {
 			return nil, errors.Wrap(err, "can't get HTTP connection")
+		}
+		if isDown && requestErr != nil {
+			// If current pool instance is marked down, that means all instances in the pool
+			// are most likely marked down, thus avoid performing any connect retries, to fail
+			// faster.
+			return nil, requestErr
 		}
 
 		resp, err := instance.Do(req)
@@ -143,6 +150,10 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
 			// protection when service may still be up but have higher rate of
 			// 500s for whatever reason.
 			pool.markInstanceDown(idx, instance, time.Now().Add(markDownDuration).Unix())
+		} else if isDown {
+			// If an instance was marked as down, but succeeded, reset the mark down timer, so
+			// instance is treated as healthy right away.
+			pool.markInstanceDown(idx, instance, 0)
 		}
 		if err != nil {
 			if _, ok := err.(DialError); !ok {
@@ -150,6 +161,7 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
 			}
 
 			if (i + 1) < connectionAttempts {
+				requestErr = err
 				continue
 			}
 		}
@@ -159,7 +171,7 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
 
 // Checks out an HTTP connection from an instance pool, favoring less loaded instances.
 func (pool *LoadBalancedPool) Get() (*http.Client, error) {
-	_, instance, err := pool.getInstance()
+	_, instance, _, err := pool.getInstance()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't get HTTP connection")
 	}
@@ -172,14 +184,17 @@ func (pool *LoadBalancedPool) Get() (*http.Client, error) {
 
 // Returns instance that isn't marked down, if all instances are
 // marked as down it will just choose a next one.
-func (pool *LoadBalancedPool) getInstance() (int, *instancePool, error) {
+func (pool *LoadBalancedPool) getInstance() (
+	idx int,
+	instance *instancePool,
+	isDown bool,
+	err error) {
 	pool.lock.RLock()
 	defer pool.lock.RUnlock()
 	if len(pool.instanceList) == 0 {
-		return 0, nil, errors.Newf("no available instances")
+		return 0, nil, false, errors.Newf("no available instances")
 	}
 	now := time.Now().Unix()
-	var idx int
 	for i := 0; i < len(pool.instanceList); i++ {
 		switch pool.strategy {
 		case LBRoundRobin:
@@ -197,7 +212,7 @@ func (pool *LoadBalancedPool) getInstance() (int, *instancePool, error) {
 			break
 		}
 	}
-	return idx, pool.instanceList[idx], nil
+	return idx, pool.instanceList[idx], (pool.markDownUntil[idx] >= now), nil
 }
 
 // Returns a SimplePool for given instanceId, or an error if it does not exist.
