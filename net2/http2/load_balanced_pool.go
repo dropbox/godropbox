@@ -153,7 +153,7 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
 		} else if isDown {
 			// If an instance was marked as down, but succeeded, reset the mark down timer, so
 			// instance is treated as healthy right away.
-			pool.markInstanceDown(idx, instance, 0)
+			pool.markInstanceUp(idx, instance)
 		}
 		if err != nil {
 			if _, ok := err.(DialError); !ok {
@@ -237,6 +237,12 @@ func (pool *LoadBalancedPool) markInstanceDown(
 	if idx < len(pool.instanceList) && pool.instanceList[idx] == instance {
 		pool.markDownUntil[idx] = downUntil
 	}
+}
+
+// Marks instance as ready to be used.
+func (pool *LoadBalancedPool) markInstanceUp(
+	idx int, instance *instancePool) {
+	pool.markInstanceDown(idx, instance, 0)
 }
 
 func (pool *LoadBalancedPool) Close() {
