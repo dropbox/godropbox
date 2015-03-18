@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"github.com/dropbox/godropbox/cinterop"
 	"io"
 	"log"
 	"net"
@@ -11,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/dropbox/godropbox/cinterop"
 )
 
 func reader(r io.Reader) {

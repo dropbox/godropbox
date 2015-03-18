@@ -12,11 +12,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
-	"github.com/dropbox/godropbox/encoding2"
-	"github.com/dropbox/godropbox/errors"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/dropbox/godropbox/encoding2"
+	"github.com/dropbox/godropbox/errors"
 )
 
 var (
