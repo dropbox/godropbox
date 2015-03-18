@@ -307,7 +307,7 @@ func (s keyedSetImpl) RemoveIf(f func(interface{}) bool) {
 }
 
 // Common functions between the two implementations, since go
-// does not allow for any inheritance. 
+// does not allow for any inheritance.
 
 func equal(s Set, s2 Set) bool {
 	if s.Len() != s2.Len() {

@@ -3,8 +3,9 @@ package binlog
 import (
 	"bytes"
 	"encoding/binary"
-	. "gopkg.in/check.v1"
 	"io"
+
+	. "gopkg.in/check.v1"
 
 	"github.com/dropbox/godropbox/errors"
 	. "github.com/dropbox/godropbox/gocheck2"
