@@ -86,7 +86,7 @@ func (s *GenericStorage) Get(key interface{}) (interface{}, error) {
 	}
 
 	items, err := s.getMulti(key)
-    if err != nil {
+	if err != nil {
 		return nil, err
 	}
 	return items[0], nil

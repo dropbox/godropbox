@@ -95,7 +95,7 @@ func (t *Table) getColumn(name string) (NonAliasColumn, error) {
 // is deferred to SerializeSql.
 func (t *Table) C(name string) NonAliasColumn {
 	return &deferredLookupColumn{
-		table:    t,
+		table:   t,
 		colName: name,
 	}
 }
