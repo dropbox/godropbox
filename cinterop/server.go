@@ -21,8 +21,8 @@ func messageOnCloseAndRun(exitChan chan<- bool,
 func validateAndRun(token []byte,
 	socketRead io.ReadCloser, socketWrite io.Writer, process func(io.ReadCloser, io.Writer)) {
 	test := make([]byte, len(token))
-	_, token_err := io.ReadFull(socketRead, test[:])
-	if token_err == nil && bytes.Equal(token, test[:]) {
+	_, tokenErr := io.ReadFull(socketRead, test[:])
+	if tokenErr == nil && bytes.Equal(token, test[:]) {
 		process(socketRead, socketWrite)
 	} else {
 		log.Print("Error: token mismatch from new client")

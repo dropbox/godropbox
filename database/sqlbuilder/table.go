@@ -23,14 +23,14 @@ type ReadableTable interface {
 	// Generates a select query on the current table.
 	Select(projections ...Projection) SelectStatement
 
-	// Creates a inner join table expression using on_condition.
-	InnerJoinOn(table ReadableTable, on_condition BoolExpression) ReadableTable
+	// Creates a inner join table expression using onCondition.
+	InnerJoinOn(table ReadableTable, onCondition BoolExpression) ReadableTable
 
-	// Creates a left join table expression using on_condition.
-	LeftJoinOn(table ReadableTable, on_condition BoolExpression) ReadableTable
+	// Creates a left join table expression using onCondition.
+	LeftJoinOn(table ReadableTable, onCondition BoolExpression) ReadableTable
 
-	// Creates a right join table expression using on_condition.
-	RightJoinOn(table ReadableTable, on_condition BoolExpression) ReadableTable
+	// Creates a right join table expression using onCondition.
+	RightJoinOn(table ReadableTable, onCondition BoolExpression) ReadableTable
 }
 
 // The sql table write interface.
@@ -154,28 +154,28 @@ func (t *Table) Select(projections ...Projection) SelectStatement {
 	return newSelectStatement(t, projections)
 }
 
-// Creates a inner join table expression using on_condition.
+// Creates a inner join table expression using onCondition.
 func (t *Table) InnerJoinOn(
 	table ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return InnerJoinOn(t, table, on_condition)
+	return InnerJoinOn(t, table, onCondition)
 }
 
-// Creates a left join table expression using on_condition.
+// Creates a left join table expression using onCondition.
 func (t *Table) LeftJoinOn(
 	table ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return LeftJoinOn(t, table, on_condition)
+	return LeftJoinOn(t, table, onCondition)
 }
 
-// Creates a right join table expression using on_condition.
+// Creates a right join table expression using onCondition.
 func (t *Table) RightJoinOn(
 	table ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return RightJoinOn(t, table, on_condition)
+	return RightJoinOn(t, table, onCondition)
 }
 
 func (t *Table) Insert(columns ...NonAliasColumn) InsertStatement {
@@ -200,48 +200,48 @@ const (
 
 // Join expressions are pseudo readable tables.
 type joinTable struct {
-	lhs          ReadableTable
-	rhs          ReadableTable
-	join_type    joinType
-	on_condition BoolExpression
+	lhs         ReadableTable
+	rhs         ReadableTable
+	join_type   joinType
+	onCondition BoolExpression
 }
 
 func newJoinTable(
 	lhs ReadableTable,
 	rhs ReadableTable,
 	join_type joinType,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
 	return &joinTable{
-		lhs:          lhs,
-		rhs:          rhs,
-		join_type:    join_type,
-		on_condition: on_condition,
+		lhs:         lhs,
+		rhs:         rhs,
+		join_type:   join_type,
+		onCondition: onCondition,
 	}
 }
 
 func InnerJoinOn(
 	lhs ReadableTable,
 	rhs ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return newJoinTable(lhs, rhs, INNER_JOIN, on_condition)
+	return newJoinTable(lhs, rhs, INNER_JOIN, onCondition)
 }
 
 func LeftJoinOn(
 	lhs ReadableTable,
 	rhs ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return newJoinTable(lhs, rhs, LEFT_JOIN, on_condition)
+	return newJoinTable(lhs, rhs, LEFT_JOIN, onCondition)
 }
 
 func RightJoinOn(
 	lhs ReadableTable,
 	rhs ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return newJoinTable(lhs, rhs, RIGHT_JOIN, on_condition)
+	return newJoinTable(lhs, rhs, RIGHT_JOIN, onCondition)
 }
 
 func (t *joinTable) Columns() []NonAliasColumn {
@@ -262,8 +262,8 @@ func (t *joinTable) SerializeSql(
 	if t.rhs == nil {
 		return errors.Newf("nil rhs.  Generated sql: %s", out.String())
 	}
-	if t.on_condition == nil {
-		return errors.Newf("nil on_condition.  Generated sql: %s", out.String())
+	if t.onCondition == nil {
+		return errors.Newf("nil onCondition.  Generated sql: %s", out.String())
 	}
 
 	if err = t.lhs.SerializeSql(database, out); err != nil {
@@ -284,7 +284,7 @@ func (t *joinTable) SerializeSql(
 	}
 
 	out.WriteString(" ON ")
-	if err = t.on_condition.SerializeSql(out); err != nil {
+	if err = t.onCondition.SerializeSql(out); err != nil {
 		return
 	}
 
@@ -297,21 +297,21 @@ func (t *joinTable) Select(projections ...Projection) SelectStatement {
 
 func (t *joinTable) InnerJoinOn(
 	table ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return InnerJoinOn(t, table, on_condition)
+	return InnerJoinOn(t, table, onCondition)
 }
 
 func (t *joinTable) LeftJoinOn(
 	table ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return LeftJoinOn(t, table, on_condition)
+	return LeftJoinOn(t, table, onCondition)
 }
 
 func (t *joinTable) RightJoinOn(
 	table ReadableTable,
-	on_condition BoolExpression) ReadableTable {
+	onCondition BoolExpression) ReadableTable {
 
-	return RightJoinOn(t, table, on_condition)
+	return RightJoinOn(t, table, onCondition)
 }

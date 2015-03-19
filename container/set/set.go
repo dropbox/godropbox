@@ -154,7 +154,7 @@ func (s setImpl) Union(s2 Set) {
 }
 
 func (s setImpl) Intersect(s2 Set) {
-	var toRemove []interface{} = nil
+	var toRemove []interface{}
 	for key := range s.data {
 		if !s2.Contains(key) {
 			toRemove = append(toRemove, key)
@@ -265,7 +265,7 @@ func (s keyedSetImpl) Union(s2 Set) {
 }
 
 func (s keyedSetImpl) Intersect(s2 Set) {
-	var toRemove []interface{} = nil
+	var toRemove []interface{}
 	for _, v := range s.data {
 		if !s2.Contains(v) {
 			toRemove = append(toRemove, v)
