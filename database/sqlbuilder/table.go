@@ -96,7 +96,7 @@ func (t *Table) getColumn(name string) (NonAliasColumn, error) {
 func (t *Table) C(name string) NonAliasColumn {
 	return &deferredLookupColumn{
 		table:    t,
-		col_name: name,
+		colName: name,
 	}
 }
 
