@@ -112,9 +112,8 @@ func (v Value) EncodeAscii(b encoding2.BinaryWriter) {
 func (v Value) MarshalBinary() ([]byte, error) {
 	if v.IsNull() {
 		return []byte{byte(NullType)}, nil
-	} else {
-		return v.Inner.MarshalBinary()
 	}
+	return v.Inner.MarshalBinary()
 }
 
 // UnmarshalBinary helps implement BinaryUnmarshaler interface for Value.
@@ -491,9 +490,8 @@ func (s String) encodeAscii(b encoding2.BinaryWriter) {
 func (s String) MarshalBinary() ([]byte, error) {
 	if s.isUtf8 {
 		return writeBinary(UTF8StringType, s.raw())
-	} else {
-		return writeBinary(StringType, s.raw())
 	}
+	return writeBinary(StringType, s.raw())
 }
 
 func writebyte(b encoding2.BinaryWriter, c byte) {

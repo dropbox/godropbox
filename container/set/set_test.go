@@ -143,7 +143,7 @@ func (suite *SetSuite) TestSubsets(c *C) {
 	c.Assert(s2.IsSuperset(s1), IsFalse)
 }
 
-func (suit *SetSuite) TestEquality(c *C) {
+func (suite *SetSuite) TestEquality(c *C) {
 	s1 := NewSet()
 	s2 := NewKeyedSet(identity)
 
@@ -174,7 +174,7 @@ func matchBar(i interface{}) bool {
 	return false
 }
 
-func (suit *SetSuite) TestKeyedSet(c *C) {
+func (suite *SetSuite) TestKeyedSet(c *C) {
 	ks := NewKeyedSet(byte2string)
 
 	m := []byte("foo")

@@ -253,7 +253,7 @@ func Alias(name string, c Expression) Column {
 }
 
 // This is a strict subset of the actual allowed identifiers
-var validIdentifierRegexp *regexp.Regexp = regexp.MustCompile("^[a-zA-Z_]\\w*$")
+var validIdentifierRegexp = regexp.MustCompile("^[a-zA-Z_]\\w*$")
 
 // Returns true if the given string is suitable as an identifier.
 func validIdentifierName(name string) bool {
@@ -264,14 +264,14 @@ func validIdentifierName(name string) bool {
 type deferredLookupColumn struct {
 	isProjection
 	isExpression
-	table    *Table
-	col_name string
+	table   *Table
+	colName string
 
 	cachedColumn NonAliasColumn
 }
 
 func (c *deferredLookupColumn) Name() string {
-	return c.col_name
+	return c.colName
 }
 
 func (c *deferredLookupColumn) SerializeSqlForColumnList(
@@ -285,7 +285,7 @@ func (c *deferredLookupColumn) SerializeSql(out *bytes.Buffer) error {
 		return c.cachedColumn.SerializeSql(out)
 	}
 
-	col, err := c.table.getColumn(c.col_name)
+	col, err := c.table.getColumn(c.colName)
 	if err != nil {
 		return err
 	}
@@ -297,5 +297,5 @@ func (c *deferredLookupColumn) SerializeSql(out *bytes.Buffer) error {
 func (c *deferredLookupColumn) setTableName(table string) error {
 	return errors.Newf(
 		"Lookup column '%s' should never have setTableName called on it",
-		c.col_name)
+		c.colName)
 }

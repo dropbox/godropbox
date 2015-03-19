@@ -198,9 +198,8 @@ func stackTrace(skip int) (current, context string) {
 		index := bytes.IndexByte(searchBuf, '\n')
 		if index == -1 {
 			return len(b)
-		} else {
-			return (start + index)
 		}
+		return (start + index)
 	}
 
 	// Strip initial levels of stack trace, but keep header line that

@@ -106,8 +106,8 @@ func (conj *conjunctExpression) SerializeSql(out *bytes.Buffer) (err error) {
 		clauses[i] = expr
 	}
 
-	use_parentheses := len(clauses) > 1
-	if use_parentheses {
+	useParentheses := len(clauses) > 1
+	if useParentheses {
 		out.WriteByte('(')
 	}
 
@@ -115,7 +115,7 @@ func (conj *conjunctExpression) SerializeSql(out *bytes.Buffer) (err error) {
 		return
 	}
 
-	if use_parentheses {
+	if useParentheses {
 		out.WriteByte(')')
 	}
 
@@ -141,8 +141,8 @@ func (arith *arithmeticExpression) SerializeSql(out *bytes.Buffer) (err error) {
 		clauses[i] = expr
 	}
 
-	use_parentheses := len(clauses) > 1
-	if use_parentheses {
+	useParentheses := len(clauses) > 1
+	if useParentheses {
 		out.WriteByte('(')
 	}
 
@@ -150,7 +150,7 @@ func (arith *arithmeticExpression) SerializeSql(out *bytes.Buffer) (err error) {
 		return
 	}
 
-	if use_parentheses {
+	if useParentheses {
 		out.WriteByte(')')
 	}
 
@@ -315,7 +315,7 @@ func SqlFunc(funcName string, expressions ...Expression) Expression {
 	return f
 }
 
-var likeEscaper *strings.Replacer = strings.NewReplacer("_", "\\_", "%", "\\%")
+var likeEscaper = strings.NewReplacer("_", "\\_", "%", "\\%")
 
 func EscapeForLike(s string) string {
 	return likeEscaper.Replace(s)
@@ -543,7 +543,7 @@ func (c *inExpression) SerializeSql(out *bytes.Buffer) error {
 // Returns a representation of "a IN (b[0], ..., b[n-1])", where b is a list
 // of literals valList must be a slice type
 func In(lhs Expression, valList interface{}) BoolExpression {
-	var clauses []Clause = nil
+	var clauses []Clause
 	switch val := valList.(type) {
 	// This atrocious body of copy-paste code is due to the fact that if you
 	// try to merge the cases, you can't treat val as a list

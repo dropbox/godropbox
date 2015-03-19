@@ -108,7 +108,7 @@ func (d *usecTemporalFieldDescriptor) init(
 	case 0:
 		// do nothing
 	case 1, 2:
-		d.neededBytes += 1
+		d.neededBytes++
 	case 3, 4:
 		d.neededBytes += 2
 	case 5, 6:
