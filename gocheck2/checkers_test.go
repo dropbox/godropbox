@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	. "gopkg.in/check.v1"
+
+	"godropbox/errors"
 )
 
 // Hook up gocheck into go test runner
@@ -36,4 +38,16 @@ func (s *CheckersSuite) TestHasKey(c *C) {
 	testHasKey(
 		c, false, "Second argument must be assignable to the map key type",
 		map[string]int{"foo": 1}, 10)
+}
+
+func (s *CheckersSuite) TestErrorMatches(c *C) {
+	actualResult, actualErr := MultilineErrorMatches.Check([]interface{}{
+		errors.Newf("Oh damn, this stinks"), "stinks"}, nil)
+	c.Assert(actualErr, Equals, "")
+	c.Assert(actualResult, IsTrue)
+
+	actualResult, actualErr = MultilineErrorMatches.Check([]interface{}{
+		errors.Newf("Oh damn, this stinks"), "skinks"}, nil)
+	c.Assert(actualErr, Equals, "")
+	c.Assert(actualResult, IsFalse)
 }
