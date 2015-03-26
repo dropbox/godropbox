@@ -5,7 +5,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 // Hook up gocheck into go test runner
