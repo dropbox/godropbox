@@ -93,10 +93,10 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	var newInstanceList instancePoolSlice
 	for _, instanceInfo := range instanceInfos {
 		if _, ok := newInstances[instanceInfo.Addr]; !ok {
-                        var instance *instancePool
-                        if instance, ok = pool.instances[instanceInfo.Addr]; !ok {
-                                instance = pool.newInstancePool(instanceInfo)
-                        }
+			var instance *instancePool
+			if instance, ok = pool.instances[instanceInfo.Addr]; !ok {
+				instance = pool.newInstancePool(instanceInfo)
+			}
 			newInstances[instanceInfo.Addr] = instance
 			newInstanceList = append(newInstanceList, instance)
 		}
