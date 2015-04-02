@@ -90,13 +90,15 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 	newInstances := make(map[string]*instancePool)
-	var newInstanceList instancePoolSlice
-	for _, instanceInfo := range instanceInfos {
-		if _, ok := newInstances[instanceInfo.Addr]; !ok {
-			instance := pool.newInstancePool(instanceInfo)
-			newInstances[instanceInfo.Addr] = instance
-			newInstanceList = append(newInstanceList, instance)
+	newInstanceList := make(instancePoolSlice, len(instanceInfos))
+	for i, instanceInfo := range instanceInfos {
+		var instance *instancePool
+		var ok bool
+		if instance, ok = pool.instances[instanceInfo.Addr]; !ok {
+			instance = pool.newInstancePool(instanceInfo)
 		}
+		newInstances[instanceInfo.Addr] = instance
+		newInstanceList[i] = instance
 	}
 	switch pool.strategy {
 	case LBRoundRobin:
