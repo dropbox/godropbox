@@ -127,13 +127,8 @@ func (pool *SimplePool) Do(req *http.Request) (resp *http.Response, err error) {
 	// consuming the response.
 	resp, err = conn.Do(req)
 	if err != nil {
-		var isDialError bool
-		if urlErr, ok := err.(*url.Error); ok {
-			if strings.HasPrefix(urlErr.Err.Error(), dialErrorMsgPrefix) {
-				isDialError = true
-			}
-		}
-		if isDialError {
+		if urlErr, ok := err.(*url.Error); ok &&
+			strings.HasPrefix(urlErr.Err.Error(), dialErrorMsgPrefix) {
 			err = DialError{errors.Wrap(err, "SimplePool: Dial Error")}
 		} else {
 			err = errors.Wrap(err, err.Error())
