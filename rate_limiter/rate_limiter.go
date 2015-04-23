@@ -10,6 +10,7 @@ import (
 const tickInterval = 100 * time.Millisecond
 const ticksPerSec = 10
 
+// Interface for a thread-safe leaky bucket rate limiter.
 type RateLimiter interface {
 	// This returns the leaky bucket's maximum capacity.
 	MaxQuota() float64
