@@ -189,3 +189,18 @@ func (s *RateLimiterSuite) TestOversizedThrottle(c *C) {
 		c.FailNow()
 	}
 }
+
+func (s *RateLimiterSuite) TestUnthrottled(c *C) {
+	done := make(chan bool)
+	go func() {
+		s.limiter.Throttle(1000)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		break
+	case <-time.After(time.Second):
+		c.FailNow()
+	}
+}
