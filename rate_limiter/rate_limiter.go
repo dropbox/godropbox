@@ -117,6 +117,10 @@ func (l *RateLimiter) SetMaxQuota(q float64) error {
 		l.quota = q
 	}
 
+	if l.maxQuota == 0 {
+		l.cond.Signal()
+	}
+
 	return nil
 }
 
