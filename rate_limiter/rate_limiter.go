@@ -10,8 +10,37 @@ import (
 const tickInterval = 100 * time.Millisecond
 const ticksPerSec = 10
 
+type RateLimiter interface {
+	// This returns the leaky bucket's maximum capacity.
+	MaxQuota() float64
+
+	// This sets the leaky bucket's maximum capacity.  The value must be
+	// non-negative.
+	SetMaxQuota(q float64) error
+
+	// This returns the leaky bucket's fill rate.
+	QuotaPerSec() float64
+
+	// This sets the leaky bucket's fill rate.  The value must be non-negative.
+	SetQuotaPerSec(r float64) error
+
+	// This returns the current available quota.
+	Quota() float64
+
+	// This blocks until the request amount of resources is acquired.  This
+	// returns false if the request can be satisfied immediately.  Otherwise, this
+	// returns true.
+	//
+	// NOTE: When maxQuota is zero, or when the rate limiter is stopped,
+	// this returns immediately.
+	Throttle(request float64) bool
+
+	// Stop the rate limiter.
+	Stop()
+}
+
 // A thread-safe leaky bucket rate limiter.
-type RateLimiter struct {
+type rateLimiterImpl struct {
 	mutex *sync.Mutex
 	cond  *sync.Cond
 
@@ -30,11 +59,11 @@ type RateLimiter struct {
 	tickChan <-chan time.Time
 }
 
-func newRateLimiter() *RateLimiter {
+func newRateLimiter() *rateLimiterImpl {
 	m := &sync.Mutex{}
 	t := time.NewTicker(tickInterval)
 
-	return &RateLimiter{
+	return &rateLimiterImpl{
 		mutex:       m,
 		cond:        sync.NewCond(m),
 		maxQuota:    0,
@@ -50,7 +79,7 @@ func newRateLimiter() *RateLimiter {
 func NewRateLimiter(
 	maxQuota float64,
 	quotaPerSec float64) (
-	*RateLimiter,
+	RateLimiter,
 	error) {
 
 	l := newRateLimiter()
@@ -70,7 +99,7 @@ func NewRateLimiter(
 	return l, nil
 }
 
-func (l *RateLimiter) run() {
+func (l *rateLimiterImpl) run() {
 	for {
 		select {
 		case <-l.tickChan:
@@ -81,7 +110,7 @@ func (l *RateLimiter) run() {
 	}
 }
 
-func (l *RateLimiter) fillBucket() {
+func (l *rateLimiterImpl) fillBucket() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -96,7 +125,7 @@ func (l *RateLimiter) fillBucket() {
 }
 
 // This returns the leaky bucket's maximum capacity.
-func (l *RateLimiter) MaxQuota() float64 {
+func (l *rateLimiterImpl) MaxQuota() float64 {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	return l.maxQuota
@@ -104,7 +133,7 @@ func (l *RateLimiter) MaxQuota() float64 {
 
 // This sets the leaky bucket's maximum capacity.  The value must be
 // non-negative.
-func (l *RateLimiter) SetMaxQuota(q float64) error {
+func (l *rateLimiterImpl) SetMaxQuota(q float64) error {
 	if q < 0 {
 		return errors.Newf("Max quota must be non-negative: %f", q)
 	}
@@ -125,7 +154,7 @@ func (l *RateLimiter) SetMaxQuota(q float64) error {
 }
 
 // This returns the leaky bucket's fill rate.
-func (l *RateLimiter) QuotaPerSec() float64 {
+func (l *rateLimiterImpl) QuotaPerSec() float64 {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -133,7 +162,7 @@ func (l *RateLimiter) QuotaPerSec() float64 {
 }
 
 // This sets the leaky bucket's fill rate.  The value must be non-negative.
-func (l *RateLimiter) SetQuotaPerSec(r float64) error {
+func (l *rateLimiterImpl) SetQuotaPerSec(r float64) error {
 	if r < 0 {
 		return errors.Newf("Quota per second must be non-negative: %f", r)
 	}
@@ -147,14 +176,14 @@ func (l *RateLimiter) SetQuotaPerSec(r float64) error {
 }
 
 // This returns the current available quota.
-func (l *RateLimiter) Quota() float64 {
+func (l *rateLimiterImpl) Quota() float64 {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	return l.quota
 }
 
 // Only used for testing.
-func (l *RateLimiter) setQuota(q float64) {
+func (l *rateLimiterImpl) setQuota(q float64) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	l.quota = q
@@ -166,7 +195,7 @@ func (l *RateLimiter) setQuota(q float64) {
 //
 // NOTE: When maxQuota is zero, or when the rate limiter is stopped,
 // this returns immediately.
-func (l *RateLimiter) Throttle(request float64) bool {
+func (l *rateLimiterImpl) Throttle(request float64) bool {
 	if request <= 0 {
 		return false
 	}
@@ -194,7 +223,8 @@ func (l *RateLimiter) Throttle(request float64) bool {
 	}
 }
 
-func (l *RateLimiter) Stop() {
+// Stop the rate limiter.
+func (l *rateLimiterImpl) Stop() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -208,4 +238,23 @@ func (l *RateLimiter) Stop() {
 	l.ticker.Stop()
 
 	l.cond.Signal()
+}
+
+// A mock rate limiter for external unittesting.  The bucket is fill via the Tick call.
+type MockRateLimiter struct {
+	*rateLimiterImpl
+}
+
+func NewMockRateLimiter() *MockRateLimiter {
+	return &MockRateLimiter{
+		newRateLimiter(),
+	}
+}
+
+func (l *MockRateLimiter) SetQuota(q float64) {
+	l.setQuota(q)
+}
+
+func (l *MockRateLimiter) Tick() {
+	l.fillBucket()
 }
