@@ -13,7 +13,7 @@ func Test(t *testing.T) {
 }
 
 type RateLimiterSuite struct {
-	limiter  *RateLimiter
+	limiter  *rateLimiterImpl
 	tickChan chan time.Time
 }
 
