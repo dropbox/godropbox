@@ -84,8 +84,10 @@ func (s *RateLimiterSuite) TestSetQuotaPerSec(c *C) {
 }
 
 func (s *RateLimiterSuite) TestFillBucket(c *C) {
-	s.limiter.SetMaxQuota(37)
-	s.limiter.SetQuotaPerSec(40)
+	err := s.limiter.SetMaxQuota(37)
+	c.Assert(err, IsNil)
+	err = s.limiter.SetQuotaPerSec(40)
+	c.Assert(err, IsNil)
 	c.Assert(s.limiter.Quota(), Equals, 0.0)
 	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 4.0)
@@ -124,8 +126,10 @@ func (s *RateLimiterSuite) TestFillBucket(c *C) {
 }
 
 func (s *RateLimiterSuite) TestBasicThrottle(c *C) {
-	s.limiter.SetMaxQuota(10)
-	s.limiter.SetQuotaPerSec(10)
+	err := s.limiter.SetMaxQuota(10)
+	c.Assert(err, IsNil)
+	err = s.limiter.SetQuotaPerSec(10)
+	c.Assert(err, IsNil)
 
 	doneChan := make(chan bool)
 	go func() {
@@ -153,8 +157,10 @@ func (s *RateLimiterSuite) TestBasicThrottle(c *C) {
 }
 
 func (s *RateLimiterSuite) TestOversizedThrottle(c *C) {
-	s.limiter.SetMaxQuota(10)
-	s.limiter.SetQuotaPerSec(10)
+	err := s.limiter.SetMaxQuota(10)
+	c.Assert(err, IsNil)
+	err = s.limiter.SetQuotaPerSec(10)
+	c.Assert(err, IsNil)
 
 	s.Tick(c)
 	s.Tick(c)
