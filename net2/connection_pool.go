@@ -19,7 +19,7 @@ type ConnectionOptions struct {
 	MaxIdleTime *time.Duration
 
 	// Dial specifies the dial function for creating network connections.
-	// If Dial is nil, net.Dial is used.
+	// If Dial is nil, net.DialTime is used, with timeout set to 500ms.
 	Dial func(network string, address string) (net.Conn, error)
 
 	// This specifies the now time function.  When the function is non-nil, the
