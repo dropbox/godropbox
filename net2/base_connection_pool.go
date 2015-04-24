@@ -3,9 +3,12 @@ package net2
 import (
 	"net"
 	"strings"
+	"time"
 
 	rp "github.com/dropbox/godropbox/resource_pool"
 )
+
+const defaultDialTimeout = 100 * time.Millisecond
 
 func parseResourceLocation(resourceLocation string) (
 	network string,
@@ -34,7 +37,9 @@ func newBaseConnectionPool(
 
 	dial := options.Dial
 	if dial == nil {
-		dial = net.Dial
+		dial = func(network string, address string) (net.Conn, error) {
+			return net.DialTimeout(network, address, defaultDialTimeout)
+		}
 	}
 
 	openFunc := func(loc string) (interface{}, error) {
