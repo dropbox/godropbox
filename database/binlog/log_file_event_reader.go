@@ -170,8 +170,6 @@ func (r *logFileV4EventReader) checkFDE(fde *FormatDescriptionEvent) error {
 			if actual != FDEFixedLengthDataSizeFor56 &&
 				actual != FDEFixedLengthDataSizeFor55 {
 
-				// [error-ok errMsg] golint thinks errMsg is an error, when it's actually
-				// an error message string
 				errMsg += fmt.Sprintf(
 					"%s (expected: %d (5.6) or %d (5.5) actual: %d); ",
 					t.String(),
