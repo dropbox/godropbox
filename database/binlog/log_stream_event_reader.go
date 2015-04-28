@@ -165,7 +165,6 @@ func (r *logStreamV4EventReader) nextEventEndPosition() int64 {
 const logFileNumberLength = 6 // zero prefix padded
 
 func (r *logStreamV4EventReader) NextEvent() (Event, error) {
-	// [error-ok err] golint false positive
 	reader, err := r.getLogFileReader()
 	if err != nil {
 		return nil, err
