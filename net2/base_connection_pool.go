@@ -8,7 +8,7 @@ import (
 	rp "github.com/dropbox/godropbox/resource_pool"
 )
 
-const defaultDialTimeout = 100 * time.Millisecond
+const defaultDialTimeout = 1 * time.Second
 
 func parseResourceLocation(resourceLocation string) (
 	network string,
