@@ -1,11 +1,11 @@
 package resource_pool
 
 import (
-	"math/rand"
 	"sync"
 	"sync/atomic"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/math2/rand2"
 )
 
 type ResourceLocationPool struct {
@@ -15,7 +15,7 @@ type ResourceLocationPool struct {
 
 func shuffle(pools []*ResourceLocationPool) {
 	for i := len(pools) - 1; i > 0; i-- {
-		idx := rand.Intn(i + 1)
+		idx := rand2.Intn(i + 1)
 		pools[i], pools[idx] = pools[idx], pools[i]
 	}
 }

@@ -1,7 +1,6 @@
 package http2
 
 import (
-	"math/rand"
 	"net/http"
 	"sort"
 	"sync"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/math2/rand2"
 )
 
 const (
@@ -105,7 +105,7 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	case LBRoundRobin:
 		// In RoundRobin strategy, InstanceList is a randomly shuffled list of instances.
 		for i, _ := range newInstanceList {
-			randIdx := rand.Intn(i + 1)
+			randIdx := rand2.Intn(i + 1)
 			newInstanceList.Swap(i, randIdx)
 		}
 	case LBFixed:
