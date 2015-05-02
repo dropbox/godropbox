@@ -153,7 +153,8 @@ func Sample(population []interface{}, k int) (res []interface{}, err error) {
 	return
 }
 
-// Same as 'Sample' except it returns both the 'picked' sample set and the 'remaining' elements.
+// Same as 'Sample' except it returns both the 'picked' sample set and the
+// 'remaining' elements.
 func PickN(population []interface{}, n int) (
 	picked []interface{}, remaining []interface{}, err error) {
 
