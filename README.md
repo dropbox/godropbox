@@ -29,8 +29,8 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Fanng Yuan
 - Harish Mallipeddi
 - Jack Ferris
-- Jamie Li
 - James Cowling
+- Jamie Li
 - Jamie Turner
 - Kerry Xing
 - Mark Chu-Carroll
