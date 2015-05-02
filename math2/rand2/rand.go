@@ -91,6 +91,11 @@ func NormFloat64() float64 { return globalRand.NormFloat64() }
 // See math/rand for documentation.
 func ExpFloat64() float64 { return globalRand.ExpFloat64() }
 
+// See math/rand for documentation.
+func NewZipf(r *rand.Rand, s float64, v float64, imax uint64) *rand.Zipf {
+	return rand.NewZipf(r, s, v, imax)
+}
+
 // Samples 'k' unique ints from the range [0, n)
 func SampleInts(n int, k int) (res []int, err error) {
 	if k < 0 {
