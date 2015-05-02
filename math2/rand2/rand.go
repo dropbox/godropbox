@@ -92,6 +92,23 @@ var (
 	NewZipf = rand.NewZipf
 )
 
+// Dur returns a pseudo-random Duration in [0, max)
+func Dur(max time.Duration) time.Duration {
+	return time.Duration(Int63n(int64(max)))
+}
+
+// Uniformly jitters the provided duration by +/- 50%.
+func Jitter(period time.Duration) time.Duration {
+	return JitterFraction(period, .5)
+}
+
+// Uniformly jitters the provided duration by +/- the given fraction.  NOTE:
+// fraction must be in (0, 1].
+func JitterFraction(period time.Duration, fraction float64) time.Duration {
+	fixed := time.Duration(float64(period) * (1 - fraction))
+	return fixed + Dur(2*(period-fixed))
+}
+
 // Samples 'k' unique ints from the range [0, n)
 func SampleInts(n int, k int) (res []int, err error) {
 	if k < 0 {
@@ -136,7 +153,8 @@ func Sample(population []interface{}, k int) (res []interface{}, err error) {
 	return
 }
 
-// Same as 'Sample' except it returns both the 'picked' sample set and the 'remaining' elements.
+// Same as 'Sample' except it returns both the 'picked' sample set and the
+// 'remaining' elements.
 func PickN(population []interface{}, n int) (
 	picked []interface{}, remaining []interface{}, err error) {
 
