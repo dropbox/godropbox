@@ -39,60 +39,58 @@ func NewSource(seed int64) rand.Source {
 	}
 }
 
-// This returns a new Rand.  See math/rand for documentation.
-func New(src rand.Source) *rand.Rand {
-	return rand.New(src)
-}
-
 func init() {
 	now := time.Now()
 	seed := now.Unix() + int64(now.Nanosecond()) + 12345*int64(os.Getpid())
 	rand.Seed(seed)
 }
 
-// See math/rand for documentation.
-func Seed(seed int64) { rand.Seed(seed) }
+var (
+	// See math/rand for documentation.
+	New = rand.New
 
-// See math/rand for documentation.
-func Int63() int64 { return rand.Int63() }
+	// See math/rand for documentation.
+	Seed = rand.Seed
 
-// See math/rand for documentation.
-func Uint32() uint32 { return rand.Uint32() }
+	// See math/rand for documentation.
+	Int63 = rand.Int63
 
-// See math/rand for documentation.
-func Int31() int32 { return rand.Int31() }
+	// See math/rand for documentation.
+	Uint32 = rand.Uint32
 
-// See math/rand for documentation.
-func Int() int { return rand.Int() }
+	// See math/rand for documentation.
+	Int31 = rand.Int31
 
-// See math/rand for documentation.
-func Int63n(n int64) int64 { return rand.Int63n(n) }
+	// See math/rand for documentation.
+	Int = rand.Int
 
-// See math/rand for documentation.
-func Int31n(n int32) int32 { return rand.Int31n(n) }
+	// See math/rand for documentation.
+	Int63n = rand.Int63n
 
-// See math/rand for documentation.
-func Intn(n int) int { return rand.Intn(n) }
+	// See math/rand for documentation.
+	Int31n = rand.Int31n
 
-// See math/rand for documentation.
-func Float64() float64 { return rand.Float64() }
+	// See math/rand for documentation.
+	Intn = rand.Intn
 
-// See math/rand for documentation.
-func Float32() float32 { return rand.Float32() }
+	// See math/rand for documentation.
+	Float64 = rand.Float64
 
-// See math/rand for documentation.
-func Perm(n int) []int { return rand.Perm(n) }
+	// See math/rand for documentation.
+	Float32 = rand.Float32
 
-// See math/rand for documentation.
-func NormFloat64() float64 { return rand.NormFloat64() }
+	// See math/rand for documentation.
+	Perm = rand.Perm
 
-// See math/rand for documentation.
-func ExpFloat64() float64 { return rand.ExpFloat64() }
+	// See math/rand for documentation.
+	NormFloat64 = rand.NormFloat64
 
-// See math/rand for documentation.
-func NewZipf(r *rand.Rand, s float64, v float64, imax uint64) *rand.Zipf {
-	return rand.NewZipf(r, s, v, imax)
-}
+	// See math/rand for documentation.
+	ExpFloat64 = rand.ExpFloat64
+
+	// See math/rand for documentation.
+	NewZipf = rand.NewZipf
+)
 
 // Samples 'k' unique ints from the range [0, n)
 func SampleInts(n int, k int) (res []int, err error) {
