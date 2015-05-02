@@ -1,5 +1,6 @@
-// rand2 is a collection of functions meant to supplement the capabilities
-// provided by the standard "math/rand" package.
+// rand2 is a drop-in replacement for the "math/rand" package.  It initializes
+// the global random generator with a random seed (instead of 1), and provides
+// additional functionality over the standard "math/rand" package.
 package rand2
 
 import (
@@ -38,7 +39,7 @@ func NewSource(seed int64) rand.Source {
 	}
 }
 
-// This returns a new Rand.  See rand.New for documentation.
+// This returns a new Rand.  See math/rand for documentation.
 func New(src rand.Source) *rand.Rand {
 	return rand.New(src)
 }
@@ -51,43 +52,43 @@ func init() {
 	globalRand = New(NewSource(seed))
 }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Seed(seed int64) { globalRand.Seed(seed) }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Int63() int64 { return globalRand.Int63() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Uint32() uint32 { return globalRand.Uint32() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Int31() int32 { return globalRand.Int31() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Int() int { return globalRand.Int() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Int63n(n int64) int64 { return globalRand.Int63n(n) }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Int31n(n int32) int32 { return globalRand.Int31n(n) }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Intn(n int) int { return globalRand.Intn(n) }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Float64() float64 { return globalRand.Float64() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Float32() float32 { return globalRand.Float32() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func Perm(n int) []int { return globalRand.Perm(n) }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func NormFloat64() float64 { return globalRand.NormFloat64() }
 
-// See rand for documentation.
+// See math/rand for documentation.
 func ExpFloat64() float64 { return globalRand.ExpFloat64() }
 
 // Samples 'k' unique ints from the range [0, n)
