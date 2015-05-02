@@ -44,52 +44,50 @@ func New(src rand.Source) *rand.Rand {
 	return rand.New(src)
 }
 
-var globalRand *rand.Rand
-
 func init() {
 	now := time.Now()
 	seed := now.Unix() + int64(now.Nanosecond()) + 12345*int64(os.Getpid())
-	globalRand = New(NewSource(seed))
+	rand.Seed(seed)
 }
 
 // See math/rand for documentation.
-func Seed(seed int64) { globalRand.Seed(seed) }
+func Seed(seed int64) { rand.Seed(seed) }
 
 // See math/rand for documentation.
-func Int63() int64 { return globalRand.Int63() }
+func Int63() int64 { return rand.Int63() }
 
 // See math/rand for documentation.
-func Uint32() uint32 { return globalRand.Uint32() }
+func Uint32() uint32 { return rand.Uint32() }
 
 // See math/rand for documentation.
-func Int31() int32 { return globalRand.Int31() }
+func Int31() int32 { return rand.Int31() }
 
 // See math/rand for documentation.
-func Int() int { return globalRand.Int() }
+func Int() int { return rand.Int() }
 
 // See math/rand for documentation.
-func Int63n(n int64) int64 { return globalRand.Int63n(n) }
+func Int63n(n int64) int64 { return rand.Int63n(n) }
 
 // See math/rand for documentation.
-func Int31n(n int32) int32 { return globalRand.Int31n(n) }
+func Int31n(n int32) int32 { return rand.Int31n(n) }
 
 // See math/rand for documentation.
-func Intn(n int) int { return globalRand.Intn(n) }
+func Intn(n int) int { return rand.Intn(n) }
 
 // See math/rand for documentation.
-func Float64() float64 { return globalRand.Float64() }
+func Float64() float64 { return rand.Float64() }
 
 // See math/rand for documentation.
-func Float32() float32 { return globalRand.Float32() }
+func Float32() float32 { return rand.Float32() }
 
 // See math/rand for documentation.
-func Perm(n int) []int { return globalRand.Perm(n) }
+func Perm(n int) []int { return rand.Perm(n) }
 
 // See math/rand for documentation.
-func NormFloat64() float64 { return globalRand.NormFloat64() }
+func NormFloat64() float64 { return rand.NormFloat64() }
 
 // See math/rand for documentation.
-func ExpFloat64() float64 { return globalRand.ExpFloat64() }
+func ExpFloat64() float64 { return rand.ExpFloat64() }
 
 // See math/rand for documentation.
 func NewZipf(r *rand.Rand, s float64, v float64, imax uint64) *rand.Zipf {
