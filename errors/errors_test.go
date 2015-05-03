@@ -12,7 +12,7 @@ func TestStackTrace(t *testing.T) {
 	e := er.(*DropboxBaseError)
 
 	if e.Msg != testMsg {
-		t.Error("error message %s != expected %s", e.Msg, testMsg)
+		t.Errorf("error message %s != expected %s", e.Msg, testMsg)
 	}
 
 	if strings.Index(e.Stack, "godropbox/errors/errors.go") != -1 {
