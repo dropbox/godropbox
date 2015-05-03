@@ -40,6 +40,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Patrick Lee
 - Rajat Goel
 - Samir Goel
+- Shawn Smith
 - Sujay Jayakar
 - Todd Eisenberger
 - Vadim Graboys
