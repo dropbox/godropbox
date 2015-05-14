@@ -3,7 +3,7 @@
 Common libraries for writing go services/applications on Linux servers.
 
 ### Requirements
- * Go 1.3+
+ * Go 1.4+
  * Linux/x64
 
 ### Installation
