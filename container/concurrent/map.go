@@ -34,13 +34,13 @@ func (p *mapImp) Get(key interface{}) (value interface{}, found bool) {
 
 func (p *mapImp) Set(key interface{}, value interface{}) {
 	p.lock.Lock()
-	p.lock.Unlock()
+	defer p.lock.Unlock()
 	p.m[key] = value
 }
 
 func (p *mapImp) Delete(key interface{}) {
 	p.lock.Lock()
-	p.lock.Unlock()
+	defer p.lock.Unlock()
 	delete(p.m, key)
 }
 
