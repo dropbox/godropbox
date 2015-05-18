@@ -35,9 +35,6 @@ func NewLRUCache(size int) LRUCache {
 }
 
 func (p *concurrentLruCacheImp) Get(key string) (v interface{}, found bool) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
 	res := p.GetMultiple([]string{key})
 
 	return res[0].V, res[0].Found
@@ -61,6 +58,7 @@ func (p *concurrentLruCacheImp) GetMultiple(keys []string) []CacheResult {
 func (p *concurrentLruCacheImp) Set(key string, value interface{}) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
 	p.cache.Set(key, value)
 }
 
