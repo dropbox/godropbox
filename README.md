@@ -20,6 +20,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Anthony Ross
 - Antoine Grondin
 - Arsham F.
+- Bashar Al-Rawi
 - Christian Ohler
 - Cuong Do
 - Daniel Hauenstein
