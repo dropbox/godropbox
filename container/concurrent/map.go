@@ -2,10 +2,15 @@ package concurrent
 
 import "sync"
 
+// A thread-safe version of map
 type Map interface {
+	// Retrieves an item from the map an indicates whether it exists or not
 	Get(key interface{}) (interface{}, bool)
+	// Sets the value for a particular item in the map
 	Set(key interface{}, value interface{})
+	// Deletes an item from the map with the provided key
 	Delete(key interface{})
+	// Retrieves the size of the map
 	Len() int
 }
 

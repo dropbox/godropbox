@@ -76,3 +76,7 @@ func (cache *LRUCache) Delete(key string) (val interface{}, existed bool) {
 
 	return val, existed
 }
+
+func (cache *LRUCache) MaxSize() int {
+	return cache.maxSize
+}

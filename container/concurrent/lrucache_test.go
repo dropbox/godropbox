@@ -12,6 +12,7 @@ var _ = Suite(&ConcurrentLruCacheSuite{})
 
 func (s *ConcurrentLruCacheSuite) TestBasic(c *C) {
 	m := NewLRUCache(5)
+	c.Assert(m.MaxSize(), Equals, 5)
 	m.Set("1", 1)
 	m.Set("2", 2)
 	m.Set("3", 9)
@@ -36,6 +37,10 @@ func (s *ConcurrentLruCacheSuite) TestBasic(c *C) {
 	c.Assert(ok, IsFalse)
 
 	m.Clear()
+
+	// clear only removes the values, but the max size
+	// should be maintained
+	c.Assert(m.MaxSize(), Equals, 5)
 	_, ok = m.Get("2")
 	c.Assert(ok, IsFalse)
 }

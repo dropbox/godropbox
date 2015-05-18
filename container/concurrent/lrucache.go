@@ -1,28 +1,39 @@
 package concurrent
 
 import (
-	"sync"
 	"github.com/dropbox/godropbox/container/lrucache"
+	"sync"
 )
 
+// A thread-safe version of LRUCache
 type LRUCache interface {
+	// Retrieves multiple items from the cache
 	GetMultiple(keys []string) []CacheResult
+	// Retrieves a single item from the cache and whether it exists
 	Get(key string) (v interface{}, found bool)
+	// Sets a single item in the cache
 	Set(key string, v interface{})
+	// Sets multiple items in the cache
 	SetMultiple(keyValues map[string]interface{})
+	// Deletes one or more keys
 	Delete(keys ...string)
+	// Clears the cache
 	Clear()
+	// Retrieves the maximum size of the cache
+	MaxSize() int
 }
 
+// Represents value in cache and whether it exists or not
 type CacheResult struct {
-	V     interface{}
+	// Result value
+	V interface{}
+	// Indicates whether it exists in the cache or not
 	Found bool
 }
 
 type concurrentLruCacheImp struct {
 	cache *lrucache.LRUCache
 	lock  sync.RWMutex
-	size  int
 }
 
 func NewLRUCache(size int) LRUCache {
@@ -30,7 +41,6 @@ func NewLRUCache(size int) LRUCache {
 
 	return &concurrentLruCacheImp{
 		cache: cache,
-		size:  size,
 	}
 }
 
@@ -85,5 +95,12 @@ func (p *concurrentLruCacheImp) Clear() {
 	defer p.lock.Unlock()
 
 	// there is no way to clear the cache. So, just create a new one
-	p.cache = lrucache.New(p.size)
+	p.cache = lrucache.New(p.cache.MaxSize())
+}
+
+func (p *concurrentLruCacheImp) MaxSize() int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.cache.MaxSize()
 }
