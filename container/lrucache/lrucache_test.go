@@ -42,4 +42,9 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 	_, ok = cache.Get("4")
 	c.Assert(ok, IsTrue)
 	c.Assert(cache.Len(), Equals, 2)
+	_, existed := cache.Delete("2")
+	c.Assert(existed, IsTrue)
+	c.Assert(cache.Len(), Equals, 1)
+	_, existed = cache.Delete("2")
+	c.Assert(existed, IsFalse)
 }

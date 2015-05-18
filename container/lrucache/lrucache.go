@@ -65,3 +65,14 @@ func (cache *LRUCache) Get(key string) (val interface{}, ok bool) {
 func (cache *LRUCache) Len() int {
 	return cache.itemsList.Len()
 }
+
+func (cache *LRUCache) Delete(key string) (val interface{}, existed bool) {
+	elem, existed := cache.itemsMap[key]
+
+	if existed {
+		cache.itemsList.Remove(elem)
+		delete(cache.itemsMap, key)
+	}
+
+	return val, existed
+}
