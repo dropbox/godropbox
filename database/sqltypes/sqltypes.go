@@ -70,6 +70,11 @@ func MakeString(b []byte) Value {
 	return Value{String{b, false}}
 }
 
+// MakeUtf8String makes a String value from a []byte.
+func MakeUtf8String(s string) Value {
+	return Value{String{[]byte(s), true}}
+}
+
 // Raw returns the raw bytes. All types are currently implemented as []byte.
 func (v Value) Raw() []byte {
 	if v.Inner == nil {
@@ -190,6 +195,15 @@ func (v Value) IsString() (ok bool) {
 	return ok
 }
 
+func (v Value) IsUtf8String() (ok bool) {
+	_ = String{} // compiler bug work-around
+	if v.Inner != nil {
+		s, ok := v.Inner.(String)
+		ok = ok && s.isUtf8
+	}
+	return ok
+}
+
 // InnerValue defines methods that need to be supported by all non-null value types.
 type InnerValue interface {
 	raw() []byte
@@ -239,7 +253,34 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	}
 	return v, nil
 }
+// ConverAssignRowNullable is the same as ConvertAssignRow except that it allows
+// nil as a value for the row or any of the row values. In thoses cases, the
+// corresponding values are ignored.
+func ConvertAssignRowNullable(row []Value, dest ...interface{}) error {
+	if len(row) != len(dest) {
+		return errors.Newf(
+			"# of row entries %d does not match # of destinations %d",
+			len(row),
+			len(dest))
+	}
 
+	if row == nil {
+		return nil
+	}
+
+	for i := 0; i < len(row); i++ {
+		if row[i].IsNull() {
+			continue
+		}
+
+		err := ConvertAssign(row[i], dest[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 // ConvertAssignRow copies a row of values in the list of destinations.  An
 // error is returned if any one of the row's element coping is done between
 // incompatible value and dest types.  The list of destinations must contain
