@@ -45,6 +45,7 @@ type Collation string
 const (
 	UTF8CaseInsensitive Collation = "utf8_unicode_ci"
 	UTF8CaseSensitive   Collation = "utf8_unicode"
+	UTF8Binary          Collation = "utf8_bin"
 )
 
 // Representation of MySQL charsets
