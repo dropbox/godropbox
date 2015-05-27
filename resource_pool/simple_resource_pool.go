@@ -130,7 +130,10 @@ func (p *SimpleResourcePool) Get(unused string) (ManagedHandle, error) {
 	handle, err := p.options.Open(p.location)
 	if err != nil {
 		atomic.AddInt32(p.numActive, -1)
-		return nil, errors.Wrap(err, "Failed to open resource handle")
+		return nil, errors.Wrapf(
+			err,
+			"Failed to open resource handle: %s",
+			p.location)
 	}
 	return NewManagedHandle(p.location, handle, p, p.options), nil
 }
