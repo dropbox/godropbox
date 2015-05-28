@@ -38,6 +38,24 @@ type InsertStatement interface {
 	IgnoreDuplicates(ignore bool) InsertStatement
 }
 
+// By default, rows selected by a UNION statement are out-of-order
+// If you have an ORDER BY on an inner SELECT statement, the only thing
+// it affects is the LIMIT clause on that inner statement (the ordering will still
+// be out-of-order).
+type UnionStatement interface {
+	Statement
+
+	// Warning! You cannot include table names for the next 4 clauses, or you'll get errors like:
+	// Table 'server_file_journal' from one of the SELECTs cannot be used in global ORDER clause
+	Where(expression BoolExpression) UnionStatement
+	AndWhere(expression BoolExpression) UnionStatement
+	GroupBy(expressions ...Expression) UnionStatement
+	OrderBy(clauses ...OrderByClause) UnionStatement
+
+	Limit(limit int64) UnionStatement
+	Offset(offset int64) UnionStatement
+}
+
 type UpdateStatement interface {
 	Statement
 
@@ -77,39 +95,148 @@ type UnlockStatement interface {
 // UNION SELECT Statement ======================================================
 //
 
-func Union(selects ...SelectStatement) Statement {
+func Union(selects ...SelectStatement) UnionStatement {
 	return &unionStatementImpl{
 		selects: selects,
+		limit:   -1,
+		offset:  -1,
 	}
 }
 
+// Similar to selectStatementImpl, but less complete
 type unionStatementImpl struct {
-	selects []SelectStatement
+	selects       []SelectStatement
+	where         BoolExpression
+	group         *listClause
+	order         *listClause
+	limit, offset int64
 }
 
-func (s *unionStatementImpl) String(database string) (sql string, err error) {
-	// XXX(teisenbe): Once sqlproxy gets fixed, re-parenthesis the UNION selects
-	// We don't have any use cases where they matter, but if one were to use limits/order by with
-	// selects and unions, it could be problematic
-	if len(s.selects) == 0 {
+func (us *unionStatementImpl) Where(expression BoolExpression) UnionStatement {
+	us.where = expression
+	return us
+}
+
+// Further filter the query, instead of replacing the filter
+func (us *unionStatementImpl) AndWhere(expression BoolExpression) UnionStatement {
+	if us.where == nil {
+		return us.Where(expression)
+	}
+	us.where = And(us.where, expression)
+	return us
+}
+
+func (us *unionStatementImpl) GroupBy(
+	expressions ...Expression) UnionStatement {
+
+	us.group = &listClause{
+		clauses:            make([]Clause, len(expressions), len(expressions)),
+		includeParentheses: false,
+	}
+
+	for i, e := range expressions {
+		us.group.clauses[i] = e
+	}
+	return us
+}
+
+func (us *unionStatementImpl) OrderBy(
+	clauses ...OrderByClause) UnionStatement {
+
+	us.order = newOrderByListClause(clauses...)
+	return us
+}
+
+func (us *unionStatementImpl) Limit(limit int64) UnionStatement {
+	us.limit = limit
+	return us
+}
+
+func (us *unionStatementImpl) Offset(offset int64) UnionStatement {
+	us.offset = offset
+	return us
+}
+
+func (us *unionStatementImpl) String(database string) (sql string, err error) {
+	if len(us.selects) == 0 {
 		return "", errors.Newf("Union statement must have at least one SELECT")
 	}
-	if len(s.selects) == 1 {
-		return s.selects[0].String(database)
+
+	if len(us.selects) == 1 {
+		return us.selects[0].String(database)
+	}
+
+	// Union statements in MySQL require that the same number of columns in each subquery
+	var projections []Projection
+
+	for _, statement := range us.selects {
+		// do a type assertion to get at the underlying struct
+		statementImpl, ok := statement.(*selectStatementImpl)
+		if !ok {
+			return "", errors.Newf(
+				"Expected inner select statement to be of type selectStatementImpl")
+		}
+
+		// check that for limit for statements with order by clauses
+		if statementImpl.order != nil && statementImpl.limit < 0 {
+			return "", errors.Newf(
+				"All inner selects in Union statement must have LIMIT if they have ORDER BY")
+		}
+
+		// check number of projections
+		if projections == nil {
+			projections = statementImpl.projections
+		} else {
+			if len(projections) != len(statementImpl.projections) {
+				return "", errors.Newf(
+					"All inner selects in Union statement must select the same number of columns." +
+						"For sanity, you probably want to select the same table columns in the same order." +
+						"If you are selecting on multiple tables, use Null to pad to the right number of fields.")
+			}
+		}
 	}
 
 	buf := new(bytes.Buffer)
-	for i, statement := range s.selects {
+	for i, statement := range us.selects {
 		if i != 0 {
 			buf.WriteString(" UNION ")
 		}
-		//buf.WriteString("(")
+		_, _ = buf.WriteString("(")
 		selectSql, err := statement.String(database)
 		if err != nil {
 			return "", err
 		}
 		buf.WriteString(selectSql)
-		//buf.WriteString(")")
+		_, _ = buf.WriteString(")")
+	}
+
+	if us.where != nil {
+		_, _ = buf.WriteString(" WHERE ")
+		if err = us.where.SerializeSql(buf); err != nil {
+			return
+		}
+	}
+
+	if us.group != nil {
+		_, _ = buf.WriteString(" GROUP BY ")
+		if err = us.group.SerializeSql(buf); err != nil {
+			return
+		}
+	}
+
+	if us.order != nil {
+		_, _ = buf.WriteString(" ORDER BY ")
+		if err = us.order.SerializeSql(buf); err != nil {
+			return
+		}
+	}
+
+	if us.limit >= 0 {
+		if us.offset >= 0 {
+			_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d, %d", us.offset, us.limit))
+		} else {
+			_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d", us.limit))
+		}
 	}
 	return buf.String(), nil
 }

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	gc "gopkg.in/check.v1"
+
+	"github.com/dropbox/godropbox/errors"
 )
 
 type StmtSuite struct {
@@ -524,4 +526,121 @@ func (s *StmtSuite) TestUnlockStatement(c *gc.C) {
 	sql, err := stmt.String("db")
 	c.Assert(err, gc.IsNil)
 	c.Assert(sql, gc.Equals, "UNLOCK TABLES")
+
+}
+
+func (s *StmtSuite) TestUnionSelectStatement(c *gc.C) {
+	select_queries := make([]SelectStatement, 0, 3)
+
+	select_queries = append(select_queries,
+		table1.Select(table1Col1).Where(GtL(table1Col1, 123)),
+		table1.Select(table1Col1).Where(GtL(table1Col1, 456)),
+		table1.Select(table1Col1).Where(LtL(table1Col1, 23)),
+	)
+
+	q := Union(select_queries...)
+
+	sql, err := q.String("db")
+
+	c.Assert(err, gc.IsNil)
+	c.Assert(
+		sql,
+		gc.Equals,
+		"(SELECT `table1`.`col1` FROM `db`.`table1` WHERE `table1`.`col1`>123) "+
+			"UNION (SELECT `table1`.`col1` FROM `db`.`table1` WHERE `table1`.`col1`>456) "+
+			"UNION (SELECT `table1`.`col1` FROM `db`.`table1` WHERE `table1`.`col1`<23)")
+}
+
+func (s *StmtSuite) TestUnionLimitWithoutOrderBy(c *gc.C) {
+	select_queries := make([]SelectStatement, 0, 3)
+
+	select_queries = append(select_queries,
+		table1.Select(table1Col1).Where(GtL(table1Col1, 123)).OrderBy(table1Col2),
+		table1.Select(table1Col1).Where(GtL(table1Col1, 456)),
+		table1.Select(table1Col1).Where(LtL(table1Col1, 23)),
+	)
+
+	q := Union(select_queries...)
+
+	_, err := q.String("db")
+
+	c.Assert(err, gc.NotNil)
+	c.Assert(
+		errors.GetMessage(err),
+		gc.Equals,
+		"All inner selects in Union statement must have LIMIT if they have ORDER BY")
+}
+
+func (s *StmtSuite) TestUnionSelectWithMismatchedColumns(c *gc.C) {
+	select_queries := make([]SelectStatement, 0, 3)
+
+	select_queries = append(select_queries,
+
+		table1.Select(
+			table1Col1,
+			table1Col2,
+			table1Col3,
+			table1Col4).AndWhere(GtL(table1Col1, 123)).AndWhere(LtL(table1Col1, 321)),
+		table1.Select(table1Col1).Where(And(GtL(table1Col1, 123), LtL(table1Col1, 321))),
+		table1.Select(table1Col1).Where(LtL(table1Col1, 23)).OrderBy(table1Col4).Limit(20),
+	)
+
+	q := Union(select_queries...)
+	q = q.Where(And(LtL(table1Col1, 1000), GtL(table1Col1, 15)))
+	q = q.OrderBy(Desc(table1Col4), Asc(table1Col3))
+	q = q.Limit(5)
+
+	_, err := q.String("db")
+
+	c.Assert(err, gc.NotNil)
+	c.Assert(
+		errors.GetMessage(err),
+		gc.Equals,
+		"All inner selects in Union statement must select the same columns. If you are "+
+			"selecting on multiple tables, use Null to get the right number of fields.")
+}
+
+func (s *StmtSuite) TestComplicatedUnionSelectWithWhereStatement(c *gc.C) {
+
+	// tests on outer statement: Group By, Order By, Limit
+	// on inner statement: AndWhere, Where (with And), Order By, Limit
+	select_queries := make([]SelectStatement, 0, 3)
+
+	// We're not trying to write a SQL parser, so we won't warn if you do something silly like
+	// try to apply a where clause on more columns than you've selected in your union select
+	select_queries = append(select_queries,
+		table1.Select(
+			table1Col1,
+		).AndWhere(GtL(table1Col1, 123)).AndWhere(LtL(table1Col1, 321)),
+		table1.Select(
+			table1Col1,
+		).Where(And(GtL(table1Col1, 456), LtL(table1Col1, 654))),
+		table1.Select(
+			table1Col1,
+		).Where(LtL(table1Col1, 23)).OrderBy(table1Col4).Limit(20),
+	)
+
+	q := Union(select_queries...)
+	q = q.Where(And(LtL(table1Col1, 1000), GtL(table1Col1, 15)))
+
+	q = q.OrderBy(Desc(table1Col4), Asc(table1Col3))
+	q = q.Limit(5)
+	q = q.GroupBy(table1Col4)
+
+	sql, err := q.String("db")
+
+	c.Assert(err, gc.IsNil)
+	c.Assert(
+		sql,
+		gc.Equals,
+		"(SELECT `table1`.`col1` FROM `db`.`table1` WHERE "+
+			"(`table1`.`col1`>123 AND `table1`.`col1`<321)) "+
+			"UNION (SELECT `table1`.`col1` FROM `db`.`table1` "+
+			"WHERE (`table1`.`col1`>456 AND `table1`.`col1`<654)) "+
+			"UNION (SELECT `table1`.`col1` FROM `db`.`table1` "+
+			"WHERE `table1`.`col1`<23 ORDER BY `table1`.`col4` LIMIT 20) "+
+			"WHERE (`table1`.`col1`<1000 AND `table1`.`col1`>15) "+
+			"GROUP BY `table1`.`col4` ORDER BY `table1`.`col4` DESC,`table1`.`col3` ASC "+
+			"LIMIT 5")
+
 }
