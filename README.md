@@ -35,6 +35,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Jamie Turner
 - Kerry Xing
 - Mark Chu-Carroll
+- Michael McCanna
 - Mike Solomon
 - Naomi Seyfer
 - Pascal Borreli
