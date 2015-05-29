@@ -8,6 +8,7 @@ package errors
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"runtime"
 	"strings"
 )
@@ -235,4 +236,58 @@ func stackTrace(skip int) (current, context string) {
 // is excluded from the stack trace.
 func StackTrace() (current, context string) {
 	return stackTrace(3)
+}
+
+// Return a wrapped error or nil if there is none.
+func unwrapError(ierr error) (nerr error) {
+	// Internal errors have a well defined bit of context.
+	if dbxErr, ok := ierr.(DropboxError); ok {
+		return dbxErr.GetInner()
+	}
+
+	// At this point, if anything goes wrong, just return nil.
+	defer func() {
+		if x := recover(); x != nil {
+			nerr = nil
+		}
+	}()
+
+	// Go system errors have a convention but paradoxically no
+	// interface.  All of these panic on error.
+	errV := reflect.ValueOf(ierr).Elem()
+	errV = errV.FieldByName("Err")
+	return errV.Interface().(error)
+}
+
+// Keep peeling away layers or context until a primitive error is revealed.
+func RootError(ierr error) (nerr error) {
+	nerr = ierr
+	for i := 0; i < 20; i++ {
+		terr := unwrapError(nerr)
+		if terr == nil {
+			return nerr
+		}
+		nerr = terr
+	}
+	return fmt.Errorf("too many iterations: %T", nerr)
+}
+
+// Perform a deep check, unwrapping errors as much as possilbe and
+// comparing the string version of the error.
+func IsError(err, errConst error) bool {
+	if err == errConst {
+		return true
+	}
+	// Must rely on string equivalence, otherwise a value is not equal
+	// to its pointer value.
+	rootErrStr := ""
+	rootErr := RootError(err)
+	if rootErr != nil {
+		rootErrStr = rootErr.Error()
+	}
+	errConstStr := ""
+	if errConst != nil {
+		errConstStr = errConst.Error()
+	}
+	return rootErrStr == errConstStr
 }

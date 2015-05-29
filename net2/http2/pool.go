@@ -19,6 +19,9 @@ type Pool interface {
 	// for a subsequent "keep-alive" request.
 	Do(*http.Request) (*http.Response, error)
 
+	// Perform request and properly tear down connection if it times out.
+	DoWithTimeout(*http.Request, time.Duration) (*http.Response, error)
+
 	// Returns http.Client to perform http requests with, preferable
 	// to just use Do() function instead of this.
 	Get() (*http.Client, error)

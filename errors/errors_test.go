@@ -2,7 +2,9 @@ package errors
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -100,5 +102,57 @@ func TestCustomError(t *testing.T) {
 
 	if strings.Index(errorStr, "errors.TestCustomError") == -1 {
 		t.Errorf("couldn't find this function in stack trace:\n%s", errorStr)
+	}
+}
+
+type customErr struct {
+}
+
+func (ce *customErr) Error() string { return "testing error" }
+
+type customNestedErr struct {
+	Err interface{}
+}
+
+func (cne *customNestedErr) Error() string { return "nested testing error" }
+
+func TestRootError(t *testing.T) {
+	err := RootError(nil)
+	if err != nil {
+		t.Fatalf("expected nil error")
+	}
+	var ce *customErr
+	err = RootError(ce)
+	if err != ce {
+		t.Fatalf("expected err on invalid nil-ptr custom error %T %v", err, err)
+	}
+	ce = &customErr{}
+	err = RootError(ce)
+	if err != ce {
+		t.Fatalf("expected err on valid custom error")
+	}
+
+	cne := &customNestedErr{}
+	err = RootError(cne)
+	if err != cne {
+		t.Fatalf("expected err on empty custom error: %T %v", err, err)
+	}
+
+	cne = &customNestedErr{reflect.ValueOf(ce).Pointer()}
+	err = RootError(cne)
+	if err != cne {
+		t.Fatalf("expected err on invalid nested uniptr: %T %v", err, err)
+	}
+
+	cne = &customNestedErr{ce}
+	err = RootError(cne)
+	if err != ce {
+		t.Fatalf("expected ce on valid nested error: %T %v", err, err)
+	}
+
+	cne = &customNestedErr{ce}
+	err = RootError(syscall.ECONNREFUSED)
+	if err != syscall.ECONNREFUSED {
+		t.Fatalf("expected ECONNREFUSED on valid nested error: %T %v", err, err)
 	}
 }
