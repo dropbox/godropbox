@@ -40,13 +40,15 @@ type InsertStatement interface {
 
 // By default, rows selected by a UNION statement are out-of-order
 // If you have an ORDER BY on an inner SELECT statement, the only thing
-// it affects is the LIMIT clause on that inner statement (the ordering will still
-// be out-of-order).
+// it affects is the LIMIT clause on that inner statement (the ordering will
+// still be out-of-order).
 type UnionStatement interface {
 	Statement
 
-	// Warning! You cannot include table names for the next 4 clauses, or you'll get errors like:
-	// Table 'server_file_journal' from one of the SELECTs cannot be used in global ORDER clause
+	// Warning! You cannot include table names for the next 4 clauses, or
+	// you'll get errors like:
+	//   Table 'server_file_journal' from one of the SELECTs cannot be used in
+	//   global ORDER clause
 	Where(expression BoolExpression) UnionStatement
 	AndWhere(expression BoolExpression) UnionStatement
 	GroupBy(expressions ...Expression) UnionStatement
@@ -85,8 +87,9 @@ type LockStatement interface {
 }
 
 // UnlockStatement can be used to release table locks taken using LockStatement.
-// NOTE: You can not selectively release a lock and continue to hold lock on another
-// table. UnlockStatement releases all the lock held in the current session.
+// NOTE: You can not selectively release a lock and continue to hold lock on
+// another table. UnlockStatement releases all the lock held in the current
+// session.
 type UnlockStatement interface {
 	Statement
 }
@@ -174,13 +177,15 @@ func (us *unionStatementImpl) String(database string) (sql string, err error) {
 		statementImpl, ok := statement.(*selectStatementImpl)
 		if !ok {
 			return "", errors.Newf(
-				"Expected inner select statement to be of type selectStatementImpl")
+				"Expected inner select statement to be of type " +
+					"selectStatementImpl")
 		}
 
 		// check that for limit for statements with order by clauses
 		if statementImpl.order != nil && statementImpl.limit < 0 {
 			return "", errors.Newf(
-				"All inner selects in Union statement must have LIMIT if they have ORDER BY")
+				"All inner selects in Union statement must have LIMIT if " +
+					"they have ORDER BY")
 		}
 
 		// check number of projections
@@ -189,9 +194,11 @@ func (us *unionStatementImpl) String(database string) (sql string, err error) {
 		} else {
 			if len(projections) != len(statementImpl.projections) {
 				return "", errors.Newf(
-					"All inner selects in Union statement must select the same number of columns." +
-						"For sanity, you probably want to select the same table columns in the same order." +
-						"If you are selecting on multiple tables, use Null to pad to the right number of fields.")
+					"All inner selects in Union statement must select the " +
+						"same number of columns.  For sanity, you probably " +
+						"want to select the same table columns in the same " +
+						"order.  If you are selecting on multiple tables, " +
+						"use Null to pad to the right number of fields.")
 			}
 		}
 	}
@@ -233,7 +240,8 @@ func (us *unionStatementImpl) String(database string) (sql string, err error) {
 
 	if us.limit >= 0 {
 		if us.offset >= 0 {
-			_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d, %d", us.offset, us.limit))
+			_, _ = buf.WriteString(
+				fmt.Sprintf(" LIMIT %d, %d", us.offset, us.limit))
 		} else {
 			_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d", us.limit))
 		}
@@ -279,7 +287,9 @@ func (s *selectStatementImpl) Copy() SelectStatement {
 }
 
 // Further filter the query, instead of replacing the filter
-func (q *selectStatementImpl) AndWhere(expression BoolExpression) SelectStatement {
+func (q *selectStatementImpl) AndWhere(
+	expression BoolExpression) SelectStatement {
+
 	if q.where == nil {
 		return q.Where(expression)
 	}
