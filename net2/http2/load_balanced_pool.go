@@ -128,9 +128,18 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 // Pool interface methods
 //
 
+func (pool *LoadBalancedPool) Do(req *http.Request) (resp *http.Response, err error) {
+	return pool.DoWithTimeout(req, 0)
+}
+
 // Issues an HTTP request, distributing more load to relatively unloaded instances.
-func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
+func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
+	timeout time.Duration) (*http.Response, error) {
 	var requestErr error = nil
+	deadline := time.Time{}
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
 	for i := 0; ; i++ {
 		idx, instance, isDown, err := pool.getInstance()
 		if err != nil {
@@ -143,7 +152,19 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (*http.Response, error) {
 			return nil, requestErr
 		}
 
+		var timer *time.Timer
+		if !deadline.IsZero() {
+			timeout = deadline.Sub(time.Now())
+			if timeout > 0 {
+				timer = time.AfterFunc(timeout, func() {
+					instance.transport.CancelRequest(req)
+				})
+			}
+		}
 		resp, err := instance.Do(req)
+		if timer != nil && err == nil {
+			resp.Body = &cancelTimerBody{timer, resp.Body}
+		}
 		if err != nil || resp.StatusCode == 500 {
 			// 500s are also treated as service being down momentarily,
 			// note that even if all servers get marked down LBPool continues
