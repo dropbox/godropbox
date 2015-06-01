@@ -138,6 +138,44 @@ func (h *hasKey) Info() *CheckerInfo {
 var HasKey = &hasKey{}
 
 // -----------------------------------------------------------------------
+// NoErr checker.
+
+type noErr struct{}
+
+// This exists to implement fmt.GoStringer and force the `%#v` format to show
+// the string unescaped, newlines and all.
+type rawString string
+
+func (r rawString) GoString() string {
+	return string(r)
+}
+
+func (c noErr) Check(params []interface{}, names []string) (bool, string) {
+	err, ok := params[0].(error)
+	if !ok {
+		return true, ""
+	}
+	params[0] = rawString("\n" + err.Error())
+	return false, ""
+}
+
+func (c noErr) Info() *CheckerInfo {
+	return &CheckerInfo{
+		Name: "NoErr",
+		Params: []string{"error"},
+	}
+}
+
+// The NoErr checker tests that the obtained value is nil.  On failure,
+// the checker adjusts the output so that a multi-line error message will
+// be printed in a readable fashion.
+//
+// For example:
+//
+//     c.Assert(err, NoErr)
+var NoErr = &noErr{}
+
+// -----------------------------------------------------------------------
 // MultilineErrorMatches: Multiline ErrorMatches
 // The standard gocheck ErrorMatches brackets the regular expression that
 // the error must match in ^ and $, so that it can only match single-line
