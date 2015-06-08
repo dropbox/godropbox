@@ -28,6 +28,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Daniel Sommermann
 - Diwaker Gupta
 - Fanng Yuan
+- Greg Price
 - Harish Mallipeddi
 - Jack Ferris
 - James Cowling
