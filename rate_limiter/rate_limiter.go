@@ -90,7 +90,7 @@ func NewRateLimiter(
 		return nil, err
 	}
 
-	err = l.SetQuotaPerSec(maxQuota)
+	err = l.SetQuotaPerSec(quotaPerSec)
 	if err != nil {
 		return nil, err
 	}
