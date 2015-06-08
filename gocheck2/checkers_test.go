@@ -1,6 +1,8 @@
 package gocheck2
 
 import (
+	stdlibErrors "errors"
+	"fmt"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -20,8 +22,10 @@ var _ = Suite(&CheckersSuite{})
 func (s *CheckersSuite) SetUpTest(c *C) {
 }
 
-func testHasKey(c *C, expectedResult bool, expectedErr string, params ...interface{}) {
-	actualResult, actualErr := HasKey.Check(params, nil)
+func test(c *C, ch Checker,
+	expectedResult bool, expectedErr string, params ...interface{}) {
+
+	actualResult, actualErr := ch.Check(params, nil)
 	if actualResult != expectedResult || actualErr != expectedErr {
 		c.Fatalf(
 			"Check returned (%#v, %#v) rather than (%#v, %#v)",
@@ -30,24 +34,34 @@ func testHasKey(c *C, expectedResult bool, expectedErr string, params ...interfa
 }
 
 func (s *CheckersSuite) TestHasKey(c *C) {
-	testHasKey(c, true, "", map[string]int{"foo": 1}, "foo")
-	testHasKey(c, false, "", map[string]int{"foo": 1}, "bar")
-	testHasKey(c, true, "", map[int][]byte{10: nil}, 10)
+	test(c, HasKey, true, "", map[string]int{"foo": 1}, "foo")
+	test(c, HasKey, false, "", map[string]int{"foo": 1}, "bar")
+	test(c, HasKey, true, "", map[int][]byte{10: nil}, 10)
 
-	testHasKey(c, false, "First argument to HasKey must be a map", nil, "bar")
-	testHasKey(
-		c, false, "Second argument must be assignable to the map key type",
+	test(c, HasKey, false, "First argument to HasKey must be a map", nil, "bar")
+	test(c, HasKey,
+		false, "Second argument must be assignable to the map key type",
 		map[string]int{"foo": 1}, 10)
 }
 
-func (s *CheckersSuite) TestErrorMatches(c *C) {
-	actualResult, actualErr := MultilineErrorMatches.Check([]interface{}{
-		errors.Newf("Oh damn, this stinks"), "stinks"}, nil)
-	c.Assert(actualErr, Equals, "")
-	c.Assert(actualResult, IsTrue)
+func (s *CheckersSuite) TestNoErr(c *C) {
+	// Test the true/false behavior.
+	test(c, NoErr, true, "", nil)
+	test(c, NoErr, true, "", 3)
+	test(c, NoErr, true, "", error(nil))
+	test(c, NoErr, false, "", stdlibErrors.New("message"))
+	test(c, NoErr, false, "", errors.New("message"))
 
-	actualResult, actualErr = MultilineErrorMatches.Check([]interface{}{
-		errors.Newf("Oh damn, this stinks"), "skinks"}, nil)
-	c.Assert(actualErr, Equals, "")
-	c.Assert(actualResult, IsFalse)
+	// Test the message behavior.
+	params := []interface{}{errors.New("1\n2\n3")}
+	text := params[0].(error).Error()
+	NoErr.Check(params, nil)
+	c.Assert(fmt.Sprintf("%#v", params[0]), Equals, "\n" + text)
+}
+
+func (s *CheckersSuite) TestErrorMatches(c *C) {
+	test(c, MultilineErrorMatches, true, "",
+		errors.Newf("Oh damn, this stinks"), "stinks")
+	test(c, MultilineErrorMatches, false, "",
+		errors.Newf("Oh damn, this stinks"), "skinks")
 }
