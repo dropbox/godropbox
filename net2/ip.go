@@ -5,7 +5,64 @@ import (
 	"os"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/singleton"
 )
+
+var myHostnameSingleton = singleton.NewSingleton(func() (interface{}, error) {
+	return os.Hostname()
+})
+var myIp4Singleton = singleton.NewSingleton(func() (interface{}, error) {
+	hostname, err := MyHostname()
+	if err != nil {
+		return nil, err
+	}
+	ipAddr, err := net.ResolveIPAddr("ip4", hostname)
+	if err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
+})
+var myIp6Singleton = singleton.NewSingleton(func() (interface{}, error) {
+	hostname, err := MyHostname()
+	if err != nil {
+		return nil, err
+	}
+	ipAddr, err := net.ResolveIPAddr("ip6", hostname)
+	if err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
+})
+
+// Like os.Hostname but caches first successful result, making it cheap to call it
+// over and over.
+func MyHostname() (string, error) {
+	if s, err := myHostnameSingleton.Get(); err != nil {
+		return "", err
+	} else {
+		return s.(string), err
+	}
+}
+
+// Resolves `MyHostname()` to an Ip4 address. Caches first successful result, making it
+// cheap to call it over and over.
+func MyIp4() (*net.IPAddr, error) {
+	if s, err := myIp4Singleton.Get(); err != nil {
+		return nil, err
+	} else {
+		return s.(*net.IPAddr), err
+	}
+}
+
+// Resolves `MyHostname()` to an Ip6 address. Caches first successful result, making it
+// cheap to call it over and over.
+func MyIp6() (*net.IPAddr, error) {
+	if s, err := myIp6Singleton.Get(); err != nil {
+		return nil, err
+	} else {
+		return s.(*net.IPAddr), err
+	}
+}
 
 // This returns the list of local ip addresses which other hosts can connect
 // to (NOTE: Loopback ip is ignored).
