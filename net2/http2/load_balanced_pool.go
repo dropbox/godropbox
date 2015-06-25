@@ -193,7 +193,7 @@ func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
 
 // Checks out an HTTP connection from an instance pool, favoring less loaded instances.
 func (pool *LoadBalancedPool) Get() (*http.Client, error) {
-	_, instance, _, err := pool.getInstance()
+	instance, err := pool.GetSingleInstance()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't get HTTP connection")
 	}
@@ -235,6 +235,15 @@ func (pool *LoadBalancedPool) getInstance() (
 		}
 	}
 	return idx, pool.instanceList[idx], (pool.markDownUntil[idx] >= now), nil
+}
+
+// Returns a Pool for an instance selected based on load balancing strategy.
+func (pool *LoadBalancedPool) GetSingleInstance() (Pool, error) {
+	_, instance, _, err := pool.getInstance()
+	if err != nil {
+		return nil, err
+	}
+	return &instance.SimplePool, nil
 }
 
 // Returns a SimplePool for given instanceId, or an error if it does not exist.
