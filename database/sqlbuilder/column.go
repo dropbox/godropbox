@@ -17,9 +17,9 @@ type Column interface {
 
 	Name() string
 	// Serialization for use in column lists
-	SerializeSqlForColumnList(out *bytes.Buffer) error
+	SerializeSqlForColumnList(includeTableName bool, database Database, out *bytes.Buffer) error
 	// Serialization for use in an expression (Clause)
-	SerializeSql(out *bytes.Buffer) error
+	SerializeSql(database Database, out *bytes.Buffer) error
 
 	// Internal function for tracking table that a column belongs to
 	// for the purpose of serialization
@@ -73,20 +73,21 @@ func (c *baseColumn) setTableName(table string) error {
 	return nil
 }
 
-func (c *baseColumn) SerializeSqlForColumnList(out *bytes.Buffer) error {
-	if c.table != "" {
-		out.WriteByte('`')
+func (c *baseColumn) SerializeSqlForColumnList(includeTableName bool, database Database, out *bytes.Buffer) error {
+	if c.table != "" && includeTableName {
+		out.WriteRune(database.EscapeCharacter())
 		out.WriteString(c.table)
-		out.WriteString("`.")
+		out.WriteRune(database.EscapeCharacter())
+		out.WriteByte('.')
 	}
-	out.WriteString("`")
+	out.WriteRune(database.EscapeCharacter())
 	out.WriteString(c.name)
-	out.WriteByte('`')
+	out.WriteRune(database.EscapeCharacter())
 	return nil
 }
 
-func (c *baseColumn) SerializeSql(out *bytes.Buffer) error {
-	return c.SerializeSqlForColumnList(out)
+func (c *baseColumn) SerializeSql(database Database, out *bytes.Buffer) error {
+	return c.SerializeSqlForColumnList(true, database, out)
 }
 
 type bytesColumn struct {
@@ -206,14 +207,14 @@ type aliasColumn struct {
 	expression Expression
 }
 
-func (c *aliasColumn) SerializeSql(out *bytes.Buffer) error {
-	out.WriteByte('`')
+func (c *aliasColumn) SerializeSql(database Database, out *bytes.Buffer) error {
+	out.WriteRune(database.EscapeCharacter())
 	out.WriteString(c.name)
-	out.WriteByte('`')
+	out.WriteRune(database.EscapeCharacter())
 	return nil
 }
 
-func (c *aliasColumn) SerializeSqlForColumnList(out *bytes.Buffer) error {
+func (c *aliasColumn) SerializeSqlForColumnList(includeTableName bool, database Database, out *bytes.Buffer) error {
 	if !validIdentifierName(c.name) {
 		return errors.Newf(
 			"Invalid alias name `%s`.  Generated sql: %s",
@@ -230,12 +231,13 @@ func (c *aliasColumn) SerializeSqlForColumnList(out *bytes.Buffer) error {
 	if c.expression == nil {
 		return errors.Newf("nil alias clause.  Generate sql: %s", out.String())
 	}
-	if err := c.expression.SerializeSql(out); err != nil {
+	if err := c.expression.SerializeSql(database, out); err != nil {
 		return err
 	}
-	out.WriteString(") AS `")
+	out.WriteString(") AS ")
+	out.WriteRune(database.EscapeCharacter())
 	out.WriteString(c.name)
-	out.WriteByte('`')
+	out.WriteRune(database.EscapeCharacter())
 	return nil
 }
 
@@ -276,14 +278,16 @@ func (c *deferredLookupColumn) Name() string {
 }
 
 func (c *deferredLookupColumn) SerializeSqlForColumnList(
+	includeTableName bool,
+	database Database,
 	out *bytes.Buffer) error {
 
-	return c.SerializeSql(out)
+	return c.SerializeSql(database, out)
 }
 
-func (c *deferredLookupColumn) SerializeSql(out *bytes.Buffer) error {
+func (c *deferredLookupColumn) SerializeSql(database Database, out *bytes.Buffer) error {
 	if c.cachedColumn != nil {
-		return c.cachedColumn.SerializeSql(out)
+		return c.cachedColumn.SerializeSql(database, out)
 	}
 
 	col, err := c.table.getColumn(c.colName)
@@ -292,7 +296,7 @@ func (c *deferredLookupColumn) SerializeSql(out *bytes.Buffer) error {
 	}
 
 	c.cachedColumn = col
-	return col.SerializeSql(out)
+	return col.SerializeSql(database, out)
 }
 
 func (c *deferredLookupColumn) setTableName(table string) error {

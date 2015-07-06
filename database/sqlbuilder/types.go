@@ -5,7 +5,7 @@ import (
 )
 
 type Clause interface {
-	SerializeSql(out *bytes.Buffer) error
+	SerializeSql(database Database, out *bytes.Buffer) error
 }
 
 // A clause that can be used in order by
@@ -29,7 +29,7 @@ type BoolExpression interface {
 type Projection interface {
 	Clause
 	isProjectionInterface
-	SerializeSqlForColumnList(out *bytes.Buffer) error
+	SerializeSqlForColumnList(includeTableName bool, database Database, out *bytes.Buffer) error
 }
 
 //

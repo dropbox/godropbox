@@ -9,8 +9,8 @@ import (
 )
 
 type Statement interface {
-	// String returns generated SQL as string.
-	String(database string) (sql string, err error)
+	// String returns generated SQL as string, adding a database name to table names.
+	String(database Database) (sql string, err error)
 }
 
 type SelectStatement interface {
@@ -160,7 +160,7 @@ func (us *unionStatementImpl) Offset(offset int64) UnionStatement {
 	return us
 }
 
-func (us *unionStatementImpl) String(database string) (sql string, err error) {
+func (us *unionStatementImpl) String(database Database) (sql string, err error) {
 	if len(us.selects) == 0 {
 		return "", errors.Newf("Union statement must have at least one SELECT")
 	}
@@ -354,8 +354,8 @@ func (q *selectStatementImpl) Comment(comment string) SelectStatement {
 }
 
 // Return the properly escaped SQL statement, against the specified database
-func (q *selectStatementImpl) String(database string) (sql string, err error) {
-	if !validIdentifierName(database) {
+func (q *selectStatementImpl) String(database Database) (sql string, err error) {
+	if database.Name() != nil && !validIdentifierName(*database.Name()) {
 		return "", errors.New("Invalid database name specified")
 	}
 
@@ -381,7 +381,7 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 				"nil column selected.  Generated sql: %s",
 				buf.String())
 		}
-		if err = col.SerializeSqlForColumnList(buf); err != nil {
+		if err = col.SerializeSqlForColumnList(true, database, buf); err != nil {
 			return
 		}
 	}
@@ -396,21 +396,21 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 
 	if q.where != nil {
 		buf.WriteString(" WHERE ")
-		if err = q.where.SerializeSql(buf); err != nil {
+		if err = q.where.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
 
 	if q.group != nil {
 		buf.WriteString(" GROUP BY ")
-		if err = q.group.SerializeSql(buf); err != nil {
+		if err = q.group.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
 
 	if q.order != nil {
 		buf.WriteString(" ORDER BY ")
-		if err = q.order.SerializeSql(buf); err != nil {
+		if err = q.order.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
@@ -490,8 +490,8 @@ func (s *insertStatementImpl) Comment(comment string) InsertStatement {
 	return s
 }
 
-func (s *insertStatementImpl) String(database string) (sql string, err error) {
-	if !validIdentifierName(database) {
+func (s *insertStatementImpl) String(database Database) (sql string, err error) {
+	if database.Name() != nil && !validIdentifierName(*database.Name()) {
 		return "", errors.New("Invalid database name specified")
 	}
 
@@ -532,7 +532,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 				buf.String())
 		}
 
-		if err = col.SerializeSqlForColumnList(buf); err != nil {
+		if err = col.SerializeSqlForColumnList(false, database, buf); err != nil {
 			return
 		}
 	}
@@ -568,7 +568,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 					buf.String())
 			}
 
-			if err = value.SerializeSql(buf); err != nil {
+			if err = value.SerializeSql(database, buf); err != nil {
 				return
 			}
 		}
@@ -589,7 +589,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 					buf.String())
 			}
 
-			if err = colExpr.col.SerializeSqlForColumnList(buf); err != nil {
+			if err = colExpr.col.SerializeSqlForColumnList(false, database, buf); err != nil {
 				return
 			}
 
@@ -602,7 +602,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 					buf.String())
 			}
 
-			if err = colExpr.expr.SerializeSql(buf); err != nil {
+			if err = colExpr.expr.SerializeSql(database, buf); err != nil {
 				return
 			}
 		}
@@ -662,8 +662,8 @@ func (u *updateStatementImpl) Comment(comment string) UpdateStatement {
 	return u
 }
 
-func (u *updateStatementImpl) String(database string) (sql string, err error) {
-	if !validIdentifierName(database) {
+func (u *updateStatementImpl) String(database Database) (sql string, err error) {
+	if database.Name() != nil && !validIdentifierName(*database.Name()) {
 		return "", errors.New("Invalid database name specified")
 	}
 
@@ -719,12 +719,12 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 				buf.String())
 		}
 
-		if err = col.SerializeSql(buf); err != nil {
+		if err = col.SerializeSqlForColumnList(false, database, buf); err != nil {
 			return
 		}
 
 		buf.WriteByte('=')
-		if err = val.SerializeSql(buf); err != nil {
+		if err = val.SerializeSql(database, buf); err != nil {
 			return
 		}
 
@@ -738,13 +738,13 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf.WriteString(" WHERE ")
-	if err = u.where.SerializeSql(buf); err != nil {
+	if err = u.where.SerializeSql(database, buf); err != nil {
 		return
 	}
 
 	if u.order != nil {
 		buf.WriteString(" ORDER BY ")
-		if err = u.order.SerializeSql(buf); err != nil {
+		if err = u.order.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
@@ -797,8 +797,8 @@ func (d *deleteStatementImpl) Comment(comment string) DeleteStatement {
 	return d
 }
 
-func (d *deleteStatementImpl) String(database string) (sql string, err error) {
-	if !validIdentifierName(database) {
+func (d *deleteStatementImpl) String(database Database) (sql string, err error) {
+	if database.Name() != nil && !validIdentifierName(*database.Name()) {
 		return "", errors.New("Invalid database name specified")
 	}
 
@@ -824,13 +824,13 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf.WriteString(" WHERE ")
-	if err = d.where.SerializeSql(buf); err != nil {
+	if err = d.where.SerializeSql(database, buf); err != nil {
 		return
 	}
 
 	if d.order != nil {
 		buf.WriteString(" ORDER BY ")
-		if err = d.order.SerializeSql(buf); err != nil {
+		if err = d.order.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
@@ -874,8 +874,8 @@ func (s *lockStatementImpl) AddWriteLock(t *Table) LockStatement {
 	return s
 }
 
-func (s *lockStatementImpl) String(database string) (sql string, err error) {
-	if !validIdentifierName(database) {
+func (s *lockStatementImpl) String(database Database) (sql string, err error) {
+	if database.Name() != nil && !validIdentifierName(*database.Name()) {
 		return "", errors.New("Invalid database name specified")
 	}
 
@@ -918,7 +918,7 @@ func NewUnlockStatement() UnlockStatement {
 type unlockStatementImpl struct {
 }
 
-func (s *unlockStatementImpl) String(database string) (sql string, err error) {
+func (s *unlockStatementImpl) String(database Database) (sql string, err error) {
 	return "UNLOCK TABLES", nil
 }
 

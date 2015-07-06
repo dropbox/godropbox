@@ -18,7 +18,7 @@ type ReadableTable interface {
 	// Generates the sql string for the current table expression.  Note: the
 	// generated string may not be a valid/executable sql statement.
 	// The database is the name of the database the table is on
-	SerializeSql(database string, out *bytes.Buffer) error
+	SerializeSql(database Database, out *bytes.Buffer) error
 
 	// Generates a select query on the current table.
 	Select(projections ...Projection) SelectStatement
@@ -41,7 +41,7 @@ type WritableTable interface {
 	// Generates the sql string for the current table expression.  Note: the
 	// generated string may not be a valid/executable sql statement.
 	// The database is the name of the database the table is on
-	SerializeSql(database string, out *bytes.Buffer) error
+	SerializeSql(database Database, out *bytes.Buffer) error
 
 	Insert(columns ...NonAliasColumn) InsertStatement
 	Update() UpdateStatement
@@ -130,20 +130,26 @@ func (t *Table) ForceIndex(index string) *Table {
 
 // Generates the sql string for the current table expression.  Note: the
 // generated string may not be a valid/executable sql statement.
-func (t *Table) SerializeSql(database string, out *bytes.Buffer) error {
-	out.WriteString("`")
-	out.WriteString(database)
-	out.WriteString("`.`")
+func (t *Table) SerializeSql(database Database, out *bytes.Buffer) error {
+	if database.Name() != nil {
+		out.WriteRune(database.EscapeCharacter())
+		out.WriteString(*database.Name())
+		out.WriteRune(database.EscapeCharacter())
+		out.WriteByte('.')
+	}
+	out.WriteRune(database.EscapeCharacter())
 	out.WriteString(t.Name())
-	out.WriteString("`")
+	out.WriteRune(database.EscapeCharacter())
 
 	if t.forcedIndex != "" {
 		if !validIdentifierName(t.forcedIndex) {
 			return errors.Newf("'%s' is not a valid identifier for an index", t.forcedIndex)
 		}
-		out.WriteString(" FORCE INDEX (`")
+		out.WriteString(" FORCE INDEX (")
+		out.WriteRune(database.EscapeCharacter())
 		out.WriteString(t.forcedIndex)
-		out.WriteString("`)")
+		out.WriteRune(database.EscapeCharacter())
+		out.WriteByte(')')
 	}
 
 	return nil
@@ -253,7 +259,7 @@ func (t *joinTable) Columns() []NonAliasColumn {
 }
 
 func (t *joinTable) SerializeSql(
-	database string,
+	database Database,
 	out *bytes.Buffer) (err error) {
 
 	if t.lhs == nil {
@@ -284,7 +290,7 @@ func (t *joinTable) SerializeSql(
 	}
 
 	out.WriteString(" ON ")
-	if err = t.onCondition.SerializeSql(out); err != nil {
+	if err = t.onCondition.SerializeSql(database, out); err != nil {
 		return
 	}
 
