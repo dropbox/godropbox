@@ -716,7 +716,7 @@ func (u *updateStatementImpl) String(database Database) (sql string, err error) 
 				buf.String())
 		}
 
-		if err = col.SerializeSqlForColumnList(true, database, buf); err != nil {
+		if err = col.SerializeSqlForColumnList(false, database, buf); err != nil {
 			return
 		}
 

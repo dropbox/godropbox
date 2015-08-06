@@ -406,7 +406,7 @@ func (s *StmtSuite) TestUpdateSingleValue(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `table1`.`col1`=1 WHERE `table1`.`col2`=2")
+	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `col1`=1 WHERE `table1`.`col2`=2")
 }
 
 func (s *StmtSuite) TestUpdateUsingDeferredLookupColumns(c *gc.C) {
@@ -418,7 +418,7 @@ func (s *StmtSuite) TestUpdateUsingDeferredLookupColumns(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `table1`.`col1`=1 WHERE `table1`.`col2`=2")
+	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `col1`=1 WHERE `table1`.`col2`=2")
 }
 
 func (s *StmtSuite) TestUpdateMultiValues(c *gc.C) {
@@ -432,7 +432,7 @@ func (s *StmtSuite) TestUpdateMultiValues(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `table1`.`col1`=1, `table1`.`col2`=2 WHERE `table1`.`col2`=3")
+	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `col1`=1, `col2`=2 WHERE `table1`.`col2`=3")
 }
 
 func (s *StmtSuite) TestUpdateWithOrderBy(c *gc.C) {
@@ -445,7 +445,7 @@ func (s *StmtSuite) TestUpdateWithOrderBy(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `table1`.`col1`=1 WHERE `table1`.`col2`=2 ORDER BY `table1`.`col2`")
+	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `col1`=1 WHERE `table1`.`col2`=2 ORDER BY `table1`.`col2`")
 }
 
 func (s *StmtSuite) TestUpdateWithLimit(c *gc.C) {
@@ -458,7 +458,7 @@ func (s *StmtSuite) TestUpdateWithLimit(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `table1`.`col1`=1 WHERE `table1`.`col2`=2 LIMIT 5")
+	c.Assert(sql, gc.Equals, "UPDATE `db`.`table1` SET `col1`=1 WHERE `table1`.`col2`=2 LIMIT 5")
 }
 
 //
