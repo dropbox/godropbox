@@ -219,21 +219,21 @@ func (us *unionStatementImpl) String(database Database) (sql string, err error) 
 
 	if us.where != nil {
 		_, _ = buf.WriteString(" WHERE ")
-		if err = us.where.SerializeSql(buf); err != nil {
+		if err = us.where.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
 
 	if us.group != nil {
 		_, _ = buf.WriteString(" GROUP BY ")
-		if err = us.group.SerializeSql(buf); err != nil {
+		if err = us.group.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
 
 	if us.order != nil {
 		_, _ = buf.WriteString(" ORDER BY ")
-		if err = us.order.SerializeSql(buf); err != nil {
+		if err = us.order.SerializeSql(database, buf); err != nil {
 			return
 		}
 	}
@@ -436,10 +436,7 @@ func (q *selectStatementImpl) String(database Database) (sql string, err error) 
 // INSERT Statement ============================================================
 //
 
-func newInsertStatement(
-	t WritableTable,
-	columns ...NonAliasColumn) InsertStatement {
-
+func newInsertStatement(t WritableTable, columns ...NonAliasColumn) InsertStatement {
 	return &insertStatementImpl{
 		table:   t,
 		columns: columns,
@@ -532,7 +529,7 @@ func (s *insertStatementImpl) String(database Database) (sql string, err error) 
 				buf.String())
 		}
 
-		if err = col.SerializeSqlForColumnList(false, database, buf); err != nil {
+		if err = col.SerializeSqlForColumnList(true, database, buf); err != nil {
 			return
 		}
 	}
@@ -589,7 +586,7 @@ func (s *insertStatementImpl) String(database Database) (sql string, err error) 
 					buf.String())
 			}
 
-			if err = colExpr.col.SerializeSqlForColumnList(false, database, buf); err != nil {
+			if err = colExpr.col.SerializeSqlForColumnList(true, database, buf); err != nil {
 				return
 			}
 
@@ -719,7 +716,7 @@ func (u *updateStatementImpl) String(database Database) (sql string, err error) 
 				buf.String())
 		}
 
-		if err = col.SerializeSqlForColumnList(false, database, buf); err != nil {
+		if err = col.SerializeSqlForColumnList(true, database, buf); err != nil {
 			return
 		}
 
