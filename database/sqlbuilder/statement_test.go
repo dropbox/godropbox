@@ -259,7 +259,7 @@ func (s *StmtSuite) TestInsertSingleValue(c *gc.C) {
 	sql, err := table1.Insert(table1Col1).Add(Literal(1)).String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`table1`.`col1`) VALUES (1)")
+	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`col1`) VALUES (1)")
 }
 
 func (s *StmtSuite) TestInsertDate(c *gc.C) {
@@ -271,7 +271,7 @@ func (s *StmtSuite) TestInsertDate(c *gc.C) {
 	sql, err := table1.Insert(table1Col4).Add(Literal(date)).String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`table1`.`col4`) VALUES ('1999-01-02 03:04:05')")
+	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`col4`) VALUES ('1999-01-02 03:04:05')")
 }
 
 func (s *StmtSuite) TestInsertIgnore(c *gc.C) {
@@ -282,7 +282,7 @@ func (s *StmtSuite) TestInsertIgnore(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT IGNORE INTO `db`.`table1` (`table1`.`col1`) VALUES (1)")
+	c.Assert(sql, gc.Equals, "INSERT IGNORE INTO `db`.`table1` (`col1`) VALUES (1)")
 }
 
 func (s *StmtSuite) TestInsertMultipleValues(c *gc.C) {
@@ -295,7 +295,7 @@ func (s *StmtSuite) TestInsertMultipleValues(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`table1`.`col1`,`table1`.`col2`,`table1`.`col3`) VALUES (1,2,3)")
+	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`col1`,`col2`,`col3`) VALUES (1,2,3)")
 }
 
 func (s *StmtSuite) TestInsertMultipleRows(c *gc.C) {
@@ -310,7 +310,7 @@ func (s *StmtSuite) TestInsertMultipleRows(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`table1`.`col1`,`table1`.`col2`) VALUES (1,2), (11,22), (111,222)")
+	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`col1`,`col2`) VALUES (1,2), (11,22), (111,222)")
 }
 
 func (s *StmtSuite) TestOnDuplicateKeyUpdateNilCol(c *gc.C) {
@@ -348,7 +348,7 @@ func (s *StmtSuite) TestOnDuplicateKeyUpdateSingle(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`table1`.`col1`,`table1`.`col2`) VALUES (1,2) ON DUPLICATE KEY UPDATE `table1`.`col3`=3")
+	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`col1`,`col2`) VALUES (1,2) ON DUPLICATE KEY UPDATE `col3`=3")
 }
 
 func (s *StmtSuite) TestOnDuplicateKeyUpdateMulti(c *gc.C) {
@@ -363,7 +363,7 @@ func (s *StmtSuite) TestOnDuplicateKeyUpdateMulti(c *gc.C) {
 	sql, err := stmt.String(db)
 	c.Assert(err, gc.IsNil)
 
-	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`table1`.`col1`,`table1`.`col2`) VALUES (1,2) ON DUPLICATE KEY UPDATE `table1`.`col3`=3, `table1`.`col2`=4")
+	c.Assert(sql, gc.Equals, "INSERT INTO `db`.`table1` (`col1`,`col2`) VALUES (1,2) ON DUPLICATE KEY UPDATE `col3`=3, `col2`=4")
 }
 
 //

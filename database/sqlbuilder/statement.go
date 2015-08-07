@@ -529,7 +529,7 @@ func (s *insertStatementImpl) String(database Database) (sql string, err error) 
 				buf.String())
 		}
 
-		if err = col.SerializeSqlForColumnList(true, database, buf); err != nil {
+		if err = col.SerializeSqlForColumnList(false, database, buf); err != nil {
 			return
 		}
 	}
@@ -586,7 +586,7 @@ func (s *insertStatementImpl) String(database Database) (sql string, err error) 
 					buf.String())
 			}
 
-			if err = colExpr.col.SerializeSqlForColumnList(true, database, buf); err != nil {
+			if err = colExpr.col.SerializeSqlForColumnList(false, database, buf); err != nil {
 				return
 			}
 
