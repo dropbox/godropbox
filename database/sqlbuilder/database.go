@@ -2,16 +2,14 @@ package sqlbuilder
 
 type Database interface {
 	EscapeCharacter() rune
-
 	InsertReturningClause() string
-
 	Name() *string
 }
 
 type genericDatabase struct {
-	escapeChar rune
+	escapeChar      rune
 	returningClause string
-	name *string
+	name            *string
 }
 
 func (db *genericDatabase) EscapeCharacter() rune {
@@ -29,20 +27,22 @@ func (db *genericDatabase) Name() *string {
 func NewMySQLDatabase(dbName *string) Database {
 	return &genericDatabase{
 		escapeChar: '`',
-		name: dbName,
+		name:       dbName,
 	}
 }
 
 func NewPostgresDatabase(dbName *string) Database {
 	return &genericDatabase{
-		escapeChar: '"',
+		escapeChar:      '"',
 		returningClause: " RETURNING *",
-		name: dbName,
+		name:            dbName,
 	}
 }
 
 func NewSQLiteDatabase() Database {
+	defaultName := "main"
 	return &genericDatabase{
 		escapeChar: '"',
+		name:       &defaultName,
 	}
 }

@@ -367,9 +367,7 @@ func (q *selectStatementImpl) String(database Database) (sql string, err error) 
 	}
 
 	if q.projections == nil || len(q.projections) == 0 {
-		return "", errors.Newf(
-			"No column selected.  Generated sql: %s",
-			buf.String())
+		return "", errors.Newf("No column selected.  Generated sql: %s", buf.String())
 	}
 
 	for i, col := range q.projections {
