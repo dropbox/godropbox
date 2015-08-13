@@ -109,7 +109,7 @@ func (conj *conjunctExpression) SerializeSql(database Database, out *bytes.Buffe
 
 	useParentheses := len(clauses) > 1
 	if useParentheses {
-		out.WriteByte('(')
+		out.WriteRune('(')
 	}
 
 	if err = serializeClauses(clauses, conj.conjunction, database, out); err != nil {
@@ -117,7 +117,7 @@ func (conj *conjunctExpression) SerializeSql(database Database, out *bytes.Buffe
 	}
 
 	if useParentheses {
-		out.WriteByte(')')
+		out.WriteRune(')')
 	}
 
 	return nil
@@ -144,7 +144,7 @@ func (arith *arithmeticExpression) SerializeSql(database Database, out *bytes.Bu
 
 	useParentheses := len(clauses) > 1
 	if useParentheses {
-		out.WriteByte('(')
+		out.WriteRune('(')
 	}
 
 	if err = serializeClauses(clauses, arith.operator, database, out); err != nil {
@@ -152,7 +152,7 @@ func (arith *arithmeticExpression) SerializeSql(database Database, out *bytes.Bu
 	}
 
 	if useParentheses {
-		out.WriteByte(')')
+		out.WriteRune(')')
 	}
 
 	return nil
@@ -191,7 +191,7 @@ type listClause struct {
 
 func (list *listClause) SerializeSql(database Database, out *bytes.Buffer) error {
 	if list.includeParentheses {
-		out.WriteByte('(')
+		out.WriteRune('(')
 	}
 
 	if err := serializeClauses(list.clauses, []byte(","), database, out); err != nil {
@@ -199,7 +199,7 @@ func (list *listClause) SerializeSql(database Database, out *bytes.Buffer) error
 	}
 
 	if list.includeParentheses {
-		out.WriteByte(')')
+		out.WriteRune(')')
 	}
 	return nil
 }
@@ -222,7 +222,7 @@ func (c *negateExpression) SerializeSql(database Database, out *bytes.Buffer) (e
 		return
 	}
 
-	out.WriteByte(')')
+	out.WriteRune(')')
 	return nil
 }
 
@@ -643,19 +643,17 @@ type ifExpression struct {
 func (exp *ifExpression) SerializeSql(database Database, out *bytes.Buffer) error {
 	out.WriteString("IF(")
 	exp.conditional.SerializeSql(database, out)
-	out.WriteString(",")
+	out.WriteRune(',')
 	exp.trueExpression.SerializeSql(database, out)
-	out.WriteString(",")
+	out.WriteRune(',')
 	exp.falseExpression.SerializeSql(database, out)
-	out.WriteString(")")
+	out.WriteRune(')')
 	return nil
 }
 
 // Returns a representation of an if-expression, of the form:
 //   IF (BOOLEAN TEST, VALUE-IF-TRUE, VALUE-IF-FALSE)
-func If(conditional BoolExpression,
-	trueExpression Expression,
-	falseExpression Expression) Expression {
+func If(conditional BoolExpression, trueExpression Expression, falseExpression Expression) Expression {
 	return &ifExpression{
 		conditional:     conditional,
 		trueExpression:  trueExpression,
@@ -677,6 +675,6 @@ func ColumnValue(col NonAliasColumn) Expression {
 func (cv *columnValueExpression) SerializeSql(database Database, out *bytes.Buffer) error {
 	out.WriteString("VALUES(")
 	cv.column.SerializeSqlForColumnList(true, database, out)
-	out.WriteByte(')')
+	out.WriteRune(')')
 	return nil
 }

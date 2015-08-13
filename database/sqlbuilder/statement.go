@@ -208,13 +208,13 @@ func (us *unionStatementImpl) String(database Database) (sql string, err error) 
 		if i != 0 {
 			buf.WriteString(" UNION ")
 		}
-		_, _ = buf.WriteString("(")
+		_, _ = buf.WriteRune('(')
 		selectSql, err := statement.String(database)
 		if err != nil {
 			return "", err
 		}
 		buf.WriteString(selectSql)
-		_, _ = buf.WriteString(")")
+		_, _ = buf.WriteRune(')')
 	}
 
 	if us.where != nil {
