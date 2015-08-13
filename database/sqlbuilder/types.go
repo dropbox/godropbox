@@ -4,6 +4,10 @@ import (
 	"bytes"
 )
 
+type SubqueryClause interface {
+	SerializeSql(database Database, out *bytes.Buffer) error
+}
+
 type Clause interface {
 	SerializeSql(database Database, out *bytes.Buffer) error
 }

@@ -558,3 +558,16 @@ func (s *ExprSuite) TestMinus(c *gc.C) {
 	sql := buf.String()
 	c.Assert(sql, gc.Equals, "1 - 2")
 }
+
+func (s *ExprSuite) TestBasicSubquery(c *gc.C) {
+	dbName := "db"
+	db := NewMySQLDatabase(&dbName)
+
+	subquery := table1.Select(table1Col2)
+	outerquery := table1.Select(table1Col1, table1Col2).Where(InQ(table1Col2, Subquery(subquery)))
+
+	sql, err := outerquery.String(db)
+	c.Assert(err, gc.IsNil)
+
+	c.Assert(sql, gc.Equals, "SELECT `table1`.`col1`,`table1`.`col2` FROM `db`.`table1` WHERE `table1`.`col2` IN (SELECT `table1`.`col2` FROM `db`.`table1`)")
+}

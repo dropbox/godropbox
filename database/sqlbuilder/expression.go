@@ -633,6 +633,39 @@ func In(lhs Expression, valList interface{}) BoolExpression {
 	return expr
 }
 
+type inSubqueryExpression struct {
+	isExpression
+	isBoolExpression
+
+	lhs Expression
+	rhs SubqueryClause
+}
+
+// InQ returns a representation of "a IN b" where b is a subquery.
+func InQ(lhs Expression, rhs SubqueryClause) BoolExpression {
+	return &inSubqueryExpression{
+		lhs: lhs,
+		rhs: rhs,
+	}
+}
+
+func (c *inSubqueryExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+	buf := &bytes.Buffer{}
+
+	if err := c.lhs.SerializeSql(database, buf); err != nil {
+		return err
+	}
+
+	out.WriteString(buf.String())
+	out.WriteString(" IN ")
+
+	if err := c.rhs.SerializeSql(database, out); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type ifExpression struct {
 	isExpression
 	conditional     BoolExpression
@@ -675,6 +708,28 @@ func ColumnValue(col NonAliasColumn) Expression {
 func (cv *columnValueExpression) SerializeSql(database Database, out *bytes.Buffer) error {
 	out.WriteString("VALUES(")
 	cv.column.SerializeSqlForColumnList(true, database, out)
+	out.WriteRune(')')
+	return nil
+}
+
+func Subquery(stmt Statement) SubqueryClause {
+	return &subqueryExpression{
+		stmt: stmt,
+	}
+}
+
+type subqueryExpression struct {
+	isExpression
+	stmt Statement
+}
+
+func (exp *subqueryExpression) SerializeSql(db Database, out *bytes.Buffer) error {
+	out.WriteRune('(')
+	subquery, err := exp.stmt.String(db)
+	if err != nil {
+		return err
+	}
+	out.WriteString(subquery)
 	out.WriteRune(')')
 	return nil
 }
