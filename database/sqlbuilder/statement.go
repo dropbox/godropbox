@@ -421,10 +421,12 @@ func (q *selectStatementImpl) String(database Database) (sql string, err error) 
 		}
 	}
 
-	if q.forUpdate {
-		buf.WriteString(" FOR UPDATE")
-	} else if q.withSharedLock {
-		buf.WriteString(" LOCK IN SHARE MODE")
+	if database.Kind() != "sqlite" {
+		if q.forUpdate {
+			buf.WriteString(" FOR UPDATE")
+		} else if q.withSharedLock {
+			buf.WriteString(" LOCK IN SHARE MODE")
+		}
 	}
 
 	return buf.String(), nil
