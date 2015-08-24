@@ -5,11 +5,11 @@ import (
 )
 
 type SubqueryClause interface {
-	SerializeSql(database Database, out *bytes.Buffer) error
+	SerializeSql(d Dialect, out *bytes.Buffer) error
 }
 
 type Clause interface {
-	SerializeSql(database Database, out *bytes.Buffer) error
+	SerializeSql(d Dialect, out *bytes.Buffer) error
 }
 
 // A clause that can be used in order by
@@ -33,7 +33,7 @@ type BoolExpression interface {
 type Projection interface {
 	Clause
 	isProjectionInterface
-	SerializeSqlForColumnList(includeTableName bool, database Database, out *bytes.Buffer) error
+	SerializeSqlForColumnList(includeTableName bool, d Dialect, out *bytes.Buffer) error
 }
 
 //

@@ -1,45 +1,45 @@
 package sqlbuilder
 
-type Database interface {
+type Dialect interface {
 	EscapeCharacter() rune
 	InsertReturningClause() string
 	Kind() string
 	Name() *string
 }
 
-type genericDatabase struct {
+type genericDialect struct {
 	escapeChar      rune
 	returningClause string
 	kind            string
 	name            *string
 }
 
-func (db *genericDatabase) EscapeCharacter() rune {
+func (db *genericDialect) EscapeCharacter() rune {
 	return db.escapeChar
 }
 
-func (db *genericDatabase) InsertReturningClause() string {
+func (db *genericDialect) InsertReturningClause() string {
 	return db.returningClause
 }
 
-func (db *genericDatabase) Kind() string {
+func (db *genericDialect) Kind() string {
 	return db.kind
 }
 
-func (db *genericDatabase) Name() *string {
+func (db *genericDialect) Name() *string {
 	return db.name
 }
 
-func NewMySQLDatabase(dbName *string) Database {
-	return &genericDatabase{
+func NewMySQLDialect(dbName *string) Dialect {
+	return &genericDialect{
 		escapeChar: '`',
 		kind:       "mysql",
 		name:       dbName,
 	}
 }
 
-func NewPostgresDatabase(dbName *string) Database {
-	return &genericDatabase{
+func NewPostgresDialect(dbName *string) Dialect {
+	return &genericDialect{
 		escapeChar:      '"',
 		returningClause: " RETURNING *",
 		kind:            "postgres",
@@ -47,9 +47,9 @@ func NewPostgresDatabase(dbName *string) Database {
 	}
 }
 
-func NewSQLiteDatabase() Database {
+func NewSQLiteDialect() Dialect {
 	defaultName := "main"
-	return &genericDatabase{
+	return &genericDialect{
 		escapeChar: '"',
 		kind:       "sqlite",
 		name:       &defaultName,

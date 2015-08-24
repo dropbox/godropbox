@@ -17,14 +17,14 @@ type orderByClause struct {
 	ascent     bool
 }
 
-func (o *orderByClause) SerializeSql(database Database, out *bytes.Buffer) error {
+func (o *orderByClause) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	if o.expression == nil {
 		return errors.Newf(
 			"nil order by clause.  Generated sql: %s",
 			out.String())
 	}
 
-	if err := o.expression.SerializeSql(database, out); err != nil {
+	if err := o.expression.SerializeSql(d, out); err != nil {
 		return err
 	}
 
@@ -51,17 +51,12 @@ type literalExpression struct {
 	value sqltypes.Value
 }
 
-func (c literalExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+func (c literalExpression) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	sqltypes.Value(c.value).EncodeSql(out)
 	return nil
 }
 
-func serializeClauses(
-	clauses []Clause,
-	separator []byte,
-	database Database,
-	out *bytes.Buffer) (err error) {
-
+func serializeClauses(clauses []Clause, separator []byte, d Dialect, out *bytes.Buffer) (err error) {
 	if clauses == nil || len(clauses) == 0 {
 		return errors.Newf("Empty clauses.  Generated sql: %s", out.String())
 	}
@@ -69,7 +64,7 @@ func serializeClauses(
 	if clauses[0] == nil {
 		return errors.Newf("nil clause.  Generated sql: %s", out.String())
 	}
-	if err = clauses[0].SerializeSql(database, out); err != nil {
+	if err = clauses[0].SerializeSql(d, out); err != nil {
 		return
 	}
 
@@ -79,7 +74,7 @@ func serializeClauses(
 		if c == nil {
 			return errors.Newf("nil clause.  Generated sql: %s", out.String())
 		}
-		if err = c.SerializeSql(database, out); err != nil {
+		if err = c.SerializeSql(d, out); err != nil {
 			return
 		}
 	}
@@ -95,7 +90,7 @@ type conjunctExpression struct {
 	conjunction []byte
 }
 
-func (conj *conjunctExpression) SerializeSql(database Database, out *bytes.Buffer) (err error) {
+func (conj *conjunctExpression) SerializeSql(d Dialect, out *bytes.Buffer) (err error) {
 	if len(conj.expressions) == 0 {
 		return errors.Newf(
 			"Empty conjunction.  Generated sql: %s",
@@ -112,7 +107,7 @@ func (conj *conjunctExpression) SerializeSql(database Database, out *bytes.Buffe
 		out.WriteRune('(')
 	}
 
-	if err = serializeClauses(clauses, conj.conjunction, database, out); err != nil {
+	if err = serializeClauses(clauses, conj.conjunction, d, out); err != nil {
 		return
 	}
 
@@ -130,7 +125,7 @@ type arithmeticExpression struct {
 	operator    []byte
 }
 
-func (arith *arithmeticExpression) SerializeSql(database Database, out *bytes.Buffer) (err error) {
+func (arith *arithmeticExpression) SerializeSql(d Dialect, out *bytes.Buffer) (err error) {
 	if len(arith.expressions) == 0 {
 		return errors.Newf(
 			"Empty arithmetic expression.  Generated sql: %s",
@@ -147,7 +142,7 @@ func (arith *arithmeticExpression) SerializeSql(database Database, out *bytes.Bu
 		out.WriteRune('(')
 	}
 
-	if err = serializeClauses(clauses, arith.operator, database, out); err != nil {
+	if err = serializeClauses(clauses, arith.operator, d, out); err != nil {
 		return
 	}
 
@@ -163,11 +158,11 @@ type tupleExpression struct {
 	elements listClause
 }
 
-func (tuple *tupleExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+func (tuple *tupleExpression) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	if len(tuple.elements.clauses) < 1 {
 		return errors.Newf("Tuples must include at least one element")
 	}
-	return tuple.elements.SerializeSql(database, out)
+	return tuple.elements.SerializeSql(d, out)
 }
 
 func Tuple(exprs ...Expression) Expression {
@@ -189,12 +184,12 @@ type listClause struct {
 	includeParentheses bool
 }
 
-func (list *listClause) SerializeSql(database Database, out *bytes.Buffer) error {
+func (list *listClause) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	if list.includeParentheses {
 		out.WriteRune('(')
 	}
 
-	if err := serializeClauses(list.clauses, []byte(","), database, out); err != nil {
+	if err := serializeClauses(list.clauses, []byte(","), d, out); err != nil {
 		return err
 	}
 
@@ -212,13 +207,13 @@ type negateExpression struct {
 	nested BoolExpression
 }
 
-func (c *negateExpression) SerializeSql(database Database, out *bytes.Buffer) (err error) {
+func (c *negateExpression) SerializeSql(d Dialect, out *bytes.Buffer) (err error) {
 	out.WriteString("NOT (")
 
 	if c.nested == nil {
 		return errors.Newf("nil nested.  Generated sql: %s", out.String())
 	}
-	if err = c.nested.SerializeSql(database, out); err != nil {
+	if err = c.nested.SerializeSql(d, out); err != nil {
 		return
 	}
 
@@ -240,11 +235,11 @@ type binaryExpression struct {
 	operator []byte
 }
 
-func (c *binaryExpression) SerializeSql(database Database, out *bytes.Buffer) (err error) {
+func (c *binaryExpression) SerializeSql(d Dialect, out *bytes.Buffer) (err error) {
 	if c.lhs == nil {
 		return errors.Newf("nil lhs.  Generated sql: %s", out.String())
 	}
-	if err = c.lhs.SerializeSql(database, out); err != nil {
+	if err = c.lhs.SerializeSql(d, out); err != nil {
 		return
 	}
 
@@ -253,7 +248,7 @@ func (c *binaryExpression) SerializeSql(database Database, out *bytes.Buffer) (e
 	if c.rhs == nil {
 		return errors.Newf("nil rhs.  Generated sql: %s", out.String())
 	}
-	if err = c.rhs.SerializeSql(database, out); err != nil {
+	if err = c.rhs.SerializeSql(d, out); err != nil {
 		return
 	}
 
@@ -281,7 +276,7 @@ type funcExpression struct {
 	args     *listClause
 }
 
-func (c *funcExpression) SerializeSql(database Database, out *bytes.Buffer) (err error) {
+func (c *funcExpression) SerializeSql(d Dialect, out *bytes.Buffer) (err error) {
 	if !validIdentifierName(c.funcName) {
 		return errors.Newf(
 			"Invalid function name: %s.  Generated sql: %s",
@@ -292,7 +287,7 @@ func (c *funcExpression) SerializeSql(database Database, out *bytes.Buffer) (err
 	if c.args == nil {
 		out.WriteString("()")
 	} else {
-		return c.args.SerializeSql(database, out)
+		return c.args.SerializeSql(d, out)
 	}
 	return nil
 }
@@ -506,7 +501,7 @@ type inExpression struct {
 	err error
 }
 
-func (c *inExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+func (c *inExpression) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	if c.err != nil {
 		return errors.Wrap(c.err, "Invalid IN expression")
 	}
@@ -520,7 +515,7 @@ func (c *inExpression) SerializeSql(database Database, out *bytes.Buffer) error 
 	// We'll serialize the lhs even if we don't need it to ensure no error
 	buf := &bytes.Buffer{}
 
-	err := c.lhs.SerializeSql(database, buf)
+	err := c.lhs.SerializeSql(d, buf)
 	if err != nil {
 		return err
 	}
@@ -533,7 +528,7 @@ func (c *inExpression) SerializeSql(database Database, out *bytes.Buffer) error 
 	out.WriteString(buf.String())
 	out.WriteString(" IN ")
 
-	err = c.rhs.SerializeSql(database, out)
+	err = c.rhs.SerializeSql(d, out)
 	if err != nil {
 		return err
 	}
@@ -649,17 +644,17 @@ func InQ(lhs Expression, rhs SubqueryClause) BoolExpression {
 	}
 }
 
-func (c *inSubqueryExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+func (c *inSubqueryExpression) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	buf := &bytes.Buffer{}
 
-	if err := c.lhs.SerializeSql(database, buf); err != nil {
+	if err := c.lhs.SerializeSql(d, buf); err != nil {
 		return err
 	}
 
 	out.WriteString(buf.String())
 	out.WriteString(" IN ")
 
-	if err := c.rhs.SerializeSql(database, out); err != nil {
+	if err := c.rhs.SerializeSql(d, out); err != nil {
 		return err
 	}
 
@@ -673,13 +668,13 @@ type ifExpression struct {
 	falseExpression Expression
 }
 
-func (exp *ifExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+func (exp *ifExpression) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	out.WriteString("IF(")
-	exp.conditional.SerializeSql(database, out)
+	exp.conditional.SerializeSql(d, out)
 	out.WriteRune(',')
-	exp.trueExpression.SerializeSql(database, out)
+	exp.trueExpression.SerializeSql(d, out)
 	out.WriteRune(',')
-	exp.falseExpression.SerializeSql(database, out)
+	exp.falseExpression.SerializeSql(d, out)
 	out.WriteRune(')')
 	return nil
 }
@@ -705,9 +700,9 @@ func ColumnValue(col NonAliasColumn) Expression {
 	}
 }
 
-func (cv *columnValueExpression) SerializeSql(database Database, out *bytes.Buffer) error {
+func (cv *columnValueExpression) SerializeSql(d Dialect, out *bytes.Buffer) error {
 	out.WriteString("VALUES(")
-	cv.column.SerializeSqlForColumnList(true, database, out)
+	cv.column.SerializeSqlForColumnList(true, d, out)
 	out.WriteRune(')')
 	return nil
 }
@@ -723,7 +718,7 @@ type subqueryExpression struct {
 	stmt Statement
 }
 
-func (exp *subqueryExpression) SerializeSql(db Database, out *bytes.Buffer) error {
+func (exp *subqueryExpression) SerializeSql(db Dialect, out *bytes.Buffer) error {
 	out.WriteRune('(')
 	subquery, err := exp.stmt.String(db)
 	if err != nil {

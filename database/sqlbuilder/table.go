@@ -18,7 +18,7 @@ type ReadableTable interface {
 	// Generates the sql string for the current table expression.  Note: the
 	// generated string may not be a valid/executable sql statement.
 	// The database is the name of the database the table is on
-	SerializeSql(database Database, out *bytes.Buffer) error
+	SerializeSql(d Dialect, out *bytes.Buffer) error
 
 	// Generates a select query on the current table.
 	Select(projections ...Projection) SelectStatement
@@ -40,8 +40,7 @@ type WritableTable interface {
 
 	// Generates the sql string for the current table expression.  Note: the
 	// generated string may not be a valid/executable sql statement.
-	// The database is the name of the database the table is on
-	SerializeSql(database Database, out *bytes.Buffer) error
+	SerializeSql(d Dialect, out *bytes.Buffer) error
 
 	Insert(columns ...NonAliasColumn) InsertStatement
 	Update() UpdateStatement
@@ -130,25 +129,25 @@ func (t *Table) ForceIndex(index string) *Table {
 
 // Generates the sql string for the current table expression.  Note: the
 // generated string may not be a valid/executable sql statement.
-func (t *Table) SerializeSql(database Database, out *bytes.Buffer) error {
-	if database.Name() != nil {
-		out.WriteRune(database.EscapeCharacter())
-		out.WriteString(*database.Name())
-		out.WriteRune(database.EscapeCharacter())
+func (t *Table) SerializeSql(d Dialect, out *bytes.Buffer) error {
+	if d.Name() != nil {
+		out.WriteRune(d.EscapeCharacter())
+		out.WriteString(*d.Name())
+		out.WriteRune(d.EscapeCharacter())
 		out.WriteByte('.')
 	}
-	out.WriteRune(database.EscapeCharacter())
+	out.WriteRune(d.EscapeCharacter())
 	out.WriteString(t.Name())
-	out.WriteRune(database.EscapeCharacter())
+	out.WriteRune(d.EscapeCharacter())
 
 	if t.forcedIndex != "" {
 		if !validIdentifierName(t.forcedIndex) {
 			return errors.Newf("'%s' is not a valid identifier for an index", t.forcedIndex)
 		}
 		out.WriteString(" FORCE INDEX (")
-		out.WriteRune(database.EscapeCharacter())
+		out.WriteRune(d.EscapeCharacter())
 		out.WriteString(t.forcedIndex)
-		out.WriteRune(database.EscapeCharacter())
+		out.WriteRune(d.EscapeCharacter())
 		out.WriteByte(')')
 	}
 
@@ -258,10 +257,7 @@ func (t *joinTable) Columns() []NonAliasColumn {
 	return columns
 }
 
-func (t *joinTable) SerializeSql(
-	database Database,
-	out *bytes.Buffer) (err error) {
-
+func (t *joinTable) SerializeSql(d Dialect, out *bytes.Buffer) (err error) {
 	if t.lhs == nil {
 		return errors.Newf("nil lhs.  Generated sql: %s", out.String())
 	}
@@ -272,7 +268,7 @@ func (t *joinTable) SerializeSql(
 		return errors.Newf("nil onCondition.  Generated sql: %s", out.String())
 	}
 
-	if err = t.lhs.SerializeSql(database, out); err != nil {
+	if err = t.lhs.SerializeSql(d, out); err != nil {
 		return
 	}
 
@@ -285,12 +281,12 @@ func (t *joinTable) SerializeSql(
 		out.WriteString(" RIGHT JOIN ")
 	}
 
-	if err = t.rhs.SerializeSql(database, out); err != nil {
+	if err = t.rhs.SerializeSql(d, out); err != nil {
 		return
 	}
 
 	out.WriteString(" ON ")
-	if err = t.onCondition.SerializeSql(database, out); err != nil {
+	if err = t.onCondition.SerializeSql(d, out); err != nil {
 		return
 	}
 

@@ -25,13 +25,13 @@ func (s *TableSuite) TestBasicColumns(c *gc.C) {
 
 func (s *TableSuite) TestCValidLookup(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	col := table1.C("col1")
 
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(db, buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -40,30 +40,30 @@ func (s *TableSuite) TestCValidLookup(c *gc.C) {
 
 func (s *TableSuite) TestCInvalidLookup(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	col := table1.C("foo")
 
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(db, buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *TableSuite) TestValidForcedIndex(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	t := table1.ForceIndex("foo")
 	buf := &bytes.Buffer{}
-	err := t.SerializeSql(db, buf)
+	err := t.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 	sql := buf.String()
 	c.Assert(sql, gc.Equals, "`db`.`table1` FORCE INDEX (`foo`)")
 
 	// Ensure the original table is unchanged
 	buf = &bytes.Buffer{}
-	err = table1.SerializeSql(db, buf)
+	err = table1.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 	sql = buf.String()
 	c.Assert(sql, gc.Equals, "`db`.`table1`")
@@ -71,59 +71,59 @@ func (s *TableSuite) TestValidForcedIndex(c *gc.C) {
 
 func (s *TableSuite) TestInvalidForcedIndex(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	t := table1.ForceIndex("foo\x00")
 	buf := &bytes.Buffer{}
-	err := t.SerializeSql(db, buf)
+	err := t.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *TableSuite) TestJoinNilLeftTable(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join := InnerJoinOn(nil, table2, EqL(table2Col3, 123))
 
 	buf := &bytes.Buffer{}
 
-	err := join.SerializeSql(db, buf)
+	err := join.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *TableSuite) TestJoinNilRightTable(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join := InnerJoinOn(table1, nil, EqL(table2Col3, 123))
 
 	buf := &bytes.Buffer{}
 
-	err := join.SerializeSql(db, buf)
+	err := join.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *TableSuite) TestJoinNilOnCondition(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join := InnerJoinOn(table1, table2, nil)
 
 	buf := &bytes.Buffer{}
 
-	err := join.SerializeSql(db, buf)
+	err := join.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *TableSuite) TestInnerJoin(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join := table1.InnerJoinOn(table2, Eq(table1Col3, table2Col3))
 
 	buf := &bytes.Buffer{}
 
-	err := join.SerializeSql(db, buf)
+	err := join.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -132,13 +132,13 @@ func (s *TableSuite) TestInnerJoin(c *gc.C) {
 
 func (s *TableSuite) TestLeftJoin(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join := table1.LeftJoinOn(table2, Eq(table1Col3, table2Col3))
 
 	buf := &bytes.Buffer{}
 
-	err := join.SerializeSql(db, buf)
+	err := join.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -147,13 +147,13 @@ func (s *TableSuite) TestLeftJoin(c *gc.C) {
 
 func (s *TableSuite) TestRightJoin(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join := table1.RightJoinOn(table2, Eq(table1Col3, table2Col3))
 
 	buf := &bytes.Buffer{}
 
-	err := join.SerializeSql(db, buf)
+	err := join.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -175,14 +175,14 @@ func (s *TableSuite) TestJoinColumns(c *gc.C) {
 
 func (s *TableSuite) TestNestedInnerJoin(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join1 := table1.InnerJoinOn(table2, Eq(table1Col3, table2Col3))
 	join2 := join1.InnerJoinOn(table3, Eq(table1Col1, table3Col1))
 
 	buf := &bytes.Buffer{}
 
-	err := join2.SerializeSql(db, buf)
+	err := join2.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -191,14 +191,14 @@ func (s *TableSuite) TestNestedInnerJoin(c *gc.C) {
 
 func (s *TableSuite) TestNestedLeftJoin(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join1 := table1.InnerJoinOn(table2, Eq(table1Col3, table2Col3))
 	join2 := join1.LeftJoinOn(table3, Eq(table1Col1, table3Col1))
 
 	buf := &bytes.Buffer{}
 
-	err := join2.SerializeSql(db, buf)
+	err := join2.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -207,14 +207,14 @@ func (s *TableSuite) TestNestedLeftJoin(c *gc.C) {
 
 func (s *TableSuite) TestNestedRightJoin(c *gc.C) {
 	dbName := "db"
-	db := NewMySQLDatabase(&dbName)
+	d := NewMySQLDialect(&dbName)
 
 	join1 := table1.InnerJoinOn(table2, Eq(table1Col3, table2Col3))
 	join2 := join1.RightJoinOn(table3, Eq(table1Col1, table3Col1))
 
 	buf := &bytes.Buffer{}
 
-	err := join2.SerializeSql(db, buf)
+	err := join2.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
