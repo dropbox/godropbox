@@ -5,12 +5,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	//. "github.com/dropbox/godropbox/gocheck2"
+	"github.com/dropbox/godropbox/container/set"
 	"github.com/dropbox/godropbox/net2/http2/test_utils"
 )
 
@@ -95,7 +97,60 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 			c.FailNow()
 		}
 	}
-	c.Assert(len(receivedPorts) < len(ports), IsFalse)
+	c.Assert(len(receivedPorts), Equals, 4)
+}
+
+func (s *LoadBalancedPoolSuite) TestGetInstanceVariesServer(c *C) {
+	pool := NewLoadBalancedPool(ConnectionParams{
+		ConnectTimeout:  1 * time.Second,
+		ResponseTimeout: 5 * time.Second,
+	})
+	// Ten servers, five different addresses
+	infos := make([]LBPoolInstanceInfo, 10)
+	for i := 0; i < 5; i++ {
+		infos[2*i].Addr = fmt.Sprintf("127.0.0.%d:1001", i)
+		infos[2*i+1].Addr = fmt.Sprintf("127.0.0.%d:1002", i)
+	}
+	pool.Update(infos)
+
+	// make sure we pick four *different* addresses of our five.
+	sampleAddresses := func() set.Set {
+		addresses := set.NewSet()
+		for i := 0; i < 10; i++ {
+			_, instance, isDown, err := pool.getInstance()
+			c.Assert(err, IsNil)
+			c.Assert(isDown, Equals, false)
+			addr := instance.addr
+			splitAddr := strings.Split(addr, ":")
+			hostname := splitAddr[0]
+			addresses.Add(hostname)
+		}
+		return addresses
+	}
+	addresses := sampleAddresses()
+	c.Assert(addresses.Len(), Equals, 4)
+
+	// mark one server down for a while
+	pool.markDownUntil[0] = time.Now().Unix() + 15
+	// we should still have four different addresses
+	moreAddresses := sampleAddresses()
+	c.Assert(moreAddresses.Len(), Equals, 4)
+
+	// Mark two entire addresses as entirely down
+	downAddresses := set.NewSet()
+	downAddresses.Add("127.0.0.0:1001")
+	downAddresses.Add("127.0.0.0:1002")
+	downAddresses.Add("127.0.0.1:1001")
+	downAddresses.Add("127.0.0.1:1002")
+	for i := 0; i < len(pool.instanceList); i++ {
+		if downAddresses.Contains(pool.instanceList[i].addr) {
+			pool.markDownUntil[i] = time.Now().Unix() + 15
+		}
+	}
+	// And at this point we should lose server diversity.
+	addresses = sampleAddresses()
+	c.Assert(addresses.Len(), Equals, 3)
+
 }
 
 func (s *LoadBalancedPoolSuite) TestRetries(c *C) {

@@ -3,10 +3,12 @@ package http2
 import (
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dropbox/godropbox/container/set"
 	"github.com/dropbox/godropbox/errors"
 	"github.com/dropbox/godropbox/math2/rand2"
 )
@@ -40,6 +42,9 @@ type LoadBalancedPool struct {
 	// from instanceList.
 	instanceIdx uint64
 
+	// Number of instances to round-robin between
+	activeSetSize uint64
+
 	// UNIX epoch time in seconds that represents time till address is considered
 	// as down and unusable.
 	markDownUntil []int64
@@ -66,6 +71,13 @@ type LBPoolInstanceInfo struct {
 	Addr       string
 }
 
+func min(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func NewLoadBalancedPool(params ConnectionParams) *LoadBalancedPool {
 	return &LoadBalancedPool{
 		instances:     make(map[string]*instancePool),
@@ -73,6 +85,7 @@ func NewLoadBalancedPool(params ConnectionParams) *LoadBalancedPool {
 		markDownUntil: make([]int64, 0),
 		params:        params,
 		strategy:      LBRoundRobin,
+		activeSetSize: 4,
 	}
 }
 
@@ -81,12 +94,25 @@ func (pool *LoadBalancedPool) SetStrategy(strategy LBStrategy) {
 	pool.strategy = strategy
 }
 
+// For the round robin strategy, sets the number of servers to round-robin
+// between.  Must be called before the pool is actually put to use.  The default
+// is 4.
+func (pool *LoadBalancedPool) SetActiveSetSize(size uint64) {
+	pool.lock.Lock()
+	defer pool.lock.Unlock()
+	pool.activeSetSize = size
+	if len(pool.instanceList) > 0 {
+		pool.adjustActiveSet()
+	}
+}
+
 func (pool *LoadBalancedPool) newInstancePool(info LBPoolInstanceInfo) *instancePool {
 	simplePool := NewSimplePool(info.Addr, pool.params)
 	return &instancePool{SimplePool: *simplePool, instanceId: info.InstanceId}
 }
 
 func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
+
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 	newInstances := make(map[string]*instancePool)
@@ -122,6 +148,7 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	pool.instances = newInstances
 	pool.instanceList = newInstanceList
 	pool.markDownUntil = make([]int64, len(newInstanceList))
+	pool.adjustActiveSet()
 }
 
 //
@@ -211,19 +238,33 @@ func (pool *LoadBalancedPool) getInstance() (
 	instance *instancePool,
 	isDown bool,
 	err error) {
+
+	someDown := false
+
 	pool.lock.RLock()
-	defer pool.lock.RUnlock()
+	defer func() {
+		pool.lock.RUnlock()
+		if someDown {
+			pool.lock.Lock()
+			defer pool.lock.Unlock()
+			pool.adjustActiveSet()
+		}
+	}()
 	if len(pool.instanceList) == 0 {
 		return 0, nil, false, errors.Newf("no available instances")
 	}
 	now := time.Now().Unix()
-	for i := 0; i < len(pool.instanceList); i++ {
+	numInstancesToTry := uint64(len(pool.instanceList))
+	if pool.strategy == LBRoundRobin {
+		numInstancesToTry = min(pool.activeSetSize, numInstancesToTry)
+	}
+	for i := 0; uint64(i) < numInstancesToTry; i++ {
 		switch pool.strategy {
 		case LBRoundRobin:
 			// In RoundRobin strategy instanceIdx keeps changing, to
 			// achieve round robin load balancing.
 			instanceIdx := atomic.AddUint64(&pool.instanceIdx, 1)
-			idx = int(instanceIdx % uint64(len(pool.instanceList)))
+			idx = int(instanceIdx % numInstancesToTry)
 		case LBFixed:
 			// In Fixed strategy instances are always traversed in same
 			// exact order.
@@ -232,9 +273,73 @@ func (pool *LoadBalancedPool) getInstance() (
 
 		if pool.markDownUntil[idx] < now {
 			break
+		} else {
+			someDown = true
 		}
 	}
 	return idx, pool.instanceList[idx], (pool.markDownUntil[idx] >= now), nil
+}
+
+func (pool *LoadBalancedPool) adjustActiveSet() {
+	// In LBRoundRobin, find non-down servers to swap in to replace servers that
+	// are down.  Is a noop in other strategies.
+
+	// Assumes the pool is write-locked
+	if pool.strategy != LBRoundRobin {
+		return
+	}
+
+	now := time.Now().Unix()
+	activeSetSize := min(pool.activeSetSize, uint64(len(pool.instanceList)))
+	representedHosts := set.NewSet()
+	goodReplacementCandidates := make([]int, 0)
+	// A less-good replacement candidate is one which is not marked down, but
+	// we've already seen its server.
+	lessGoodReplacementCandidates := make([]int, 0)
+	for i := 0; i < len(pool.instanceList); i++ {
+		down := pool.markDownUntil[i] >= now
+		addr := pool.instanceList[i].addr
+		splitAddr := strings.Split(addr, ":")
+		hostname := splitAddr[0]
+		if down {
+			continue
+		}
+		if representedHosts.Contains(hostname) {
+			lessGoodReplacementCandidates = append(lessGoodReplacementCandidates, i)
+		} else {
+			goodReplacementCandidates = append(goodReplacementCandidates, i)
+			representedHosts.Add(hostname)
+		}
+		if uint64(len(goodReplacementCandidates)) == activeSetSize {
+			break
+		}
+	}
+	// swap in (could be noop swaps) until we've replaced our active set with
+	// good or less-good replacements.
+
+	// Note: we first swap in the good entries by index, and then the less good
+	// ones.  The less good stage, we could end up swapping a less-good entry
+	// that's already in our range with a good entry, but that's safe.
+	for i := 0; uint64(i) < activeSetSize; i++ {
+		var candidate int
+		if len(goodReplacementCandidates) > 0 {
+			candidate = goodReplacementCandidates[0]
+			goodReplacementCandidates = goodReplacementCandidates[1:]
+		} else if len(lessGoodReplacementCandidates) > 0 {
+			candidate = lessGoodReplacementCandidates[0]
+			lessGoodReplacementCandidates = lessGoodReplacementCandidates[1:]
+		} else {
+			break
+		}
+		pool.swap(i, candidate)
+	}
+
+}
+
+func (pool *LoadBalancedPool) swap(i, j int) {
+	// Only call when locked
+	pool.instanceList.Swap(i, j)
+	pool.markDownUntil[i], pool.markDownUntil[j] = pool.markDownUntil[j], pool.markDownUntil[i]
 }
 
 // Returns a SimplePool for given instanceId, or an error if it does not exist.
