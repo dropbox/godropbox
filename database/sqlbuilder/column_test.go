@@ -27,12 +27,15 @@ func (s *ColumnSuite) TestRealColumnName(c *gc.C) {
 }
 
 func (s *ColumnSuite) TestRealColumnSerializeSqlForColumnList(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := IntColumn("col", Nullable)
 
 	// Without table name
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSqlForColumnList(buf)
+	err := col.SerializeSqlForColumnList(false, d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -44,7 +47,7 @@ func (s *ColumnSuite) TestRealColumnSerializeSqlForColumnList(c *gc.C) {
 
 	buf = &bytes.Buffer{}
 
-	err = col.SerializeSqlForColumnList(buf)
+	err = col.SerializeSqlForColumnList(true, d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql = buf.String()
@@ -52,12 +55,15 @@ func (s *ColumnSuite) TestRealColumnSerializeSqlForColumnList(c *gc.C) {
 }
 
 func (s *ColumnSuite) TestRealColumnSerializeSql(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := IntColumn("col", Nullable)
 
 	// Without table name
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -69,7 +75,7 @@ func (s *ColumnSuite) TestRealColumnSerializeSql(c *gc.C) {
 
 	buf = &bytes.Buffer{}
 
-	err = col.SerializeSql(buf)
+	err = col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql = buf.String()
@@ -87,10 +93,13 @@ func (s *ColumnSuite) TestAliasColumnName(c *gc.C) {
 }
 
 func (s *ColumnSuite) TestAliasColumnSerializeSqlForColumnList(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := Alias("foo", SqlFunc("max", table1Col1))
 
 	buf := &bytes.Buffer{}
-	err := col.SerializeSqlForColumnList(buf)
+	err := col.SerializeSqlForColumnList(true, d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -100,28 +109,35 @@ func (s *ColumnSuite) TestAliasColumnSerializeSqlForColumnList(c *gc.C) {
 }
 
 func (s *ColumnSuite) TestAliasColumnSerializeSqlForColumnListNilExpr(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := Alias("foo", nil)
 
 	buf := &bytes.Buffer{}
-	err := col.SerializeSqlForColumnList(buf)
+	err := col.SerializeSqlForColumnList(false, d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
-func (s *ColumnSuite) TestAliasColumnSerializeSqlForColumnListInvalidAlias(
-	c *gc.C) {
+func (s *ColumnSuite) TestAliasColumnSerializeSqlForColumnListInvalidAlias(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
 
 	col := Alias("1234", SqlFunc("max", table1Col1))
 
 	buf := &bytes.Buffer{}
-	err := col.SerializeSqlForColumnList(buf)
+	err := col.SerializeSqlForColumnList(false, d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *ColumnSuite) TestAliasColumnSerializeSql(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := Alias("foo", SqlFunc("max", table1Col1))
 
 	buf := &bytes.Buffer{}
-	err := col.SerializeSql(buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -146,14 +162,15 @@ func (s *ColumnSuite) TestDeferredLookupColumnName(c *gc.C) {
 	c.Assert(col.Name(), gc.Equals, "foo")
 }
 
-func (s *ColumnSuite) TestDeferredLookupColumnSerializeSqlForColumnList(
-	c *gc.C) {
+func (s *ColumnSuite) TestDeferredLookupColumnSerializeSqlForColumnList(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
 
 	col := table1.C("col1")
 
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -162,29 +179,34 @@ func (s *ColumnSuite) TestDeferredLookupColumnSerializeSqlForColumnList(
 	// check cached lookup
 	buf = &bytes.Buffer{}
 
-	err = col.SerializeSql(buf)
+	err = col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql = buf.String()
 	c.Assert(sql, gc.Equals, "`table1`.`col1`")
 }
 
-func (s *ColumnSuite) TestDeferredLookupColumnSerializeSqlForColumnListInvalidName(
-	c *gc.C) {
+func (s *ColumnSuite) TestDeferredLookupColumnSerializeSqlForColumnListInvalidName(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := table1.C("foo")
 
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
 func (s *ColumnSuite) TestDeferredLookupColumnSerializeSql(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := table1.C("col1")
 
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.IsNil)
 
 	sql := buf.String()
@@ -192,11 +214,14 @@ func (s *ColumnSuite) TestDeferredLookupColumnSerializeSql(c *gc.C) {
 }
 
 func (s *ColumnSuite) TestDeferredLookupColumnSerializeSqlInvalidName(c *gc.C) {
+	dbName := "db"
+	d := NewMySQLDialect(&dbName)
+
 	col := table1.C("foo")
 
 	buf := &bytes.Buffer{}
 
-	err := col.SerializeSql(buf)
+	err := col.SerializeSql(d, buf)
 	c.Assert(err, gc.NotNil)
 }
 
