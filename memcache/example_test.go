@@ -214,4 +214,3 @@ func clientExample(client memcache.Client) {
 	app("zzz", []byte{'9'})
 	get("zzz")
 }
-

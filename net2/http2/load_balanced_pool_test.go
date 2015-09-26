@@ -111,7 +111,7 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 }
 
 func (s *LoadBalancedPoolSuite) TestShuffledFixedStrategy(c *C) {
-  c.Skip("bad test")
+	c.Skip("bad test")
 	ports := startHttpServers(c)
 
 	// create pool
