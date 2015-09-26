@@ -1,6 +1,9 @@
 package http2
 
 import (
+	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"net/http"
 	"sort"
 	"sync"
@@ -24,10 +27,21 @@ type LBStrategy int
 const (
 	// In 'RoundRobin' load balancing strategy requests are sent to
 	// different hosts in round robin fashion.
+	//
+	// Note: Order of hosts to try is changed after each update.
 	LBRoundRobin LBStrategy = 0
-	// In 'Fixed' load balancing strategy requests are routed to same host,
-	// others are used only in case of failover.
-	LBFixed LBStrategy = 1
+	// In 'SortedFixed' load balancing strategy requests are routed to same host,
+	// others are used only in case of failover. Order of hosts to try is determined
+	// by instance id.
+	//
+	// Note: Order of hosts to try is the same for all instances of LoadBalancedPool.
+	LBSortedFixed LBStrategy = 1
+	// In 'ShuffledFixed' load balancing strategy requests are routed to same host,
+	// others are used only in case of failover. Order of hosts to try is determined
+	// by instance id and shuffle seed which is picked at pool's initialization.
+	//
+	// Note: Order of hosts to try is specific to instance of LoadBalancedPool.
+	LBShuffledFixed LBStrategy = 2
 )
 
 type LoadBalancedPool struct {
@@ -39,6 +53,8 @@ type LoadBalancedPool struct {
 	// Atomic counter that is used for round robining instances
 	// from instanceList.
 	instanceIdx uint64
+	// Randomly generated seed for determenistic shuffle.
+	shuffleSeed int
 
 	// UNIX epoch time in seconds that represents time till address is considered
 	// as down and unusable.
@@ -61,7 +77,26 @@ func (s instancePoolSlice) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 // instancePoolSlice sorts by instanceId in descending order.
 func (s instancePoolSlice) Less(i, j int) bool { return s[i].instanceId > s[j].instanceId }
 
+type shuffleSortHelper struct {
+	instances   []*instancePool
+	shuffleSeed int
+}
+
+func (s shuffleSortHelper) sortIdx(idx int) uint32 {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, int64(s.shuffleSeed))
+	binary.Write(buffer, binary.BigEndian, int64(s.instances[idx].instanceId))
+	return crc32.ChecksumIEEE(buffer.Bytes())
+}
+func (s shuffleSortHelper) Len() int { return len(s.instances) }
+func (s shuffleSortHelper) Swap(i, j int) {
+	s.instances[i], s.instances[j] = s.instances[j], s.instances[i]
+}
+func (s shuffleSortHelper) Less(i, j int) bool { return s.sortIdx(i) < s.sortIdx(j) }
+
 type LBPoolInstanceInfo struct {
+	// Optional InstanceId that can later on be used to look up specific instances
+	// from the LoadBalancedPool.
 	InstanceId int
 	Addr       string
 }
@@ -70,6 +105,7 @@ func NewLoadBalancedPool(params ConnectionParams) *LoadBalancedPool {
 	return &LoadBalancedPool{
 		instances:     make(map[string]*instancePool),
 		instanceList:  make(instancePoolSlice, 0),
+		shuffleSeed:   rand2.Int(),
 		markDownUntil: make([]int64, 0),
 		params:        params,
 		strategy:      LBRoundRobin,
@@ -96,6 +132,10 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 			var instance *instancePool
 			if instance, ok = pool.instances[instanceInfo.Addr]; !ok {
 				instance = pool.newInstancePool(instanceInfo)
+			} else {
+				// Update `instanceId` for given instance since same host:port address
+				// might have a new `instanceId` now.
+				instance.instanceId = instanceInfo.InstanceId
 			}
 			newInstances[instanceInfo.Addr] = instance
 			newInstanceList = append(newInstanceList, instance)
@@ -108,9 +148,12 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 			randIdx := rand2.Intn(i + 1)
 			newInstanceList.Swap(i, randIdx)
 		}
-	case LBFixed:
-		// In Fixed strategy, InstanceList is a sorted list, sorted by instanceId.
+	case LBSortedFixed:
+		// In SortedFixed strategy, InstanceList is a sorted list, sorted by instanceId.
 		sort.Sort(newInstanceList)
+	case LBShuffledFixed:
+		// In ShuffledFixed strategy, InstanceList is a deterministically shuffled list.
+		sort.Sort(shuffleSortHelper{newInstanceList, pool.shuffleSeed})
 	}
 
 	for addr, instancePool := range pool.instances {
@@ -224,9 +267,13 @@ func (pool *LoadBalancedPool) getInstance() (
 			// achieve round robin load balancing.
 			instanceIdx := atomic.AddUint64(&pool.instanceIdx, 1)
 			idx = int(instanceIdx % uint64(len(pool.instanceList)))
-		case LBFixed:
-			// In Fixed strategy instances are always traversed in same
+		case LBSortedFixed:
+			// In SortedFixed strategy instances are always traversed in same
 			// exact order.
+			idx = i
+		case LBShuffledFixed:
+			// In ShuffledFixed strategy instances are also always traversed in
+			// same exact order.
 			idx = i
 		}
 
@@ -235,6 +282,12 @@ func (pool *LoadBalancedPool) getInstance() (
 		}
 	}
 	return idx, pool.instanceList[idx], (pool.markDownUntil[idx] >= now), nil
+}
+
+// Returns a Pool for an instance selected based on load balancing strategy.
+func (pool *LoadBalancedPool) GetSingleInstance() (Pool, error) {
+	_, instance, _, err := pool.getInstance()
+	return instance, err
 }
 
 // Returns a SimplePool for given instanceId, or an error if it does not exist.

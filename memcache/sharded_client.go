@@ -1,6 +1,7 @@
 package memcache
 
 import (
+	"expvar"
 	"github.com/dropbox/godropbox/errors"
 	"github.com/dropbox/godropbox/net2"
 )
@@ -9,13 +10,36 @@ import (
 // handled by the provided ShardManager.
 type ShardedClient struct {
 	manager ShardManager
+
+	// When true, use ascii protocol.  Otherwise, use binary protocol.
+	useAsciiProtocol bool
 }
 
+var (
+	// Counters for number of get requests that successed / errored, by address.
+	getOkByAddr  = expvar.NewMap("ShardedClientGetOkByAddrCounter")
+	getErrByAddr = expvar.NewMap("ShardedClientGetErrByAddrCounter")
+)
+
 // This creates a new ShardedClient.
-func NewShardedClient(manager ShardManager) Client {
+func NewShardedClient(
+	manager ShardManager,
+	useAsciiProtocol bool) Client {
+
 	return &ShardedClient{
-		manager: manager,
+		manager:          manager,
+		useAsciiProtocol: useAsciiProtocol,
 	}
+}
+
+func (s *ShardedClient) newRawClient(
+	shard int,
+	conn net2.ManagedConn) ClientShard {
+
+	if s.useAsciiProtocol {
+		return NewRawAsciiClient(shard, conn)
+	}
+	return NewRawBinaryClient(shard, conn)
 }
 
 func (c *ShardedClient) release(rawClient ClientShard, conn net2.ManagedConn) {
@@ -54,10 +78,16 @@ func (c *ShardedClient) Get(key string) GetResponse {
 		return NewGetResponse(key, StatusKeyNotFound, 0, nil, 0)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
-	return client.Get(key)
+	result := client.Get(key)
+	if client.IsValidState() {
+		getOkByAddr.Add(conn.Key().Address, 1)
+	} else {
+		getErrByAddr.Add(conn.Key().Address, 1)
+	}
+	return result
 }
 
 func (c *ShardedClient) getMultiHelper(
@@ -87,10 +117,15 @@ func (c *ShardedClient) getMultiHelper(
 			results[key] = NewGetResponse(key, StatusKeyNotFound, 0, nil, 0)
 		}
 	} else {
-		client := NewRawClient(shard, conn)
+		client := c.newRawClient(shard, conn)
 		defer c.release(client, conn)
 
 		results = client.GetMulti(keys)
+		if client.IsValidState() {
+			getOkByAddr.Add(conn.Key().Address, 1)
+		} else {
+			getErrByAddr.Add(conn.Key().Address, 1)
+		}
 	}
 	resultsChannel <- results
 }
@@ -130,10 +165,10 @@ func (c *ShardedClient) mutate(
 	}
 	if conn == nil {
 		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(item.Key, StatusNoError, 0)
+		return NewMutateResponse(item.Key, StatusNoError, 0, c.useAsciiProtocol)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return mutateFunc(client, item)
@@ -181,10 +216,14 @@ func (c *ShardedClient) mutateMultiHelper(
 			// NOTE: zero is an invalid version id.
 			results = append(
 				results,
-				NewMutateResponse(item.Key, StatusNoError, 0))
+				NewMutateResponse(
+					item.Key,
+					StatusNoError,
+					0,
+					c.useAsciiProtocol))
 		}
 	} else {
-		client := NewRawClient(shard, conn)
+		client := c.newRawClient(shard, conn)
 		defer c.release(client, conn)
 
 		results = mutateMultiFunc(client, items)
@@ -194,7 +233,11 @@ func (c *ShardedClient) mutateMultiHelper(
 	if warmingUp {
 		for idx, item := range items {
 			if results[idx].Error() != nil {
-				results[idx] = NewMutateResponse(item.Key, StatusNoError, 0)
+				results[idx] = NewMutateResponse(
+					item.Key,
+					StatusNoError,
+					0,
+					c.useAsciiProtocol)
 			}
 		}
 	}
@@ -293,10 +336,10 @@ func (c *ShardedClient) Replace(item *Item) MutateResponse {
 	}
 	if conn == nil {
 		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(item.Key, StatusNoError, 0)
+		return NewMutateResponse(item.Key, StatusNoError, 0, c.useAsciiProtocol)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Replace(item)
@@ -313,10 +356,10 @@ func (c *ShardedClient) Delete(key string) MutateResponse {
 	}
 	if conn == nil {
 		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(key, StatusNoError, 0)
+		return NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Delete(key)
@@ -350,10 +393,10 @@ func (c *ShardedClient) deleteMultiHelper(
 			// NOTE: zero is an invalid version id.
 			results = append(
 				results,
-				NewMutateResponse(key, StatusNoError, 0))
+				NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol))
 		}
 	} else {
-		client := NewRawClient(shard, conn)
+		client := c.newRawClient(shard, conn)
 		defer c.release(client, conn)
 
 		results = client.DeleteMulti(keys)
@@ -393,10 +436,10 @@ func (c *ShardedClient) Append(key string, value []byte) MutateResponse {
 	}
 	if conn == nil {
 		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(key, StatusNoError, 0)
+		return NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Append(key, value)
@@ -413,10 +456,10 @@ func (c *ShardedClient) Prepend(key string, value []byte) MutateResponse {
 	}
 	if conn == nil {
 		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(key, StatusNoError, 0)
+		return NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Prepend(key, value)
@@ -440,7 +483,7 @@ func (c *ShardedClient) Increment(
 		return NewCountResponse(key, StatusNoError, 0)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Increment(key, delta, initValue, expiration)
@@ -464,7 +507,7 @@ func (c *ShardedClient) Decrement(
 		return NewCountResponse(key, StatusNoError, 0)
 	}
 
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Decrement(key, delta, initValue, expiration)
@@ -478,7 +521,7 @@ func (c *ShardedClient) flushHelper(
 	if conn == nil {
 		return NewErrorResponse(c.connectionError(shard, nil))
 	}
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Flush(expiration)
@@ -515,7 +558,7 @@ func (c *ShardedClient) statHelper(
 			c.connectionError(shard, nil),
 			make(map[int](map[string]string)))
 	}
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Stat(statsKey)
@@ -557,7 +600,7 @@ func (c *ShardedClient) versionHelper(
 			c.connectionError(shard, nil),
 			make(map[int]string))
 	}
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Version()
@@ -600,7 +643,7 @@ func (c *ShardedClient) verbosityHelper(
 	if conn == nil {
 		return NewErrorResponse(c.connectionError(shard, nil))
 	}
-	client := NewRawClient(shard, conn)
+	client := c.newRawClient(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Verbosity(verbosity)

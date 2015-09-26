@@ -18,6 +18,10 @@ type ConnectionOptions struct {
 	// The maximum amount of time an idle connection can alive (if specified).
 	MaxIdleTime *time.Duration
 
+	// This limits the number of concurrent Dial calls (there's no limit when
+	// DialMaxConcurrency is non-positive).
+	DialMaxConcurrency int
+
 	// Dial specifies the dial function for creating network connections.
 	// If Dial is nil, net.DialTimeout is used, with timeout set to 1 second.
 	Dial func(network string, address string) (net.Conn, error)
@@ -45,8 +49,15 @@ func (o ConnectionOptions) getCurrentTime() time.Time {
 // A generic interface for managed connection pool.  All connection pool
 // implementations must be threadsafe.
 type ConnectionPool interface {
-	// This returns the number of active connections.
+	// This returns the number of active connections that are on loan.
 	NumActive() int32
+
+	// This returns the highest number of active connections for the entire
+	// lifetime of the pool.
+	ActiveHighWaterMark() int32
+
+	// This returns the number of idle connections that are in the pool.
+	NumIdle() int
 
 	// This associates (network, address) to the connection pool; afterwhich,
 	// the user can get connections to (network, address).

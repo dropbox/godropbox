@@ -1,67 +1,63 @@
 package net2
 
 import (
+	"log"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/dropbox/godropbox/errors"
-	"github.com/dropbox/godropbox/singleton"
 )
 
-var myHostnameSingleton = singleton.NewSingleton(func() (interface{}, error) {
-	return os.Hostname()
-})
-var myIp4Singleton = singleton.NewSingleton(func() (interface{}, error) {
-	hostname, err := MyHostname()
-	if err != nil {
-		return nil, err
-	}
-	ipAddr, err := net.ResolveIPAddr("ip4", hostname)
-	if err != nil {
-		return nil, err
-	}
-	return ipAddr, nil
-})
-var myIp6Singleton = singleton.NewSingleton(func() (interface{}, error) {
-	hostname, err := MyHostname()
-	if err != nil {
-		return nil, err
-	}
-	ipAddr, err := net.ResolveIPAddr("ip6", hostname)
-	if err != nil {
-		return nil, err
-	}
-	return ipAddr, nil
-})
+var myHostname string
+var myHostnameOnce sync.Once
 
 // Like os.Hostname but caches first successful result, making it cheap to call it
 // over and over.
-func MyHostname() (string, error) {
-	if s, err := myHostnameSingleton.Get(); err != nil {
-		return "", err
-	} else {
-		return s.(string), err
-	}
+// It will also crash whole process if fetching Hostname fails!
+func MyHostname() string {
+	myHostnameOnce.Do(func() {
+		var err error
+		myHostname, err = os.Hostname()
+		if err != nil {
+			log.Fatal(err)
+		}
+	})
+	return myHostname
 }
+
+var myIp4 *net.IPAddr
+var myIp4Once sync.Once
 
 // Resolves `MyHostname()` to an Ip4 address. Caches first successful result, making it
 // cheap to call it over and over.
-func MyIp4() (*net.IPAddr, error) {
-	if s, err := myIp4Singleton.Get(); err != nil {
-		return nil, err
-	} else {
-		return s.(*net.IPAddr), err
-	}
+// It will also crash whole process if resolving the IP fails!
+func MyIp4() *net.IPAddr {
+	myIp4Once.Do(func() {
+		var err error
+		myIp4, err = net.ResolveIPAddr("ip4", MyHostname())
+		if err != nil {
+			log.Fatal(err)
+		}
+	})
+	return myIp4
 }
+
+var myIp6 *net.IPAddr
+var myIp6Once sync.Once
 
 // Resolves `MyHostname()` to an Ip6 address. Caches first successful result, making it
 // cheap to call it over and over.
-func MyIp6() (*net.IPAddr, error) {
-	if s, err := myIp6Singleton.Get(); err != nil {
-		return nil, err
-	} else {
-		return s.(*net.IPAddr), err
-	}
+// It will also crash whole process if resolving the IP fails!
+func MyIp6() *net.IPAddr {
+	myIp6Once.Do(func() {
+		var err error
+		myIp6, err = net.ResolveIPAddr("ip6", MyHostname())
+		if err != nil {
+			log.Fatal(err)
+		}
+	})
+	return myIp6
 }
 
 // This returns the list of local ip addresses which other hosts can connect

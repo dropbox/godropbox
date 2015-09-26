@@ -18,14 +18,18 @@ type Options struct {
 	// specified).
 	MaxIdleTime *time.Duration
 
+	// This limits the number of concurrent Open calls (there's no limit when
+	// OpenMaxConcurrency is non-positive).
+	OpenMaxConcurrency int
+
 	// This function creates a resource handle (e.g., a connection) for a
-	// resource location.
+	// resource location.  The function must be thread-safe.
 	Open func(resourceLocation string) (
 		handle interface{},
 		err error)
 
 	// This function destroys a resource handle and performs the necessary
-	// cleanup to free up resources.
+	// cleanup to free up resources.  The function must be thread-safe.
 	Close func(handle interface{}) error
 
 	// This specifies the now time function.  When the function is non-nil, the
@@ -47,6 +51,11 @@ func (o Options) getCurrentTime() time.Time {
 type ResourcePool interface {
 	// This returns the number of active resource handles.
 	NumActive() int32
+
+	// This returns the highest number of actives handles for the entire
+	// lifetime of the pool.  If the pool contains multiple sub-pools, the
+	// high water mark is the max of the sub-pools' high water marks.
+	ActiveHighWaterMark() int32
 
 	// This returns the number of alive idle handles.  NOTE: This is only used
 	// for testing.

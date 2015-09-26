@@ -56,7 +56,7 @@ func (s *CheckersSuite) TestNoErr(c *C) {
 	params := []interface{}{errors.New("1\n2\n3")}
 	text := params[0].(error).Error()
 	NoErr.Check(params, nil)
-	c.Assert(fmt.Sprintf("%#v", params[0]), Equals, "\n" + text)
+	c.Assert(fmt.Sprintf("%#v", params[0]), Equals, "\n"+text)
 }
 
 func (s *CheckersSuite) TestErrorMatches(c *C) {
@@ -64,4 +64,17 @@ func (s *CheckersSuite) TestErrorMatches(c *C) {
 		errors.Newf("Oh damn, this stinks"), "stinks")
 	test(c, MultilineErrorMatches, false, "",
 		errors.Newf("Oh damn, this stinks"), "skinks")
+}
+
+func (s *CheckersSuite) TestAlmostEqual(c *C) {
+	// Test margins.
+	test(c, AlmostEqual, true, "", 5.0, 5.0, 0.0)
+	test(c, AlmostEqual, true, "", 5.0, 5.0, 0.1)
+	test(c, AlmostEqual, true, "", 5.0, 4.995, 0.01)
+	test(c, AlmostEqual, false, "Obtained 5.000000 different from expected 4.995000 by more than 0.001000 margin", 5.0, 4.995, 0.001)
+
+	// Test invalid args.
+	test(c, AlmostEqual, false, "AlmostEqual takes exactly 3 arguments", 5.0, 4.99)
+	test(c, AlmostEqual, false, "All arguments to AlmostEqual must be float64", "5.0", 5.0, 0.1)
+	test(c, AlmostEqual, false, "Margin must be non-negative", 5.0, 5.0, -0.1)
 }

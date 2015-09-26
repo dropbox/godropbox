@@ -51,8 +51,10 @@ func (p *concurrentLruCacheImp) Get(key string) (v interface{}, found bool) {
 }
 
 func (p *concurrentLruCacheImp) GetMultiple(keys []string) []CacheResult {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	// the LRU cache get alters the cache. Therefore, we should
+	// acquire the write lock and not the read lock
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	res := make([]CacheResult, len(keys))
 

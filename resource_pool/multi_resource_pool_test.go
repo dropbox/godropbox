@@ -13,7 +13,7 @@ type MultiResourcePoolSuite struct {
 var _ = Suite(&MultiResourcePoolSuite{})
 
 func (s *MultiResourcePoolSuite) SetUpTest(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
