@@ -41,7 +41,9 @@ func validateValue(value []byte) error {
 
 	if len(value) > maxValueLength {
 		return errors.Newf(
-			"Invalid value: length %d longer than max length %d", len(value), maxValueLength)
+			"Invalid value: length %d longer than max length %d",
+			len(value),
+			maxValueLength)
 	}
 
 	return nil
@@ -60,20 +62,21 @@ type header struct {
 }
 
 // An unsharded memcache client implementation which operates on a pre-existing
-// io channel (The user must explicitly setup and close down the channel).
-// Note that the client assumes nothing else is sending or receiving on the
-// network channel.  In general, all client operations are serialized (Use
-// multiple channels / clients if parallelism is needed).
-type RawClient struct {
+// io channel (The user must explicitly setup and close down the channel),
+// using the binary memcached protocol.  Note that the client assumes nothing
+// else is sending or receiving on the network channel.  In general, all client
+// operations are serialized (Use multiple channels / clients if parallelism
+// is needed).
+type RawBinaryClient struct {
 	shard      int
 	channel    io.ReadWriter
 	mutex      sync.Mutex
 	validState bool
 }
 
-// This creates a new memcache RawClient.
-func NewRawClient(shard int, channel io.ReadWriter) ClientShard {
-	return &RawClient{
+// This creates a new memcache RawBinaryClient.
+func NewRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
+	return &RawBinaryClient{
 		shard:      shard,
 		channel:    channel,
 		validState: true,
@@ -81,18 +84,18 @@ func NewRawClient(shard int, channel io.ReadWriter) ClientShard {
 }
 
 // See ClientShard interface for documentation.
-func (c *RawClient) ShardId() int {
+func (c *RawBinaryClient) ShardId() int {
 	return c.shard
 }
 
 // See ClientShard interface for documentation.
-func (c *RawClient) IsValidState() bool {
+func (c *RawBinaryClient) IsValidState() bool {
 	return c.validState
 }
 
 // Sends a memcache request through the connection.  NOTE: extras must be
 // fix-sized values.
-func (c *RawClient) sendRequest(
+func (c *RawBinaryClient) sendRequest(
 	code opCode,
 	dataVersionId uint64, // aka CAS
 	key []byte, // may be nil
@@ -174,7 +177,7 @@ func (c *RawClient) sendRequest(
 // dataVersionId (aka CAS), key and value are returned, while the extra
 // values are stored in the arguments.  NOTE: extras must be pointers to
 // fix-sized values.
-func (c *RawClient) receiveResponse(
+func (c *RawBinaryClient) receiveResponse(
 	expectedCode opCode,
 	extras ...interface{}) (
 	status ResponseStatus,
@@ -270,7 +273,7 @@ func (c *RawClient) receiveResponse(
 	return
 }
 
-func (c *RawClient) sendGetRequest(key string) GetResponse {
+func (c *RawBinaryClient) sendGetRequest(key string) GetResponse {
 	if !isValidKeyString(key) {
 		return NewGetErrorResponse(
 			key,
@@ -285,7 +288,7 @@ func (c *RawClient) sendGetRequest(key string) GetResponse {
 	return nil
 }
 
-func (c *RawClient) receiveGetResponse(key string) GetResponse {
+func (c *RawBinaryClient) receiveGetResponse(key string) GetResponse {
 	var flags uint32
 	status, version, _, value, err := c.receiveResponse(opGet, &flags)
 	if err != nil {
@@ -295,7 +298,7 @@ func (c *RawClient) receiveGetResponse(key string) GetResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Get(key string) GetResponse {
+func (c *RawBinaryClient) Get(key string) GetResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -306,7 +309,7 @@ func (c *RawClient) Get(key string) GetResponse {
 	return c.receiveGetResponse(key)
 }
 
-func (c *RawClient) removeDuplicateKey(keys []string) []string {
+func (c *RawBinaryClient) removeDuplicateKey(keys []string) []string {
 	keyMap := make(map[string]interface{})
 	for _, key := range keys {
 		keyMap[key] = nil
@@ -321,7 +324,7 @@ func (c *RawClient) removeDuplicateKey(keys []string) []string {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
+func (c *RawBinaryClient) GetMulti(keys []string) map[string]GetResponse {
 	if keys == nil {
 		return nil
 	}
@@ -348,7 +351,7 @@ func (c *RawClient) GetMulti(keys []string) map[string]GetResponse {
 	return responses
 }
 
-func (c *RawClient) sendMutateRequest(
+func (c *RawBinaryClient) sendMutateRequest(
 	code opCode,
 	item *Item,
 	addExtras bool) MutateResponse {
@@ -385,7 +388,7 @@ func (c *RawClient) sendMutateRequest(
 	return nil
 }
 
-func (c *RawClient) receiveMutateResponse(
+func (c *RawBinaryClient) receiveMutateResponse(
 	code opCode,
 	key string) MutateResponse {
 
@@ -393,11 +396,11 @@ func (c *RawClient) receiveMutateResponse(
 	if err != nil {
 		return NewMutateErrorResponse(key, err)
 	}
-	return NewMutateResponse(key, status, version)
+	return NewMutateResponse(key, status, version, false)
 }
 
 // Perform a mutation operation specified by the given code.
-func (c *RawClient) mutate(code opCode, item *Item) MutateResponse {
+func (c *RawBinaryClient) mutate(code opCode, item *Item) MutateResponse {
 	if item == nil {
 		return NewMutateErrorResponse("", errors.New("item is nil"))
 	}
@@ -414,7 +417,10 @@ func (c *RawClient) mutate(code opCode, item *Item) MutateResponse {
 
 // Batch version of the mutate method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering)
-func (c *RawClient) mutateMulti(code opCode, items []*Item) []MutateResponse {
+func (c *RawBinaryClient) mutateMulti(
+	code opCode,
+	items []*Item) []MutateResponse {
+
 	if items == nil {
 		return nil
 	}
@@ -444,34 +450,34 @@ func (c *RawClient) mutateMulti(code opCode, items []*Item) []MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Set(item *Item) MutateResponse {
+func (c *RawBinaryClient) Set(item *Item) MutateResponse {
 	return c.mutate(opSet, item)
 }
 
 // See Client interface for documentation.
-func (c *RawClient) SetMulti(items []*Item) []MutateResponse {
+func (c *RawBinaryClient) SetMulti(items []*Item) []MutateResponse {
 	return c.mutateMulti(opSet, items)
 }
 
 // See Client interface for documentation.
-func (c *RawClient) SetSentinels(items []*Item) []MutateResponse {
+func (c *RawBinaryClient) SetSentinels(items []*Item) []MutateResponse {
 	// For raw clients, there are no difference between SetMulti and
 	// SetSentinels.
 	return c.SetMulti(items)
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Add(item *Item) MutateResponse {
+func (c *RawBinaryClient) Add(item *Item) MutateResponse {
 	return c.mutate(opAdd, item)
 }
 
 // See Client interface for documentation.
-func (c *RawClient) AddMulti(items []*Item) []MutateResponse {
+func (c *RawBinaryClient) AddMulti(items []*Item) []MutateResponse {
 	return c.mutateMulti(opAdd, items)
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Replace(item *Item) MutateResponse {
+func (c *RawBinaryClient) Replace(item *Item) MutateResponse {
 	if item == nil {
 		return NewMutateErrorResponse("", errors.New("item is nil"))
 	}
@@ -486,7 +492,7 @@ func (c *RawClient) Replace(item *Item) MutateResponse {
 	return c.receiveMutateResponse(opReplace, item.Key)
 }
 
-func (c *RawClient) sendDeleteRequest(key string) MutateResponse {
+func (c *RawBinaryClient) sendDeleteRequest(key string) MutateResponse {
 	if !isValidKeyString(key) {
 		return NewMutateErrorResponse(
 			key,
@@ -500,7 +506,7 @@ func (c *RawClient) sendDeleteRequest(key string) MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Delete(key string) MutateResponse {
+func (c *RawBinaryClient) Delete(key string) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -512,7 +518,7 @@ func (c *RawClient) Delete(key string) MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) DeleteMulti(keys []string) []MutateResponse {
+func (c *RawBinaryClient) DeleteMulti(keys []string) []MutateResponse {
 	if keys == nil {
 		return nil
 	}
@@ -537,7 +543,7 @@ func (c *RawClient) DeleteMulti(keys []string) []MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Append(key string, value []byte) MutateResponse {
+func (c *RawBinaryClient) Append(key string, value []byte) MutateResponse {
 	item := &Item{
 		Key:   key,
 		Value: value,
@@ -554,7 +560,7 @@ func (c *RawClient) Append(key string, value []byte) MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Prepend(key string, value []byte) MutateResponse {
+func (c *RawBinaryClient) Prepend(key string, value []byte) MutateResponse {
 	item := &Item{
 		Key:   key,
 		Value: value,
@@ -570,7 +576,7 @@ func (c *RawClient) Prepend(key string, value []byte) MutateResponse {
 	return c.receiveMutateResponse(opPrepend, item.Key)
 }
 
-func (c *RawClient) sendCountRequest(
+func (c *RawBinaryClient) sendCountRequest(
 	code opCode,
 	key string,
 	delta uint64,
@@ -597,7 +603,7 @@ func (c *RawClient) sendCountRequest(
 	return nil
 }
 
-func (c *RawClient) receiveCountResponse(
+func (c *RawBinaryClient) receiveCountResponse(
 	code opCode,
 	key string) CountResponse {
 
@@ -616,7 +622,7 @@ func (c *RawClient) receiveCountResponse(
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Increment(
+func (c *RawBinaryClient) Increment(
 	key string,
 	delta uint64,
 	initValue uint64,
@@ -633,7 +639,7 @@ func (c *RawClient) Increment(
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Decrement(
+func (c *RawBinaryClient) Decrement(
 	key string,
 	delta uint64,
 	initValue uint64,
@@ -650,7 +656,7 @@ func (c *RawClient) Decrement(
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Stat(statsKey string) StatResponse {
+func (c *RawBinaryClient) Stat(statsKey string) StatResponse {
 	shardEntries := make(map[int](map[string]string))
 	entries := make(map[string]string)
 	shardEntries[c.ShardId()] = entries
@@ -689,7 +695,7 @@ func (c *RawClient) Stat(statsKey string) StatResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Version() VersionResponse {
+func (c *RawBinaryClient) Version() VersionResponse {
 	versions := make(map[int]string)
 
 	c.mutex.Lock()
@@ -709,7 +715,10 @@ func (c *RawClient) Version() VersionResponse {
 	return NewVersionResponse(status, versions)
 }
 
-func (c *RawClient) genericOp(code opCode, extras ...interface{}) Response {
+func (c *RawBinaryClient) genericOp(
+	code opCode,
+	extras ...interface{}) Response {
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -726,11 +735,11 @@ func (c *RawClient) genericOp(code opCode, extras ...interface{}) Response {
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Flush(expiration uint32) Response {
+func (c *RawBinaryClient) Flush(expiration uint32) Response {
 	return c.genericOp(opFlush, expiration)
 }
 
 // See Client interface for documentation.
-func (c *RawClient) Verbosity(verbosity uint32) Response {
+func (c *RawBinaryClient) Verbosity(verbosity uint32) Response {
 	return c.genericOp(opVerbosity, verbosity)
 }

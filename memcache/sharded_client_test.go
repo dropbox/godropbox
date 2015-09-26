@@ -44,7 +44,7 @@ var _ = Suite(&ShardedClientSuite{})
 
 func (s *ShardedClientSuite) SetUpTest(c *C) {
 	s.sm = &MockShardManager{C: c}
-	s.mc = NewShardedClient(s.sm)
+	s.mc = NewShardedClient(s.sm, false)
 }
 
 func (s *ShardedClientSuite) TestSetSentinels(c *C) {

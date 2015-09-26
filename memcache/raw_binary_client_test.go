@@ -33,6 +33,15 @@ type mockReadWriter struct {
 	sentChan chan struct{}
 }
 
+func newMockReadWriter() *mockReadWriter {
+	return &mockReadWriter{
+		recvBuf:      &bytes.Buffer{},
+		sendBuf:      &bytes.Buffer{},
+		receivedChan: make(chan struct{}, 1000),
+		sentChan:     make(chan struct{}, 1000),
+	}
+}
+
 // Implements the Reader interface.
 func (rw *mockReadWriter) Read(p []byte) (n int, err error) {
 	defer func() { rw.receivedChan <- struct{}{} }()
@@ -50,24 +59,19 @@ func Test(t *testing.T) {
 	TestingT(t)
 }
 
-type RawClientSuite struct {
+type RawBinaryClientSuite struct {
 	rw     *mockReadWriter
-	client *RawClient
+	client *RawBinaryClient
 }
 
-var _ = Suite(&RawClientSuite{})
+var _ = Suite(&RawBinaryClientSuite{})
 
-func (s *RawClientSuite) SetUpTest(c *C) {
-	s.rw = &mockReadWriter{
-		recvBuf:      &bytes.Buffer{},
-		sendBuf:      &bytes.Buffer{},
-		receivedChan: make(chan struct{}, 100),
-		sentChan:     make(chan struct{}, 100),
-	}
-	s.client = NewRawClient(0, s.rw).(*RawClient)
+func (s *RawBinaryClientSuite) SetUpTest(c *C) {
+	s.rw = newMockReadWriter()
+	s.client = NewRawBinaryClient(0, s.rw).(*RawBinaryClient)
 }
 
-func (s *RawClientSuite) verifyRequestMessage(c *C, code opCode) {
+func (s *RawBinaryClientSuite) verifyRequestMessage(c *C, code opCode) {
 	/*
 	     Byte/     0       |       1       |       2       |       3       |
 	        /              |               |               |               |
@@ -135,7 +139,7 @@ func (s *RawClientSuite) verifyRequestMessage(c *C, code opCode) {
 	c.Assert(s.rw.sendBuf.Bytes(), DeepEquals, serializedRequestMessage)
 }
 
-func (s *RawClientSuite) TestSendRequest(c *C) {
+func (s *RawBinaryClientSuite) TestSendRequest(c *C) {
 	err := s.client.sendRequest(
 		opAdd,
 		testCas,         // CAS
@@ -148,7 +152,7 @@ func (s *RawClientSuite) TestSendRequest(c *C) {
 	s.verifyRequestMessage(c, opAdd)
 }
 
-func (s *RawClientSuite) TestRecvResponse(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponse(c *C) {
 	/*
 	    Byte/     0       |       1       |       2       |       3       |
 	        /              |               |               |               |
@@ -227,7 +231,7 @@ func (s *RawClientSuite) TestRecvResponse(c *C) {
 	c.Assert(flags, Equals, uint32(0xdeadbeef))
 }
 
-func (s *RawClientSuite) TestRecvResponseNoExtrasByteWithExtrasArg(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponseNoExtrasByteWithExtrasArg(c *C) {
 
 	var serializedResponseMessage = []byte{
 		respMagicByte, // magic
@@ -254,7 +258,7 @@ func (s *RawClientSuite) TestRecvResponseNoExtrasByteWithExtrasArg(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (s *RawClientSuite) TestRecvResponseNotEnoughExtrasBytes(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponseNotEnoughExtrasBytes(c *C) {
 	var serializedResponseMessage = []byte{
 		respMagicByte, // magic
 		0x09,          // op code
@@ -283,7 +287,7 @@ func (s *RawClientSuite) TestRecvResponseNotEnoughExtrasBytes(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (s *RawClientSuite) TestRecvResponseTooManExtrasBytes(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponseTooManExtrasBytes(c *C) {
 	var serializedResponseMessage = []byte{
 		respMagicByte, // magic
 		0x09,          // op code
@@ -310,7 +314,7 @@ func (s *RawClientSuite) TestRecvResponseTooManExtrasBytes(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (s *RawClientSuite) TestRecvResponseBadTotalLength(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponseBadTotalLength(c *C) {
 	var serializedResponseMessage = []byte{
 		respMagicByte, // magic
 		0x09,          // op code
@@ -337,7 +341,7 @@ func (s *RawClientSuite) TestRecvResponseBadTotalLength(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (s *RawClientSuite) TestRecvResponseBadMagic(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponseBadMagic(c *C) {
 	var serializedResponseMessage = []byte{
 		0x82,       // (bad) magic
 		0x09,       // op code
@@ -364,7 +368,7 @@ func (s *RawClientSuite) TestRecvResponseBadMagic(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (s *RawClientSuite) TestRecvResponseBadOpCode(c *C) {
+func (s *RawBinaryClientSuite) TestRecvResponseBadOpCode(c *C) {
 
 	var serializedResponseMessage = []byte{
 		respMagicByte, // magic
@@ -402,7 +406,11 @@ func createTestItem() *Item {
 	}
 }
 
-func (s *RawClientSuite) performMutateRequestTest(c *C, code opCode, isMulti bool) {
+func (s *RawBinaryClientSuite) performMutateRequestTest(
+	c *C,
+	code opCode,
+	isMulti bool) {
+
 	// Populate the add response.
 	var serializedResponseMessage = []byte{
 		respMagicByte, // magic
@@ -455,23 +463,23 @@ func (s *RawClientSuite) performMutateRequestTest(c *C, code opCode, isMulti boo
 	c.Assert(resp.DataVersionId(), Equals, uint64(1))
 }
 
-func (s *RawClientSuite) TestAddRequest(c *C) {
+func (s *RawBinaryClientSuite) TestAddRequest(c *C) {
 	s.performMutateRequestTest(c, opAdd, false)
 }
 
-func (s *RawClientSuite) TestAddMultiRequest(c *C) {
+func (s *RawBinaryClientSuite) TestAddMultiRequest(c *C) {
 	s.performMutateRequestTest(c, opAdd, true)
 }
 
-func (s *RawClientSuite) TestSetRequest(c *C) {
+func (s *RawBinaryClientSuite) TestSetRequest(c *C) {
 	s.performMutateRequestTest(c, opSet, false)
 }
 
-func (s *RawClientSuite) TestSetMultiRequest(c *C) {
+func (s *RawBinaryClientSuite) TestSetMultiRequest(c *C) {
 	s.performMutateRequestTest(c, opSet, true)
 }
 
-func (s *RawClientSuite) TestGetMultiDupKeys(c *C) {
+func (s *RawBinaryClientSuite) TestGetMultiDupKeys(c *C) {
 	expectedFooReq := []byte{
 		reqMagicByte, // magic
 		uint8(opGet), // op code

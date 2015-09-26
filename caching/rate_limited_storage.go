@@ -27,7 +27,10 @@ func (s *RateLimitedStorage) wait() {
 }
 
 func (s *RateLimitedStorage) signal() {
-	<-s.semaphore
+	select {
+	case <-s.semaphore:
+	default:
+	}
 }
 
 // See Storage for documentation.

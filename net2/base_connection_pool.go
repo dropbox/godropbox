@@ -52,12 +52,13 @@ func newBaseConnectionPool(
 	}
 
 	poolOptions := rp.Options{
-		MaxActiveHandles: options.MaxActiveConnections,
-		MaxIdleHandles:   options.MaxIdleConnections,
-		MaxIdleTime:      options.MaxIdleTime,
-		Open:             openFunc,
-		Close:            closeFunc,
-		NowFunc:          options.NowFunc,
+		MaxActiveHandles:   options.MaxActiveConnections,
+		MaxIdleHandles:     options.MaxIdleConnections,
+		MaxIdleTime:        options.MaxIdleTime,
+		OpenMaxConcurrency: options.DialMaxConcurrency,
+		Open:               openFunc,
+		Close:              closeFunc,
+		NowFunc:            options.NowFunc,
 	}
 
 	return &BaseConnectionPool{
@@ -87,6 +88,11 @@ func NewMultiConnectionPool(options ConnectionOptions) ConnectionPool {
 // See ConnectionPool for documentation.
 func (p *BaseConnectionPool) NumActive() int32 {
 	return p.pool.NumActive()
+}
+
+// See ConnectionPool for documentation.
+func (p *BaseConnectionPool) ActiveHighWaterMark() int32 {
+	return p.pool.ActiveHighWaterMark()
 }
 
 // This returns the number of alive idle connections.  This method is not part

@@ -253,6 +253,7 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	}
 	return v, nil
 }
+
 // ConverAssignRowNullable is the same as ConvertAssignRow except that it allows
 // nil as a value for the row or any of the row values. In thoses cases, the
 // corresponding values are ignored.
@@ -281,6 +282,7 @@ func ConvertAssignRowNullable(row []Value, dest ...interface{}) error {
 
 	return nil
 }
+
 // ConvertAssignRow copies a row of values in the list of destinations.  An
 // error is returned if any one of the row's element coping is done between
 // incompatible value and dest types.  The list of destinations must contain

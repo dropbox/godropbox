@@ -58,11 +58,28 @@ func (p *MultiResourcePool) NumActive() int32 {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) NumIdle() int {
+func (p *MultiResourcePool) ActiveHighWaterMark() int32 {
+	high := int32(0)
+
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
 
+	for _, pool := range p.locationPools {
+		val := pool.ActiveHighWaterMark()
+		if val > high {
+			high = val
+		}
+	}
+	return high
+}
+
+// See ResourcePool for documentation.
+func (p *MultiResourcePool) NumIdle() int {
 	total := 0
+
+	p.rwMutex.RLock()
+	defer p.rwMutex.RUnlock()
+
 	for _, pool := range p.locationPools {
 		total += pool.NumIdle()
 	}

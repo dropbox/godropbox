@@ -18,7 +18,7 @@ func (s *RoundRobinResourcePoolSuite) SetupPool(
 	c *C,
 	max int,
 	pools ...*ResourceLocationPool) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
@@ -37,7 +37,7 @@ func (s *RoundRobinResourcePoolSuite) SetupPool(
 
 func (s *RoundRobinResourcePoolSuite) CreateResourceLocationPool(
 	location string) *ResourceLocationPool {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{

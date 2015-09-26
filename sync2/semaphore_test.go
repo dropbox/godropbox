@@ -21,13 +21,15 @@ var _ = Suite(&SemaphoreSuite{})
 func (suite *SemaphoreSuite) TestNonBlockedWait(t *C) {
 	c := make(chan bool)
 	go func() {
-		s := NewSemaphore(3)
-		s.Wait(2)
-		s.Wait(1)
-		s.Increment(1)
-		s.Wait(1)
+		s := NewUnboundedSemaphore(3)
+		for i := 0; i < 3; i++ {
+			s.Acquire()
+		}
+		s.Release()
+		s.Acquire()
 		c <- true
 	}()
+
 	select {
 	case <-c:
 	case <-time.NewTimer(5 * time.Second).C:
@@ -37,13 +39,15 @@ func (suite *SemaphoreSuite) TestNonBlockedWait(t *C) {
 
 func (suite *SemaphoreSuite) TestBlockedWait(t *C) {
 	c := make(chan bool)
-	s := NewSemaphore(0)
+	s := NewUnboundedSemaphore(0)
 	go func() {
-		s.Wait(2)
+		for i := 0; i < 2; i++ {
+			s.Acquire()
+		}
 		c <- true
 	}()
 
-	s.Increment(1)
+	s.Release()
 
 	select {
 	case <-c:
@@ -51,7 +55,7 @@ func (suite *SemaphoreSuite) TestBlockedWait(t *C) {
 	default:
 	}
 
-	s.Increment(1)
+	s.Release()
 
 	select {
 	case <-c:
@@ -62,15 +66,15 @@ func (suite *SemaphoreSuite) TestBlockedWait(t *C) {
 
 func (suite *SemaphoreSuite) TestMultipleWaiters(t *C) {
 	c := make(chan bool)
-	s := NewSemaphore(0)
+	s := NewUnboundedSemaphore(0)
 	waiter := func() {
-		s.Wait(1)
+		s.Acquire()
 		c <- true
 	}
 	go waiter()
 	go waiter()
 
-	s.Increment(1)
+	s.Release()
 
 	select {
 	case <-c:
@@ -78,7 +82,7 @@ func (suite *SemaphoreSuite) TestMultipleWaiters(t *C) {
 		t.FailNow()
 	}
 
-	s.Increment(1)
+	s.Release()
 
 	select {
 	case <-c:
@@ -100,7 +104,8 @@ func (suite *SemaphoreSuite) TestMultipleWaiters(t *C) {
 		t.FailNow()
 	default:
 	}
-	s.Increment(2)
+	s.Release()
+	s.Release()
 	select {
 	case <-c:
 	case <-time.NewTimer(5 * time.Second).C:
@@ -120,38 +125,40 @@ func (suite *SemaphoreSuite) TestMultipleWaiters(t *C) {
 
 func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
 	c := make(chan bool, 1000)
-	s := NewSemaphore(0)
+	s := NewUnboundedSemaphore(0)
 	waiter := func() {
-		s.Wait(2)
+		s.Acquire()
+		s.Acquire()
 		c <- true
 	}
 	for i := 0; i < 1000; i++ {
 		go waiter()
 	}
 
-	s.Increment(2000)
-	time.Sleep(time.Millisecond)
+	for i := 0; i < 2000; i++ {
+		s.Release()
+	}
 
 	for found := 0; found < 1000; found++ {
 		select {
 		case <-c:
-		default:
-			t.FailNow()
+		case <-time.After(20 * time.Millisecond):
+			t.Fatalf("Not all GoRoutines finished in time, Found: %d", found)
 		}
 	}
 
 	select {
 	case <-c:
-		t.FailNow()
+		t.Fatal("Channel contained more items than possible!")
 	default:
 	}
 }
 
-func (suite *SemaphoreSuite) TestWaitWithTimeout(t *C) {
-	s := NewSemaphore(0)
-	res := s.WaitTimeout(1, time.Millisecond)
+func (suite *SemaphoreSuite) TestTryAcquire(t *C) {
+	s := NewUnboundedSemaphore(0)
+	res := s.TryAcquire(time.Millisecond)
 	t.Assert(res, IsFalse)
-	s.Increment(1)
-	res = s.WaitTimeout(1, time.Millisecond)
+	s.Release()
+	res = s.TryAcquire(time.Millisecond)
 	t.Assert(res, IsTrue)
 }

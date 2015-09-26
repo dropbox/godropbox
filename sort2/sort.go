@@ -6,6 +6,32 @@ import (
 )
 
 //
+// UintSlice ----------------------------------------------------------------
+//
+
+type UintSlice []uint
+
+func (s UintSlice) Len() int {
+	return len(s)
+}
+
+func (s UintSlice) Less(i, j int) bool {
+	return s[i] < s[j]
+}
+
+func (s UintSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s UintSlice) Sort() {
+	sort.Sort(s)
+}
+
+func Uints(s []uint) {
+	sort.Sort(UintSlice(s))
+}
+
+//
 // Uint64Slice ----------------------------------------------------------------
 //
 

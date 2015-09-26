@@ -1,11 +1,13 @@
 package resource_pool
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/sync2"
 )
 
 type idleHandle struct {
@@ -20,6 +22,10 @@ type SimpleResourcePool struct {
 
 	numActive *int32 // atomic counter
 
+	activeHighWaterMark *int32 // atomic / monotonically increasing value
+
+	openTokens sync2.Semaphore
+
 	mutex       sync.Mutex
 	location    string        // guard by mutex
 	idleHandles []*idleHandle // guarded by mutex
@@ -32,19 +38,34 @@ func NewSimpleResourcePool(options Options) ResourcePool {
 	numActive := new(int32)
 	atomic.StoreInt32(numActive, 0)
 
+	activeHighWaterMark := new(int32)
+	atomic.StoreInt32(activeHighWaterMark, 0)
+
+	var tokens sync2.Semaphore
+	if options.OpenMaxConcurrency > 0 {
+		tokens = sync2.NewBoundedSemaphore(uint(options.OpenMaxConcurrency))
+	}
+
 	return &SimpleResourcePool{
-		location:    "",
-		options:     options,
-		numActive:   numActive,
-		mutex:       sync.Mutex{},
-		idleHandles: make([]*idleHandle, 0, 0),
-		isLameDuck:  false,
+		location:            "",
+		options:             options,
+		numActive:           numActive,
+		activeHighWaterMark: activeHighWaterMark,
+		openTokens:          tokens,
+		mutex:               sync.Mutex{},
+		idleHandles:         make([]*idleHandle, 0, 0),
+		isLameDuck:          false,
 	}
 }
 
 // See ResourcePool for documentation.
 func (p *SimpleResourcePool) NumActive() int32 {
 	return atomic.LoadInt32(p.numActive)
+}
+
+// See ResourcePool for documentation.
+func (p *SimpleResourcePool) ActiveHighWaterMark() int32 {
+	return atomic.LoadInt32(p.activeHighWaterMark)
 }
 
 // See ResourcePool for documentation.
@@ -65,7 +86,7 @@ func (p *SimpleResourcePool) Register(resourceLocation string) error {
 	defer p.mutex.Unlock()
 
 	if p.isLameDuck {
-		return errors.Newf(
+		return fmt.Errorf(
 			"Cannot register %s to lame duck resource pool",
 			resourceLocation)
 	}
@@ -92,49 +113,72 @@ func (p *SimpleResourcePool) ListRegistered() []string {
 	return []string{}
 }
 
+func (p *SimpleResourcePool) getLocation() (string, error) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if p.location == "" {
+		return "", fmt.Errorf(
+			"Resource location is not set for SimpleResourcePool")
+	}
+
+	if p.isLameDuck {
+		return "", fmt.Errorf(
+			"Lame duck resource pool cannot return handles to %s",
+			p.location)
+	}
+
+	return p.location, nil
+}
+
 // This gets an active resource from the resource pool.  Note that the
 // resourceLocation argument is ignroed (The handles are associated to the
 // resource location provided by the first Register call).
 func (p *SimpleResourcePool) Get(unused string) (ManagedHandle, error) {
-
 	activeCount := atomic.AddInt32(p.numActive, 1)
 	if p.options.MaxActiveHandles > 0 &&
 		activeCount > p.options.MaxActiveHandles {
 
 		atomic.AddInt32(p.numActive, -1)
-		return nil, errors.Newf(
+		return nil, fmt.Errorf(
 			"Too many handles to %s",
 			p.location)
+	}
+
+	highest := atomic.LoadInt32(p.activeHighWaterMark)
+	for activeCount > highest &&
+		!atomic.CompareAndSwapInt32(
+			p.activeHighWaterMark,
+			highest,
+			activeCount) {
+
+		highest = atomic.LoadInt32(p.activeHighWaterMark)
 	}
 
 	if h := p.getIdleHandle(); h != nil {
 		return h, nil
 	}
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	if p.location == "" {
-		atomic.AddInt32(p.numActive, -1)
-		return nil, errors.Newf(
-			"Resource location is not set for SimpleResourcePool")
-	}
-
-	if p.isLameDuck {
-		atomic.AddInt32(p.numActive, -1)
-		return nil, errors.Newf(
-			"Lame duck resource pool cannot return handles to %s",
-			p.location)
-	}
-
-	handle, err := p.options.Open(p.location)
+	location, err := p.getLocation()
 	if err != nil {
 		atomic.AddInt32(p.numActive, -1)
-		return nil, errors.Wrapf(
-			err,
-			"Failed to open resource handle: %s",
-			p.location)
+		return nil, err
 	}
+
+	if p.openTokens != nil {
+		p.openTokens.Acquire()
+		defer p.openTokens.Release()
+	}
+
+	handle, err := p.options.Open(location)
+	if err != nil {
+		atomic.AddInt32(p.numActive, -1)
+		return nil, fmt.Errorf(
+			"Failed to open resource handle: %s (%v)",
+			p.location,
+			err)
+	}
+
 	return NewManagedHandle(p.location, handle, p, p.options), nil
 }
 
@@ -148,6 +192,12 @@ func (p *SimpleResourcePool) Release(handle ManagedHandle) error {
 
 	h := handle.ReleaseUnderlyingHandle()
 	if h != nil {
+		// We can unref either before or after queuing the idle handle.
+		// The advantage of unref-ing before queuing is that there is
+		// a higher chance of successful Get when number of active handles
+		// is close to the limit (but potentially more handle creation).
+		// The advantage of queuing before unref-ing is that there's a
+		// higher chance of reusing handle (but potentially more Get failures).
 		atomic.AddInt32(p.numActive, -1)
 		p.queueIdleHandles(h)
 	}
@@ -167,7 +217,7 @@ func (p *SimpleResourcePool) Discard(handle ManagedHandle) error {
 	if h != nil {
 		atomic.AddInt32(p.numActive, -1)
 		if err := p.options.Close(h); err != nil {
-			return errors.Wrap(err, "Failed to close resource handle")
+			return fmt.Errorf("Failed to close resource handle: %v", err)
 		}
 	}
 	return nil
@@ -176,15 +226,24 @@ func (p *SimpleResourcePool) Discard(handle ManagedHandle) error {
 // See ResourcePool for documentation.
 func (p *SimpleResourcePool) EnterLameDuckMode() {
 	p.mutex.Lock()
-	defer p.mutex.Unlock()
 
+	toClose := p.idleHandles
 	p.isLameDuck = true
-	p.closeHandles(p.idleHandles)
-	p.idleHandles = make([]*idleHandle, 0, 0)
+	p.idleHandles = []*idleHandle{}
+
+	p.mutex.Unlock()
+
+	p.closeHandles(toClose)
 }
 
 // This returns an idle resource, if there is one.
 func (p *SimpleResourcePool) getIdleHandle() ManagedHandle {
+	var toClose []*idleHandle
+	defer func() {
+		// NOTE: Must keep the closure around to late bind the toClose slice.
+		p.closeHandles(toClose)
+	}()
+
 	now := p.options.getCurrentTime()
 
 	p.mutex.Lock()
@@ -198,8 +257,7 @@ func (p *SimpleResourcePool) getIdleHandle() ManagedHandle {
 		}
 	}
 	if i > 0 {
-		// Close all resources that have expired.
-		p.closeHandles(p.idleHandles[0 : i-1])
+		toClose = p.idleHandles[0 : i-1]
 	}
 
 	if i < len(p.idleHandles) {
@@ -209,13 +267,19 @@ func (p *SimpleResourcePool) getIdleHandle() ManagedHandle {
 	}
 
 	if len(p.idleHandles) > 0 {
-		p.idleHandles = make([]*idleHandle, 0, 0)
+		p.idleHandles = []*idleHandle{}
 	}
 	return nil
 }
 
 // This adds an idle resource to the pool.
 func (p *SimpleResourcePool) queueIdleHandles(handle interface{}) {
+	var toClose []*idleHandle
+	defer func() {
+		// NOTE: Must keep the closure around to late bind the toClose slice.
+		p.closeHandles(toClose)
+	}()
+
 	now := p.options.getCurrentTime()
 	var keepUntil *time.Time
 	if p.options.MaxIdleTime != nil {
@@ -228,7 +292,9 @@ func (p *SimpleResourcePool) queueIdleHandles(handle interface{}) {
 	defer p.mutex.Unlock()
 
 	if p.isLameDuck {
-		p.options.Close(handle)
+		toClose = []*idleHandle{
+			&idleHandle{handle: handle},
+		}
 		return
 	}
 
@@ -238,10 +304,11 @@ func (p *SimpleResourcePool) queueIdleHandles(handle interface{}) {
 			handle:    handle,
 			keepUntil: keepUntil,
 		})
+
 	nIdleHandles := uint32(len(p.idleHandles))
 	if nIdleHandles > p.options.MaxIdleHandles {
 		handlesToClose := nIdleHandles - p.options.MaxIdleHandles
-		p.closeHandles(p.idleHandles[0:handlesToClose])
+		toClose = p.idleHandles[0:handlesToClose]
 		p.idleHandles = p.idleHandles[handlesToClose:nIdleHandles]
 	}
 }
@@ -250,6 +317,6 @@ func (p *SimpleResourcePool) queueIdleHandles(handle interface{}) {
 // are no longer referenced from the main idleHandles slice.
 func (p *SimpleResourcePool) closeHandles(handles []*idleHandle) {
 	for _, handle := range handles {
-		p.options.Close(handle.handle)
+		_ = p.options.Close(handle.handle)
 	}
 }

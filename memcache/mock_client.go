@@ -68,18 +68,21 @@ func (c *MockClient) setHelper(item *Item) MutateResponse {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusNoError,
-			newItem.DataVersionId)
+			newItem.DataVersionId,
+			false)
 	} else if !ok {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyNotFound,
-			0)
+			0,
+			false)
 	} else {
 		// CAS mismatch
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyExists,
-			0)
+			0,
+			false)
 	}
 
 }
@@ -128,12 +131,14 @@ func (c *MockClient) addHelper(item *Item) MutateResponse {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusNoError,
-			newItem.DataVersionId)
+			newItem.DataVersionId,
+			false)
 	} else {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyExists,
-			0)
+			0,
+			false)
 	}
 }
 
@@ -177,7 +182,8 @@ func (c *MockClient) Delete(key string) MutateResponse {
 		return NewMutateResponse(
 			key,
 			StatusKeyNotFound,
-			0)
+			0,
+			false)
 	}
 
 	delete(c.data, key)
@@ -185,7 +191,8 @@ func (c *MockClient) Delete(key string) MutateResponse {
 	return NewMutateResponse(
 		key,
 		StatusNoError,
-		0)
+		0,
+		false)
 }
 
 // Batch version of the Delete method.  Note that the response entries

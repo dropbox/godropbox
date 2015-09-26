@@ -108,7 +108,7 @@ func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
 
 	if c.options.ReadTimeout > 0 {
 		deadline := c.options.getCurrentTime().Add(c.options.ReadTimeout)
-		conn.SetReadDeadline(deadline)
+		_ = conn.SetReadDeadline(deadline)
 	}
 	n, err = conn.Read(b)
 	if err != nil {
@@ -126,7 +126,7 @@ func (c *ManagedConnImpl) Write(b []byte) (n int, err error) {
 
 	if c.options.WriteTimeout > 0 {
 		deadline := c.options.getCurrentTime().Add(c.options.WriteTimeout)
-		conn.SetWriteDeadline(deadline)
+		_ = conn.SetWriteDeadline(deadline)
 	}
 	n, err = conn.Write(b)
 	if err != nil {

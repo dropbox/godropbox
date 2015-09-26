@@ -100,6 +100,45 @@ func (b *bytesEquals) Info() *CheckerInfo {
 var BytesEquals = &bytesEquals{}
 
 // -----------------------------------------------------------------------
+// AlmostEqual checker.
+// Meant to compare floats with some margin of error which might arrise
+// from rounding errors.
+
+type almostEqualChecker struct{}
+
+func (ae *almostEqualChecker) Info() *CheckerInfo {
+	return &CheckerInfo{
+		Name:   "AlmostEqual",
+		Params: []string{"obtained", "expected", "margin"},
+	}
+}
+
+func (ae *almostEqualChecker) Check(params []interface{}, names []string) (bool, string) {
+	if len(params) != 3 {
+		return false, "AlmostEqual takes exactly 3 arguments"
+	}
+	obtained, ok1 := params[0].(float64)
+	expected, ok2 := params[1].(float64)
+	margin, ok3 := params[2].(float64)
+
+	if !(ok1 && ok2 && ok3) {
+		return false, "All arguments to AlmostEqual must be float64"
+	}
+
+	if margin < 0 {
+		return false, "Margin must be non-negative"
+	}
+
+	if obtained < (expected-margin) || obtained > (expected+margin) {
+		return false, fmt.Sprintf("Obtained %f different from expected %f by more than %f margin",
+			obtained, expected, margin)
+	}
+	return true, ""
+}
+
+var AlmostEqual = &almostEqualChecker{}
+
+// -----------------------------------------------------------------------
 // HasKey checker.
 
 type hasKey struct{}
@@ -161,7 +200,7 @@ func (c noErr) Check(params []interface{}, names []string) (bool, string) {
 
 func (c noErr) Info() *CheckerInfo {
 	return &CheckerInfo{
-		Name: "NoErr",
+		Name:   "NoErr",
 		Params: []string{"error"},
 	}
 }

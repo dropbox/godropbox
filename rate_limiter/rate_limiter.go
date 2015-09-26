@@ -122,6 +122,12 @@ func (l *rateLimiterImpl) fillBucket() {
 		l.quota = l.maxQuota
 	}
 
+	// Do not use Broadcast here because fill happens frequently
+	// and we do not want to wake all go-routines that often.
+	// This intoduces a chance of Lost Wakeups, but (a) we
+	// mitigate that as much as possible in Throttle(request)
+	// function by signaling again; and (b) sleeping routine gets
+	// a chance to wake up again during the next fill.
 	l.cond.Signal()
 }
 
@@ -148,7 +154,7 @@ func (l *rateLimiterImpl) SetMaxQuota(q float64) error {
 	}
 
 	if l.maxQuota == 0 {
-		l.cond.Signal()
+		l.cond.Broadcast()
 	}
 
 	return nil
@@ -216,6 +222,11 @@ func (l *rateLimiterImpl) Throttle(request float64) bool {
 
 		if request <= 0 {
 			l.quota = -request
+			if l.quota > 0 {
+				// Mitigate Lost Wakeups.
+				// Still possible, but less likely.
+				l.cond.Signal()
+			}
 			return throttled
 		}
 
@@ -238,7 +249,7 @@ func (l *rateLimiterImpl) Stop() {
 	l.stopChan <- true
 	l.ticker.Stop()
 
-	l.cond.Signal()
+	l.cond.Broadcast()
 }
 
 // A mock rate limiter for external unittesting.  The bucket is fill via the Tick call.

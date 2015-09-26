@@ -1,6 +1,7 @@
 package resource_pool
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,17 +34,26 @@ func (c *mockConn) Close() error {
 }
 
 type fakeDialer struct {
-	id int
+	id *int32
+}
+
+func newFakeDialer() *fakeDialer {
+	id := new(int32)
+	atomic.StoreInt32(id, 0)
+
+	return &fakeDialer{
+		id: id,
+	}
 }
 
 func (d *fakeDialer) MaxId() int {
-	return d.id
+	return int(atomic.LoadInt32(d.id))
 }
 
 func (d *fakeDialer) FakeDial(location string) (interface{}, error) {
-	d.id += 1
+	id := atomic.AddInt32(d.id, 1)
 	return &mockConn{
-		id:       d.id,
+		id:       int(id),
 		location: location,
 		isClosed: false,
 	}, nil
@@ -88,14 +98,15 @@ func closePoolConns(pool *SimpleResourcePool) {
 }
 
 func (s *SimpleResourcePoolSuite) TestRecycleHandles(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
-		MaxIdleHandles: 10,
-		Open:           dialer.FakeDial,
-		Close:          closeMockConn,
-		NowFunc:        mockClock.Now,
+		MaxIdleHandles:     10,
+		OpenMaxConcurrency: 2,
+		Open:               dialer.FakeDial,
+		Close:              closeMockConn,
+		NowFunc:            mockClock.Now,
 	}
 
 	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
@@ -149,7 +160,7 @@ func (s *SimpleResourcePoolSuite) TestRecycleHandles(c *C) {
 }
 
 func (s *SimpleResourcePoolSuite) TestDoubleFree(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
@@ -203,7 +214,7 @@ func (s *SimpleResourcePoolSuite) TestDoubleFree(c *C) {
 }
 
 func (s *SimpleResourcePoolSuite) TestDiscards(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
@@ -216,29 +227,34 @@ func (s *SimpleResourcePoolSuite) TestDiscards(c *C) {
 	pool.Register("bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(0))
 	c.Assert(pool.NumIdle(), Equals, 0)
 
 	c1, err := pool.Get("bar")
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(1))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(1))
 	c.Assert(c1, NotNil)
 	c.Assert(pool.NumIdle(), Equals, 0)
 
 	c2, err := pool.Get("bar")
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(2))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(2))
 	c.Assert(c2, NotNil)
 	c.Assert(pool.NumIdle(), Equals, 0)
 
 	c3, err := pool.Get("bar")
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(3))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(3))
 	c.Assert(c3, NotNil)
 	c.Assert(pool.NumIdle(), Equals, 0)
 
 	c4, err := pool.Get("bar")
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(4))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(4))
 	c.Assert(c4, NotNil)
 	c.Assert(pool.NumIdle(), Equals, 0)
 
@@ -246,6 +262,7 @@ func (s *SimpleResourcePoolSuite) TestDiscards(c *C) {
 	err = c4.Discard()
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(3))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(4))
 	c.Assert(pool.NumIdle(), Equals, 0)
 	CheckIsClosed(c, c4, true)
 
@@ -253,22 +270,25 @@ func (s *SimpleResourcePoolSuite) TestDiscards(c *C) {
 	err = c2.Release()
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(2))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(4))
 	c.Assert(pool.NumIdle(), Equals, 1)
 	CheckIsClosed(c, c2, false)
 
 	err = c1.Discard()
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(1))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(4))
 	c.Assert(pool.NumIdle(), Equals, 1)
 
 	err = c3.Release()
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumActive(), Equals, int32(0))
+	c.Assert(pool.ActiveHighWaterMark(), Equals, int32(4))
 	c.Assert(pool.NumIdle(), Equals, 2)
 }
 
 func (s *SimpleResourcePoolSuite) TestMaxActiveHandles(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
@@ -325,7 +345,7 @@ func (s *SimpleResourcePoolSuite) TestMaxActiveHandles(c *C) {
 }
 
 func (s *SimpleResourcePoolSuite) TestMaxIdleHandles(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{
@@ -386,7 +406,7 @@ func (s *SimpleResourcePoolSuite) TestMaxIdleHandles(c *C) {
 }
 
 func (s *SimpleResourcePoolSuite) TestMaxIdleTime(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	idlePeriod := time.Duration(1000)
@@ -473,7 +493,7 @@ func (s *SimpleResourcePoolSuite) TestMaxIdleTime(c *C) {
 }
 
 func (s *SimpleResourcePoolSuite) TestLameDuckMode(c *C) {
-	dialer := fakeDialer{}
+	dialer := newFakeDialer()
 	mockClock := time2.MockClock{}
 
 	options := Options{

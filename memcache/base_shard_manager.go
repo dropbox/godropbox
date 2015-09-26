@@ -1,6 +1,7 @@
 package memcache
 
 import (
+	"expvar"
 	"sync"
 
 	"github.com/dropbox/godropbox/container/set"
@@ -14,6 +15,13 @@ const (
 	WriteOnlyServer = MemcachedState(1)
 	DownServer      = MemcachedState(2)
 	WarmUpServer    = MemcachedState(4)
+)
+
+var (
+	// Counters for number of connections that succeeded / errored / were skipped, by address.
+	connOkByAddr      = expvar.NewMap("ShardManagerConnOkByAddrCounter")
+	connErrByAddr     = expvar.NewMap("ShardManagerConnErrByAddrCounter")
+	connSkippedByAddr = expvar.NewMap("ShardManagerConnSkippedByAddrCounter")
 )
 
 type ShardState struct {
@@ -107,16 +115,16 @@ func (m *BaseShardManager) GetShard(
 		return
 	}
 
-	if m.shardStates[shardId].State != ActiveServer {
+	state := m.shardStates[shardId]
+	if state.State != ActiveServer {
 		m.logInfo("Memcache shard ", shardId, " is not in active state.")
+		connSkippedByAddr.Add(state.Address, 1)
 		return
 	}
 
-	conn, err = m.pool.Get("tcp", m.shardStates[shardId].Address)
-	if err != nil {
-		m.logError(err)
-		conn = nil
-	}
+	entry := &ShardMapping{}
+	m.fillEntryWithConnection(state.Address, entry)
+	conn, err = entry.Connection, entry.ConnErr
 
 	return
 }
@@ -140,13 +148,9 @@ func (m *BaseShardManager) GetShardsForKeys(
 			if shardId != -1 {
 				state := m.shardStates[shardId]
 				if state.State == ActiveServer {
-					conn, err := m.pool.Get("tcp", state.Address)
-					if err != nil {
-						m.logError(err)
-						entry.ConnErr = err
-					} else {
-						entry.Connection = conn
-					}
+					m.fillEntryWithConnection(state.Address, entry)
+				} else {
+					connSkippedByAddr.Add(state.Address, 1)
 				}
 			}
 			entry.Keys = make([]string, 0, 1)
@@ -177,13 +181,9 @@ func (m *BaseShardManager) GetShardsForItems(
 			if shardId != -1 {
 				state := m.shardStates[shardId]
 				if state.State == ActiveServer {
-					conn, err := m.pool.Get("tcp", state.Address)
-					if err != nil {
-						m.logError(err)
-						entry.ConnErr = err
-					} else {
-						entry.Connection = conn
-					}
+					m.fillEntryWithConnection(state.Address, entry)
+				} else {
+					connSkippedByAddr.Add(state.Address, 1)
 				}
 			}
 			entry.Items = make([]*Item, 0, 1)
@@ -217,13 +217,7 @@ func (m *BaseShardManager) GetShardsForSentinels(
 					state.State == WriteOnlyServer ||
 					state.State == WarmUpServer {
 
-					conn, err := m.pool.Get("tcp", state.Address)
-					if err != nil {
-						m.logError(err)
-						entry.ConnErr = err
-					} else {
-						entry.Connection = conn
-					}
+					m.fillEntryWithConnection(state.Address, entry)
 
 					// During WARM_UP state, we do try to write sentinels to
 					// memcache but any failures are ignored. We run memcache
@@ -232,6 +226,8 @@ func (m *BaseShardManager) GetShardsForSentinels(
 					if state.State == WarmUpServer {
 						entry.WarmingUp = true
 					}
+				} else {
+					connSkippedByAddr.Add(state.Address, 1)
 				}
 			}
 			entry.Items = make([]*Item, 0, 1)
@@ -260,4 +256,16 @@ func (m *BaseShardManager) GetAllShards() map[int]net2.ManagedConn {
 	}
 
 	return results
+}
+
+func (m *BaseShardManager) fillEntryWithConnection(address string, entry *ShardMapping) {
+	conn, err := m.pool.Get("tcp", address)
+	if err != nil {
+		m.logError(err)
+		connErrByAddr.Add(address, 1)
+		entry.ConnErr = err
+	} else {
+		connOkByAddr.Add(address, 1)
+		entry.Connection = conn
+	}
 }
