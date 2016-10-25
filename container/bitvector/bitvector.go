@@ -31,6 +31,50 @@ func (vector *BitVector) Length() int {
 	return vector.length
 }
 
+// And will AND two BitVector's and returns the resulting one
+func (a *BitVector) And(b *BitVector) *BitVector {
+	vector := NewBitVector(make([]byte, 0), 0)
+	if a.length != b.length {
+		return vector
+	}
+	vector.length = a.length
+	for byteIndex := 0; byteIndex < len(a.data); byteIndex++ {
+		vector.data = append(vector.data, byte(a.data[byteIndex]&b.data[byteIndex]))
+	}
+	return vector
+}
+
+// Or will OR two BitVector's and returns the resulting one
+func (a *BitVector) Or(b *BitVector) *BitVector {
+	vector := NewBitVector(make([]byte, 0), 0)
+	if a.length != b.length {
+		return vector
+	}
+	vector.length = a.length
+	for byteIndex := 0; byteIndex < len(a.data); byteIndex++ {
+		vector.data = append(vector.data, byte(a.data[byteIndex]|b.data[byteIndex]))
+	}
+	return vector
+}
+
+// NewOneVector will return a BitVector of only 1's with the given size
+func NewOneVector(length int) *BitVector {
+	bitVector := NewBitVector(make([]byte, 0), 0)
+	for i := 0; i < length; i++ {
+		bitVector.Append(1)
+	}
+	return bitVector
+}
+
+// NewZeroVector will return a BitVector of only 0's with the given size
+func NewZeroVector(length int) *BitVector {
+	bitVector := NewBitVector(make([]byte, 0), 0)
+	for i := 0; i < length; i++ {
+		bitVector.Append(0)
+	}
+	return bitVector
+}
+
 // This function shifts a byte slice one bit lower (less significant).
 // bit (either 1 or 0) contains the bit to put in the most significant
 // position of the last byte in the slice.
