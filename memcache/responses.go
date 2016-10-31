@@ -65,9 +65,6 @@ type genericResponse struct {
 
 	// statEntries is used by stat response.
 	statEntries map[int](map[string]string)
-
-	// set to true for mutate operations over the ascii protocol.
-	asciiMutateResponse bool
 }
 
 func (r *genericResponse) Status() ResponseStatus {
@@ -100,10 +97,6 @@ func (r *genericResponse) Flags() uint32 {
 }
 
 func (r *genericResponse) DataVersionId() uint64 {
-	if r.asciiMutateResponse {
-		panic("Ascii protocol does not support version id in MutateResponse.")
-	}
-
 	return r.item.DataVersionId
 }
 
@@ -181,12 +174,10 @@ func NewMutateErrorResponse(key string, err error) MutateResponse {
 func NewMutateResponse(
 	key string,
 	status ResponseStatus,
-	version uint64,
-	asciiMutateResponse bool) MutateResponse {
+	version uint64) MutateResponse {
 
 	resp := &genericResponse{
-		status:              status,
-		asciiMutateResponse: asciiMutateResponse,
+		status: status,
 	}
 	resp.item.Key = key
 	if status == StatusNoError {

@@ -112,7 +112,20 @@ func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
 	}
 	n, err = conn.Read(b)
 	if err != nil {
-		err = errors.Wrap(err, "Read error")
+		var localAddr string
+		if conn.LocalAddr() != nil {
+			localAddr = conn.LocalAddr().String()
+		} else {
+			localAddr = "(nil)"
+		}
+
+		var remoteAddr string
+		if conn.RemoteAddr() != nil {
+			remoteAddr = conn.RemoteAddr().String()
+		} else {
+			remoteAddr = "(nil)"
+		}
+		err = errors.Wrapf(err, "Read error from host: %s <-> %s", localAddr, remoteAddr)
 	}
 	return
 }

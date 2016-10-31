@@ -1,7 +1,7 @@
 package http2
 
 import (
-	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/sync2"
+	//	"github.com/dropbox/godropbox/stopwatch"
 )
 
-const (
-	// This is a hax to propagate DialError with the Do call
-	dialErrorMsgPrefix = "dial "
+var (
+	errFollowRedirectDisabled = fmt.Errorf("Following redirect disabled")
 )
 
 // Pool of persistent HTTP connections. The only limit is on the max # of idle connections we
@@ -25,8 +26,14 @@ type SimplePool struct {
 	client    *http.Client
 	transport *http.Transport
 
+	conns        *ConnectionTracker
+	connsLimiter sync2.Semaphore
+
 	addr   string
 	params ConnectionParams
+
+	// Override for testing
+	closeWait time.Duration
 }
 
 // get from http://golang.org/src/pkg/net/http/transport.go
@@ -45,9 +52,14 @@ func getenvEitherCase(k string) string {
 // set params.HostHeader.
 func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 	pool := &SimplePool{
-		addr:   addr,
-		params: params,
-		client: new(http.Client),
+		addr:      addr,
+		params:    params,
+		client:    new(http.Client),
+		closeWait: 5 * time.Minute,
+	}
+
+	if params.MaxConns > 0 && params.ConnectionAcquireTimeout > 0 {
+		pool.connsLimiter = sync2.NewBoundedSemaphore(uint(params.MaxConns))
 	}
 
 	// It's desirable to enforce the timeout at the client-level since it
@@ -69,25 +81,49 @@ func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 		transport.Proxy = http.ProxyFromEnvironment
 	}
 
+	dial := net.Dial
 	if params.Dial == nil {
 		// dialTimeout could only be used in none proxy requests since it talks directly
 		// to pool.addr
 		if getenvEitherCase("HTTP_PROXY") == "" && params.Proxy == nil {
-			transport.Dial = pool.dialTimeout
+			dial = pool.dialTimeout
 		}
 	} else {
-		transport.Dial = params.Dial
+		dial = params.Dial
 	}
+
+	pool.conns = NewConnectionTracker(params.MaxConns, dial)
+	transport.Dial = pool.conns.Dial
+
 	pool.transport = transport
 	pool.client.Transport = transport
 
-	if params.UseSSL && params.SkipVerifySSL {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
+	if params.UseSSL {
+		transport.TLSClientConfig = params.TLSClientConfig
+	}
+
+	if params.DisableFollowRedirect {
+		pool.client.CheckRedirect = func(
+			req *http.Request,
+			via []*http.Request) error {
+
+			return errFollowRedirectDisabled
 		}
 	}
 
 	return pool
+}
+
+func (pool *SimplePool) Addr() string {
+	return pool.addr
+}
+
+func (pool *SimplePool) Params() ConnectionParams {
+	return pool.params
+}
+
+func (pool *SimplePool) Transport() *http.Transport {
+	return pool.transport
 }
 
 // Adds connection timeout for HTTP client
@@ -117,17 +153,43 @@ func (pool *SimplePool) Do(req *http.Request) (resp *http.Response, err error) {
 	} else {
 		req.URL.Scheme = "http"
 	}
-	if pool.params.HostHeader != nil {
-		req.URL.Host = *pool.params.HostHeader
+
+	if pool.params.UseRequestHost && req.Host != "" {
+		req.URL.Host = req.Host
 	} else {
-		req.URL.Host = pool.addr
+		if pool.params.HostHeader != nil {
+			req.URL.Host = *pool.params.HostHeader
+		} else {
+			req.URL.Host = pool.addr
+		}
+	}
+
+	if pool.connsLimiter != nil {
+		//sw := stopwatch.StartStopwatch("simple_pool-" + pool.params.Name + "-connection_acquire")
+		acquired := pool.connsLimiter.TryAcquire(pool.params.ConnectionAcquireTimeout)
+		//sw.Stop()
+		if acquired {
+			defer pool.connsLimiter.Release()
+		} else {
+			return nil, DialError{errors.New(
+				"Dial Error: Reached maximum active requests for connection pool")}
+		}
 	}
 
 	resp, err = conn.Do(req)
 	if err != nil {
-		if urlErr, ok := err.(*url.Error); ok &&
-			strings.HasPrefix(urlErr.Err.Error(), dialErrorMsgPrefix) {
-			err = DialError{errors.Wrap(err, "SimplePool: Dial Error")}
+		if _, ok := err.(DialError); ok {
+			// do nothing.  err is already wrapped.
+		} else if urlErr, ok := err.(*url.Error); ok {
+			if urlErr.Err == errFollowRedirectDisabled {
+				// This is not an actual error
+				return resp, nil
+			}
+			if _, ok := urlErr.Err.(DialError); ok {
+				err = urlErr.Err
+			} else {
+				err = errors.Wrap(err, err.Error())
+			}
 		} else {
 			err = errors.Wrap(err, err.Error())
 		}
@@ -161,8 +223,28 @@ func (pool *SimplePool) Get() (*http.Client, error) {
 }
 
 // Closes all idle connections in this pool
-func (pool *SimplePool) Close() {
+func (pool *SimplePool) CloseIdleConnections() {
 	pool.transport.CloseIdleConnections()
+}
+
+func (pool *SimplePool) Close() {
+	pool.conns.DisallowNewConn()
+
+	go func() {
+		// try gracefully shutdown connection for pool.closeWait before force
+		// closing connections.
+		for i := 0; i < 100; i++ {
+			pool.transport.CloseIdleConnections()
+
+			if pool.conns.NumAlive() == 0 {
+				return
+			}
+
+			time.Sleep(pool.closeWait / 100)
+		}
+
+		pool.conns.ForceCloseAll()
+	}()
 }
 
 type cancelTimerBody struct {

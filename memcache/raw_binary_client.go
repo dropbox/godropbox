@@ -6,14 +6,15 @@ import (
 	"io"
 	"sync"
 
+	"github.com/dropbox/godropbox/dlog"
 	"github.com/dropbox/godropbox/errors"
 )
 
 const (
-	headerLength = 24
-	maxKeyLength = 250
-	// NOTE: Storing values larger than 1MB requires recompiling memcached.
-	maxValueLength = 1024 * 1024
+	headerLength          = 24
+	maxKeyLength          = 250
+	defaultMaxValueLength = 1024 * 1024
+	largeMaxValueLength   = 5 * 1024 * 1024 // np-large clusters support up to 5MB values.
 )
 
 func isValidKeyChar(char byte) bool {
@@ -34,7 +35,7 @@ func isValidKeyString(key string) bool {
 	return true
 }
 
-func validateValue(value []byte) error {
+func validateValue(value []byte, maxValueLength int) error {
 	if value == nil {
 		return errors.New("Invalid value: cannot be nil")
 	}
@@ -61,6 +62,30 @@ type header struct {
 	DataVersionId     uint64 // aka CAS
 }
 
+func (h header) Serialize(buffer []byte) {
+	buffer[0] = byte(h.Magic)
+	buffer[1] = byte(h.OpCode)
+	binary.BigEndian.PutUint16(buffer[2:], h.KeyLength)
+	buffer[4] = byte(h.ExtrasLength)
+	buffer[5] = byte(h.DataType)
+	binary.BigEndian.PutUint16(buffer[6:], h.VBucketIdOrStatus)
+	binary.BigEndian.PutUint32(buffer[8:], h.TotalBodyLength)
+	binary.BigEndian.PutUint32(buffer[12:], h.Opaque)
+	binary.BigEndian.PutUint64(buffer[16:], h.DataVersionId)
+}
+
+func (h *header) Deserialize(buffer []byte) {
+	h.Magic = uint8(buffer[0])
+	h.OpCode = uint8(buffer[1])
+	h.KeyLength = binary.BigEndian.Uint16(buffer[2:])
+	h.ExtrasLength = uint8(buffer[4])
+	h.DataType = uint8(buffer[5])
+	h.VBucketIdOrStatus = binary.BigEndian.Uint16(buffer[6:])
+	h.TotalBodyLength = binary.BigEndian.Uint32(buffer[8:])
+	h.Opaque = binary.BigEndian.Uint32(buffer[12:])
+	h.DataVersionId = binary.BigEndian.Uint64(buffer[16:])
+}
+
 // An unsharded memcache client implementation which operates on a pre-existing
 // io channel (The user must explicitly setup and close down the channel),
 // using the binary memcached protocol.  Note that the client assumes nothing
@@ -68,18 +93,30 @@ type header struct {
 // operations are serialized (Use multiple channels / clients if parallelism
 // is needed).
 type RawBinaryClient struct {
-	shard      int
-	channel    io.ReadWriter
-	mutex      sync.Mutex
-	validState bool
+	shard          int
+	channel        io.ReadWriter
+	mutex          sync.Mutex
+	validState     bool
+	maxValueLength int
 }
 
 // This creates a new memcache RawBinaryClient.
 func NewRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
 	return &RawBinaryClient{
-		shard:      shard,
-		channel:    channel,
-		validState: true,
+		shard:          shard,
+		channel:        channel,
+		validState:     true,
+		maxValueLength: defaultMaxValueLength,
+	}
+}
+
+// This creates a new memcache RawBinaryClient for use with np-large cluster.
+func NewLargeRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
+	return &RawBinaryClient{
+		shard:          shard,
+		channel:        channel,
+		validState:     true,
+		maxValueLength: largeMaxValueLength,
 	}
 }
 
@@ -102,6 +139,9 @@ func (c *RawBinaryClient) sendRequest(
 	value []byte, // may be nil
 	extras ...interface{}) (err error) {
 
+	if key != nil && len(key) > 255 {
+		return errors.New("Key too long")
+	}
 	if !c.validState {
 		// An error has occurred previously.  It's not safe to continue sending.
 		return errors.New("Skipping due to previous error")
@@ -133,40 +173,27 @@ func (c *RawBinaryClient) sendRequest(
 		DataVersionId:   dataVersionId,
 	}
 
-	msgBuffer := new(bytes.Buffer)
-
-	if err := binary.Write(msgBuffer, binary.BigEndian, hdr); err != nil {
-		return errors.Wrap(err, "Failed to write header")
-	}
-	if msgBuffer.Len() != headerLength { // sanity check
-		return errors.Newf("Incorrect header size: %d", msgBuffer.Len())
-	}
-
-	bytesWritten, err := extrasBuffer.WriteTo(msgBuffer)
-	if err != nil {
-		return errors.Wrap(err, "Failed to add extras to msg")
-	}
-	if bytesWritten != int64(hdr.ExtrasLength) {
-		return errors.New("Failed to write out extras")
-	}
-
+	var msgBuffer = make([]byte, headerLength+hdr.TotalBodyLength)
+	hdr.Serialize(msgBuffer)
+	var offset uint32 = headerLength
+	offset += uint32(copy(msgBuffer[offset:], extrasBuffer.Bytes()))
 	if key != nil {
-		if _, err := msgBuffer.Write(key); err != nil {
-			return errors.Wrap(err, "Failed to write key")
-		}
+		offset += uint32(copy(msgBuffer[offset:], key))
 	}
 
 	if value != nil {
-		if _, err := msgBuffer.Write(value); err != nil {
-			return errors.Wrap(err, "Failed to write value")
-		}
+		offset += uint32(copy(msgBuffer[offset:], value))
+	}
+	if offset != headerLength+hdr.TotalBodyLength {
+		return errors.New("Failed to serialize message")
 	}
 
-	bytesWritten, err = msgBuffer.WriteTo(c.channel)
+	dlog.V(9).Infof("key: %x, msgBuffer: %x", key, msgBuffer)
+	bytesWritten, err := c.channel.Write(msgBuffer)
 	if err != nil {
 		return errors.Wrap(err, "Failed to send msg")
 	}
-	if bytesWritten != int64((hdr.TotalBodyLength)+headerLength) {
+	if bytesWritten != int((hdr.TotalBodyLength)+headerLength) {
 		return errors.New("Failed to sent out message")
 	}
 
@@ -197,11 +224,20 @@ func (c *RawBinaryClient) receiveResponse(
 		}
 	}()
 
+	// Process the header fields
 	hdr := header{}
-	if err = binary.Read(c.channel, binary.BigEndian, &hdr); err != nil {
+	var hdrBytes = make([]byte, headerLength)
+	hdrBytesRead, err := io.ReadFull(c.channel, hdrBytes)
+	if err != nil {
 		err = errors.Wrap(err, "Failed to read header")
 		return
 	}
+	if hdrBytesRead != headerLength {
+		err = errors.Newf("Failed to read header: got %d bytes, expected %d",
+			hdrBytesRead, headerLength)
+		return
+	}
+	hdr.Deserialize(hdrBytes)
 	if hdr.Magic != respMagicByte {
 		err = errors.Newf("Invalid response magic byte: %d", hdr.Magic)
 		return
@@ -346,9 +382,18 @@ func (c *RawBinaryClient) GetMulti(keys []string) map[string]GetResponse {
 			continue
 		}
 		responses[key] = c.receiveGetResponse(key)
+		if err := responses[key].Error(); err != nil {
+			dlog.V(2).Infof("Failed to get data for key: %x, err: %s, keys count: %d", key, err.Error(), len(cacheKeys))
+		}
 	}
 
 	return responses
+}
+
+func (c *RawBinaryClient) GetSentinels(keys []string) map[string]GetResponse {
+	// For raw clients, there are no difference between GetMulti and
+	// GetSentinels.
+	return c.GetMulti(keys)
 }
 
 func (c *RawBinaryClient) sendMutateRequest(
@@ -366,7 +411,7 @@ func (c *RawBinaryClient) sendMutateRequest(
 			errors.New("Invalid key"))
 	}
 
-	if err := validateValue(item.Value); err != nil {
+	if err := validateValue(item.Value, c.maxValueLength); err != nil {
 		return NewMutateErrorResponse(item.Key, err)
 	}
 
@@ -396,7 +441,7 @@ func (c *RawBinaryClient) receiveMutateResponse(
 	if err != nil {
 		return NewMutateErrorResponse(key, err)
 	}
-	return NewMutateResponse(key, status, version, false)
+	return NewMutateResponse(key, status, version)
 }
 
 // Perform a mutation operation specified by the given code.
@@ -417,8 +462,9 @@ func (c *RawBinaryClient) mutate(code opCode, item *Item) MutateResponse {
 
 // Batch version of the mutate method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering)
+// When DataVersionId is 0, zeroVersionIdCode is used instead of code.
 func (c *RawBinaryClient) mutateMulti(
-	code opCode,
+	code opCode, zeroVersionIdCode opCode,
 	items []*Item) []MutateResponse {
 
 	if items == nil {
@@ -435,15 +481,24 @@ func (c *RawBinaryClient) mutateMulti(
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	var itemCode opCode
 	for i, item := range items {
-		responses[i] = c.sendMutateRequest(code, item, true)
+		itemCode = code
+		if item.DataVersionId == 0 {
+			itemCode = zeroVersionIdCode
+		}
+		responses[i] = c.sendMutateRequest(itemCode, item, true)
 	}
 
 	for i, item := range items {
 		if responses[i] != nil { // error occurred while sending
 			continue
 		}
-		responses[i] = c.receiveMutateResponse(code, item.Key)
+		itemCode = code
+		if item.DataVersionId == 0 {
+			itemCode = zeroVersionIdCode
+		}
+		responses[i] = c.receiveMutateResponse(itemCode, item.Key)
 	}
 
 	return responses
@@ -456,7 +511,7 @@ func (c *RawBinaryClient) Set(item *Item) MutateResponse {
 
 // See Client interface for documentation.
 func (c *RawBinaryClient) SetMulti(items []*Item) []MutateResponse {
-	return c.mutateMulti(opSet, items)
+	return c.mutateMulti(opSet, opSet, items)
 }
 
 // See Client interface for documentation.
@@ -467,13 +522,25 @@ func (c *RawBinaryClient) SetSentinels(items []*Item) []MutateResponse {
 }
 
 // See Client interface for documentation.
+func (c *RawBinaryClient) CasMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(opSet, opAdd, items)
+}
+
+// See Client interface for documentation.
+func (c *RawBinaryClient) CasSentinels(items []*Item) []MutateResponse {
+	// For raw clients, there are no difference between CasMulti and
+	// CasSentinels.
+	return c.CasMulti(items)
+}
+
+// See Client interface for documentation.
 func (c *RawBinaryClient) Add(item *Item) MutateResponse {
 	return c.mutate(opAdd, item)
 }
 
 // See Client interface for documentation.
 func (c *RawBinaryClient) AddMulti(items []*Item) []MutateResponse {
-	return c.mutateMulti(opAdd, items)
+	return c.mutateMulti(opAdd, opAdd, items)
 }
 
 // See Client interface for documentation.

@@ -35,8 +35,12 @@ func SetupTestServer(ssl bool) (*TestServer, string) {
 	serveMux.HandleFunc(
 		"/",
 		func(writer http.ResponseWriter, req *http.Request) {
-
 			writer.Write([]byte("ok"))
+		})
+	serveMux.HandleFunc(
+		"/redirect",
+		func(writer http.ResponseWriter, req *http.Request) {
+			http.Redirect(writer, req, "/", http.StatusMovedPermanently)
 		})
 
 	server := httptest.NewUnstartedServer(serveMux)

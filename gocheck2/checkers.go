@@ -258,3 +258,29 @@ func (h multilineErrorMatches) Info() *CheckerInfo {
 }
 
 var MultilineErrorMatches multilineErrorMatches = multilineErrorMatches{}
+
+type greaterThan struct{}
+
+func (c greaterThan) Check(params []interface{}, names []string) (bool, string) {
+	obtained, ok := params[0].(int)
+	if !ok {
+		return false, "obtained is not int"
+	}
+	expected, ok := params[1].(int)
+	if !ok {
+		return false, "expected is not int"
+	}
+
+	if obtained > expected {
+		return true, ""
+	}
+	return false, fmt.Sprintf("%d is less than or equal to %d", obtained, expected)
+}
+func (c greaterThan) Info() *CheckerInfo {
+	return &CheckerInfo{
+		Name:   "GreaterThan",
+		Params: []string{"obtained", "expected"},
+	}
+}
+
+var GreaterThan = &greaterThan{}

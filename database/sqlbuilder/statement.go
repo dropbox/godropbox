@@ -21,6 +21,7 @@ type SelectStatement interface {
 	GroupBy(expressions ...Expression) SelectStatement
 	OrderBy(clauses ...OrderByClause) SelectStatement
 	Limit(limit int64) SelectStatement
+	Distinct() SelectStatement
 	WithSharedLock() SelectStatement
 	ForUpdate() SelectStatement
 	Offset(offset int64) SelectStatement
@@ -94,6 +95,11 @@ type UnlockStatement interface {
 	Statement
 }
 
+// SetGtidNextStatement returns a SQL statement that can be used to explicitly set the next GTID.
+type GtidNextStatement interface {
+	Statement
+}
+
 //
 // UNION SELECT Statement ======================================================
 //
@@ -103,6 +109,16 @@ func Union(selects ...SelectStatement) UnionStatement {
 		selects: selects,
 		limit:   -1,
 		offset:  -1,
+		unique:  true,
+	}
+}
+
+func UnionAll(selects ...SelectStatement) UnionStatement {
+	return &unionStatementImpl{
+		selects: selects,
+		limit:   -1,
+		offset:  -1,
+		unique:  false,
 	}
 }
 
@@ -113,6 +129,8 @@ type unionStatementImpl struct {
 	group         *listClause
 	order         *listClause
 	limit, offset int64
+	// True if results of the union should be deduped.
+	unique bool
 }
 
 func (us *unionStatementImpl) Where(expression BoolExpression) UnionStatement {
@@ -206,14 +224,18 @@ func (us *unionStatementImpl) String(database string) (sql string, err error) {
 	buf := new(bytes.Buffer)
 	for i, statement := range us.selects {
 		if i != 0 {
-			buf.WriteString(" UNION ")
+			if us.unique {
+				_, _ = buf.WriteString(" UNION ")
+			} else {
+				_, _ = buf.WriteString(" UNION ALL ")
+			}
 		}
 		_, _ = buf.WriteString("(")
 		selectSql, err := statement.String(database)
 		if err != nil {
 			return "", err
 		}
-		buf.WriteString(selectSql)
+		_, _ = buf.WriteString(selectSql)
 		_, _ = buf.WriteString(")")
 	}
 
@@ -264,6 +286,7 @@ func newSelectStatement(
 		offset:         -1,
 		withSharedLock: false,
 		forUpdate:      false,
+		distinct:       false,
 	}
 }
 
@@ -279,6 +302,7 @@ type selectStatementImpl struct {
 	limit, offset  int64
 	withSharedLock bool
 	forUpdate      bool
+	distinct       bool
 }
 
 func (s *selectStatementImpl) Copy() SelectStatement {
@@ -328,6 +352,11 @@ func (q *selectStatementImpl) Limit(limit int64) SelectStatement {
 	return q
 }
 
+func (q *selectStatementImpl) Distinct() SelectStatement {
+	q.distinct = true
+	return q
+}
+
 func (q *selectStatementImpl) WithSharedLock() SelectStatement {
 	// We don't need to grab a read lock if we're going to grab a write one
 	if !q.forUpdate {
@@ -360,10 +389,14 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.WriteString("SELECT ")
+	_, _ = buf.WriteString("SELECT ")
 
 	if err = writeComment(q.comment, buf); err != nil {
 		return
+	}
+
+	if q.distinct {
+		_, _ = buf.WriteString("DISTINCT ")
 	}
 
 	if q.projections == nil || len(q.projections) == 0 {
@@ -374,7 +407,7 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 
 	for i, col := range q.projections {
 		if i > 0 {
-			buf.WriteByte(',')
+			_ = buf.WriteByte(',')
 		}
 		if col == nil {
 			return "", errors.Newf(
@@ -386,7 +419,7 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 		}
 	}
 
-	buf.WriteString(" FROM ")
+	_, _ = buf.WriteString(" FROM ")
 	if q.table == nil {
 		return "", errors.Newf("nil table.  Generated sql: %s", buf.String())
 	}
@@ -395,21 +428,21 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	if q.where != nil {
-		buf.WriteString(" WHERE ")
+		_, _ = buf.WriteString(" WHERE ")
 		if err = q.where.SerializeSql(buf); err != nil {
 			return
 		}
 	}
 
 	if q.group != nil {
-		buf.WriteString(" GROUP BY ")
+		_, _ = buf.WriteString(" GROUP BY ")
 		if err = q.group.SerializeSql(buf); err != nil {
 			return
 		}
 	}
 
 	if q.order != nil {
-		buf.WriteString(" ORDER BY ")
+		_, _ = buf.WriteString(" ORDER BY ")
 		if err = q.order.SerializeSql(buf); err != nil {
 			return
 		}
@@ -417,16 +450,16 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 
 	if q.limit >= 0 {
 		if q.offset >= 0 {
-			buf.WriteString(fmt.Sprintf(" LIMIT %d, %d", q.offset, q.limit))
+			_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d, %d", q.offset, q.limit))
 		} else {
-			buf.WriteString(fmt.Sprintf(" LIMIT %d", q.limit))
+			_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d", q.limit))
 		}
 	}
 
 	if q.forUpdate {
-		buf.WriteString(" FOR UPDATE")
+		_, _ = buf.WriteString(" FOR UPDATE")
 	} else if q.withSharedLock {
-		buf.WriteString(" LOCK IN SHARE MODE")
+		_, _ = buf.WriteString(" LOCK IN SHARE MODE")
 	}
 
 	return buf.String(), nil
@@ -496,11 +529,11 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.WriteString("INSERT ")
+	_, _ = buf.WriteString("INSERT ")
 	if s.ignore {
-		buf.WriteString("IGNORE ")
+		_, _ = buf.WriteString("IGNORE ")
 	}
-	buf.WriteString("INTO ")
+	_, _ = buf.WriteString("INTO ")
 
 	if err = writeComment(s.comment, buf); err != nil {
 		return
@@ -520,10 +553,10 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 			buf.String())
 	}
 
-	buf.WriteString(" (")
+	_, _ = buf.WriteString(" (")
 	for i, col := range s.columns {
 		if i > 0 {
-			buf.WriteByte(',')
+			_ = buf.WriteByte(',')
 		}
 
 		if col == nil {
@@ -543,10 +576,10 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 			buf.String())
 	}
 
-	buf.WriteString(") VALUES (")
+	_, _ = buf.WriteString(") VALUES (")
 	for row_i, row := range s.rows {
 		if row_i > 0 {
-			buf.WriteString(", (")
+			_, _ = buf.WriteString(", (")
 		}
 
 		if len(row) != len(s.columns) {
@@ -557,7 +590,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 
 		for col_i, value := range row {
 			if col_i > 0 {
-				buf.WriteByte(',')
+				_ = buf.WriteByte(',')
 			}
 
 			if value == nil {
@@ -572,14 +605,14 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 				return
 			}
 		}
-		buf.WriteByte(')')
+		_ = buf.WriteByte(')')
 	}
 
 	if len(s.onDuplicateKeyUpdates) > 0 {
-		buf.WriteString(" ON DUPLICATE KEY UPDATE ")
+		_, _ = buf.WriteString(" ON DUPLICATE KEY UPDATE ")
 		for i, colExpr := range s.onDuplicateKeyUpdates {
 			if i > 0 {
-				buf.WriteString(", ")
+				_, _ = buf.WriteString(", ")
 			}
 
 			if colExpr.col == nil {
@@ -593,7 +626,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 				return
 			}
 
-			buf.WriteByte('=')
+			_ = buf.WriteByte('=')
 
 			if colExpr.expr == nil {
 				return "", errors.Newf(
@@ -668,7 +701,7 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.WriteString("UPDATE ")
+	_, _ = buf.WriteString("UPDATE ")
 
 	if err = writeComment(u.comment, buf); err != nil {
 		return
@@ -688,7 +721,7 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 			buf.String())
 	}
 
-	buf.WriteString(" SET ")
+	_, _ = buf.WriteString(" SET ")
 	addComma := false
 
 	// Sorting is too hard in go, just create a second map ...
@@ -710,7 +743,7 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 		}
 
 		if addComma {
-			buf.WriteString(", ")
+			_, _ = buf.WriteString(", ")
 		}
 
 		if val == nil {
@@ -723,7 +756,7 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 			return
 		}
 
-		buf.WriteByte('=')
+		_ = buf.WriteByte('=')
 		if err = val.SerializeSql(buf); err != nil {
 			return
 		}
@@ -737,20 +770,20 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 			buf.String())
 	}
 
-	buf.WriteString(" WHERE ")
+	_, _ = buf.WriteString(" WHERE ")
 	if err = u.where.SerializeSql(buf); err != nil {
 		return
 	}
 
 	if u.order != nil {
-		buf.WriteString(" ORDER BY ")
+		_, _ = buf.WriteString(" ORDER BY ")
 		if err = u.order.SerializeSql(buf); err != nil {
 			return
 		}
 	}
 
 	if u.limit >= 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", u.limit))
+		_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d", u.limit))
 	}
 
 	return buf.String(), nil
@@ -803,7 +836,7 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.WriteString("DELETE FROM ")
+	_, _ = buf.WriteString("DELETE FROM ")
 
 	if err = writeComment(d.comment, buf); err != nil {
 		return
@@ -823,20 +856,20 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 			buf.String())
 	}
 
-	buf.WriteString(" WHERE ")
+	_, _ = buf.WriteString(" WHERE ")
 	if err = d.where.SerializeSql(buf); err != nil {
 		return
 	}
 
 	if d.order != nil {
-		buf.WriteString(" ORDER BY ")
+		_, _ = buf.WriteString(" ORDER BY ")
 		if err = d.order.SerializeSql(buf); err != nil {
 			return
 		}
 	}
 
 	if d.limit >= 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", d.limit))
+		_, _ = buf.WriteString(fmt.Sprintf(" LIMIT %d", d.limit))
 	}
 
 	return buf.String(), nil
@@ -884,7 +917,7 @@ func (s *lockStatementImpl) String(database string) (sql string, err error) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.WriteString("LOCK TABLES ")
+	_, _ = buf.WriteString("LOCK TABLES ")
 
 	for idx, lock := range s.locks {
 		if lock.t == nil {
@@ -896,13 +929,13 @@ func (s *lockStatementImpl) String(database string) (sql string, err error) {
 		}
 
 		if lock.w {
-			buf.WriteString(" WRITE")
+			_, _ = buf.WriteString(" WRITE")
 		} else {
-			buf.WriteString(" READ")
+			_, _ = buf.WriteString(" READ")
 		}
 
 		if idx != len(s.locks)-1 {
-			buf.WriteString(", ")
+			_, _ = buf.WriteString(", ")
 		}
 	}
 
@@ -922,6 +955,33 @@ func (s *unlockStatementImpl) String(database string) (sql string, err error) {
 	return "UNLOCK TABLES", nil
 }
 
+// Set GTID_NEXT statment returns a SQL statment that can be used to explicitly set the next GTID.
+func NewGtidNextStatment(sid []byte, gno uint64) GtidNextStatement {
+	return &gtidNextStatementImpl{
+		sid: sid,
+		gno: gno,
+	}
+}
+
+type gtidNextStatementImpl struct {
+	sid []byte
+	gno uint64
+}
+
+func (s *gtidNextStatementImpl) String(database string) (sql string, err error) {
+	// This statement sets a session local variable defining what the next transaction ID is.  It
+	// does not interact with other MySQL sessions. It is neither a DDL nor DML statement, so we
+	// don't have to worry about data corruption.
+	// Because of the string formatting (hex plus an integer), can't morph into another statement.
+	// See: https://dev.mysql.com/doc/refman/5.7/en/replication-options-gtids.html
+	const gtidFormatString = "SET GTID_NEXT=\"%x-%x-%x-%x-%x:%d\""
+
+	buf := new(bytes.Buffer)
+	_, _ = buf.WriteString(fmt.Sprintf(gtidFormatString,
+		s.sid[:4], s.sid[4:6], s.sid[6:8], s.sid[8:10], s.sid[10:], s.gno))
+	return buf.String(), nil
+}
+
 //
 // Util functions =============================================================
 //
@@ -935,12 +995,12 @@ func isValidComment(comment string) bool {
 
 func writeComment(comment string, buf *bytes.Buffer) error {
 	if comment != "" {
-		buf.WriteString("/* ")
+		_, _ = buf.WriteString("/* ")
 		if !isValidComment(comment) {
 			return errors.Newf("Invalid comment: %s", comment)
 		}
-		buf.WriteString(comment)
-		buf.WriteString(" */")
+		_, _ = buf.WriteString(comment)
+		_, _ = buf.WriteString(" */")
 	}
 	return nil
 }

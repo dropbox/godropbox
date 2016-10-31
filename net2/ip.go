@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/dropbox/godropbox/errors"
@@ -102,4 +103,30 @@ func IsLocalhost(host string) bool {
 	return host == "localhost" ||
 		host == "ip6-localhost" ||
 		host == "ipv6-localhost"
+}
+
+// Resolves hostnames in addresses to actual IP4 addresses. Skips all invalid addresses
+// and all addresses that can't be resolved.
+// `addrs` are assumed to be of form: ["<hostname>:<port>", ...]
+// Returns an error in addition to resolved addresses if not all resolutions succeed.
+func ResolveIP4s(addrs []string) ([]string, error) {
+	resolvedAddrs := make([]string, 0, len(addrs))
+	var lastErr error
+
+	for _, server := range addrs {
+		hostPort := strings.Split(server, ":")
+		if len(hostPort) != 2 {
+			lastErr = errors.Newf(
+				"Skipping invalid address: %s", server)
+			continue
+		}
+
+		ip, err := net.ResolveIPAddr("ip4", hostPort[0])
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		resolvedAddrs = append(resolvedAddrs, ip.IP.String()+":"+hostPort[1])
+	}
+	return resolvedAddrs, lastErr
 }

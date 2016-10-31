@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"strings"
+	"sync"
 )
 
 // This interface exposes additional information about the error.
@@ -18,53 +18,65 @@ type DropboxError interface {
 	// This returns the error message without the stack trace.
 	GetMessage() string
 
-	// This returns the stack trace without the error message.
-	GetStack() string
-
-	// This returns the stack trace's context.
-	GetContext() string
-
 	// This returns the wrapped error.  This returns nil if this does not wrap
 	// another error.
 	GetInner() error
 
 	// Implements the built-in error interface.
 	Error() string
+
+	// Returns stack addresses as a string that can be supplied to
+	// a helper tool to get the actual stack trace. This function doesn't result
+	// in resolving full stack frames thus is a lot more efficient.
+	StackAddrs() string
+
+	// Returns stack frames.
+	StackFrames() []StackFrame
+
+	// Returns string representation of stack frames.
+	// Stack frame formatting looks generally something like this:
+	// dropbox/rpc.(*clientV4).Do
+	//   /srv/server/go/src/dropbox/rpc/client.go:87 +0xbf9
+	// dropbox/exclog.Report
+	//   /srv/server/go/src/dropbox/exclog/client.go:129 +0x9e5
+	// main.main
+	//   /home/cdo/tmp/report_exception.go:13 +0x84
+	// It is discouraged to parse stack frames using string parsing since it can change at any time.
+	// Use StackFrames() function instead to get actual stack frame metadata.
+	GetStack() string
+}
+
+// Represents a single stack frame.
+type StackFrame struct {
+	PC         uintptr
+	Func       *runtime.Func
+	FuncName   string
+	File       string
+	LineNumber int
 }
 
 // Standard struct for general types of errors.
 //
 // For an example of custom error type, look at databaseError/newDatabaseError
 // in errors_test.go.
-type DropboxBaseError struct {
-	Msg     string
-	Stack   string
-	Context string
-	inner   error
+type baseError struct {
+	msg   string
+	inner error
+
+	stack       []uintptr
+	framesOnce  sync.Once
+	stackFrames []StackFrame
 }
 
 // This returns the error string without stack trace information.
 func GetMessage(err interface{}) string {
 	switch e := err.(type) {
 	case DropboxError:
-		dberr := DropboxError(e)
-		ret := []string{}
-		for dberr != nil {
-			ret = append(ret, dberr.GetMessage())
-			d := dberr.GetInner()
-			if d == nil {
-				break
-			}
-			var ok bool
-			dberr, ok = d.(DropboxError)
-			if !ok {
-				ret = append(ret, d.Error())
-				break
-			}
-		}
-		return strings.Join(ret, " ")
+		return extractFullErrorMessage(e, false)
 	case runtime.Error:
 		return runtime.Error(e).Error()
+	case error:
+		return e.Error()
 	default:
 		return "Passed a non-error to GetMessage"
 	}
@@ -72,170 +84,125 @@ func GetMessage(err interface{}) string {
 
 // This returns a string with all available error information, including inner
 // errors that are wrapped by this errors.
-func (e *DropboxBaseError) Error() string {
-	return DefaultError(e)
+func (e *baseError) Error() string {
+	return extractFullErrorMessage(e, true)
 }
 
-// This returns the error message without the stack trace.
-func (e *DropboxBaseError) GetMessage() string {
-	return e.Msg
+// Implements DropboxError interface.
+func (e *baseError) GetMessage() string {
+	return e.msg
 }
 
-// This returns the stack trace without the error message.
-func (e *DropboxBaseError) GetStack() string {
-	return e.Stack
-}
-
-// This returns the stack trace's context.
-func (e *DropboxBaseError) GetContext() string {
-	return e.Context
-}
-
-// This returns the wrapped error, if there is one.
-func (e *DropboxBaseError) GetInner() error {
+// Implements DropboxError interface.
+func (e *baseError) GetInner() error {
 	return e.inner
 }
 
-// This returns a new DropboxBaseError initialized with the given message and
+// Implements DropboxError interface.
+func (e *baseError) StackAddrs() string {
+	buf := bytes.NewBuffer(make([]byte, 0, len(e.stack)*8))
+	for _, pc := range e.stack {
+		fmt.Fprintf(buf, "0x%x ", pc)
+	}
+	bufBytes := buf.Bytes()
+	return string(bufBytes[:len(bufBytes)-1])
+}
+
+// Implements DropboxError interface.
+func (e *baseError) StackFrames() []StackFrame {
+	e.framesOnce.Do(func() {
+		e.stackFrames = make([]StackFrame, len(e.stack))
+		for i, pc := range e.stack {
+			frame := &e.stackFrames[i]
+			frame.PC = pc
+			frame.Func = runtime.FuncForPC(pc)
+			if frame.Func != nil {
+				frame.FuncName = frame.Func.Name()
+				frame.File, frame.LineNumber = frame.Func.FileLine(frame.PC - 1)
+			}
+		}
+	})
+	return e.stackFrames
+}
+
+// Implements DropboxError interface.
+func (e *baseError) GetStack() string {
+	stackFrames := e.StackFrames()
+	buf := bytes.NewBuffer(make([]byte, 0, 256))
+	for _, frame := range stackFrames {
+		_, _ = buf.WriteString(frame.FuncName)
+		_, _ = buf.WriteString("\n")
+		fmt.Fprintf(buf, "\t%s:%d +0x%x\n",
+			frame.File, frame.LineNumber, frame.PC)
+	}
+	return buf.String()
+}
+
+// This returns a new baseError initialized with the given message and
 // the current stack trace.
 func New(msg string) DropboxError {
-	stack, context := StackTrace()
-	return &DropboxBaseError{
-		Msg:     msg,
-		Stack:   stack,
-		Context: context,
-	}
+	return new(nil, msg)
 }
 
 // Same as New, but with fmt.Printf-style parameters.
 func Newf(format string, args ...interface{}) DropboxError {
-	stack, context := StackTrace()
-	return &DropboxBaseError{
-		Msg:     fmt.Sprintf(format, args...),
-		Stack:   stack,
-		Context: context,
-	}
+	return new(nil, fmt.Sprintf(format, args...))
 }
 
-// Wraps another error in a new DropboxBaseError.
+// Wraps another error in a new baseError.
 func Wrap(err error, msg string) DropboxError {
-	stack, context := StackTrace()
-	return &DropboxBaseError{
-		Msg:     msg,
-		Stack:   stack,
-		Context: context,
-		inner:   err,
-	}
+	return new(err, msg)
 }
 
 // Same as Wrap, but with fmt.Printf-style parameters.
 func Wrapf(err error, format string, args ...interface{}) DropboxError {
-	stack, context := StackTrace()
-	return &DropboxBaseError{
-		Msg:     fmt.Sprintf(format, args...),
-		Stack:   stack,
-		Context: context,
-		inner:   err,
+	return new(err, fmt.Sprintf(format, args...))
+}
+
+// Internal helper function to create new baseError objects,
+// note that if there is more than one level of redirection to call this function,
+// stack frame information will include that level too.
+func new(err error, msg string) *baseError {
+	stack := make([]uintptr, 200)
+	stackLength := runtime.Callers(3, stack)
+	return &baseError{
+		msg:   msg,
+		stack: stack[:stackLength],
+		inner: err,
 	}
 }
 
-// A default implementation of the Error method of the error interface.
-func DefaultError(e DropboxError) string {
-	// Find the "original" stack trace, which is probably the most helpful for
-	// debugging.
-	errLines := make([]string, 1)
-	var origStack string
-	errLines[0] = "ERROR:"
-	fillErrorInfo(e, &errLines, &origStack)
-	errLines = append(errLines, "")
-	errLines = append(errLines, "ORIGINAL STACK TRACE:")
-	errLines = append(errLines, origStack)
-	return strings.Join(errLines, "\n")
-}
+// Constructs full error message for a given DropboxError by traversing
+// all of its inner errors. If includeStack is True it will also include
+// stack trace from deepest DropboxError in the chain.
+func extractFullErrorMessage(e DropboxError, includeStack bool) string {
+	var ok bool
+	var lastDbxErr DropboxError
+	errMsg := bytes.NewBuffer(make([]byte, 0, 1024))
 
-// Fills errLines with all error messages, and origStack with the inner-most
-// stack.
-func fillErrorInfo(err error, errLines *[]string, origStack *string) {
-	if err == nil {
-		return
-	}
-
-	derr, ok := err.(DropboxError)
-	if ok {
-		*errLines = append(*errLines, derr.GetMessage())
-		*origStack = derr.GetStack()
-		fillErrorInfo(derr.GetInner(), errLines, origStack)
-	} else {
-		*errLines = append(*errLines, err.Error())
-	}
-}
-
-// Returns a copy of the error with the stack trace field populated and any
-// other shared initialization; skips 'skip' levels of the stack trace.
-//
-// NOTE: This panics on any error.
-func stackTrace(skip int) (current, context string) {
-	// grow buf until it's large enough to store entire stack trace
-	buf := make([]byte, 128)
+	dbxErr := e
 	for {
-		n := runtime.Stack(buf, false)
-		if n < len(buf) {
-			buf = buf[:n]
+		lastDbxErr = dbxErr
+		errMsg.WriteString(dbxErr.GetMessage())
+
+		innerErr := dbxErr.GetInner()
+		if innerErr == nil {
 			break
 		}
-		buf = make([]byte, len(buf)*2)
-	}
-
-	// Returns the index of the first occurrence of '\n' in the buffer 'b'
-	// starting with index 'start'.
-	//
-	// In case no occurrence of '\n' is found, it returns len(b). This
-	// simplifies the logic on the calling sites.
-	indexNewline := func(b []byte, start int) int {
-		if start >= len(b) {
-			return len(b)
+		dbxErr, ok = innerErr.(DropboxError)
+		if !ok {
+			// We have reached the end and traveresed all inner errors.
+			// Add last message and exit loop.
+			errMsg.WriteString(innerErr.Error())
+			break
 		}
-		searchBuf := b[start:]
-		index := bytes.IndexByte(searchBuf, '\n')
-		if index == -1 {
-			return len(b)
-		}
-		return (start + index)
+		errMsg.WriteString("\n")
 	}
-
-	// Strip initial levels of stack trace, but keep header line that
-	// identifies the current goroutine.
-	var strippedBuf bytes.Buffer
-	index := indexNewline(buf, 0)
-	if index != -1 {
-		strippedBuf.Write(buf[:index])
+	if includeStack {
+		errMsg.WriteString("\nORIGINAL STACK TRACE:\n")
+		errMsg.WriteString(lastDbxErr.GetStack())
 	}
-
-	// Skip lines.
-	for i := 0; i < skip; i++ {
-		index = indexNewline(buf, index+1)
-		index = indexNewline(buf, index+1)
-	}
-
-	isDone := false
-	startIndex := index
-	lastIndex := index
-	for !isDone {
-		index = indexNewline(buf, index+1)
-		if (index - lastIndex) <= 1 {
-			isDone = true
-		} else {
-			lastIndex = index
-		}
-	}
-	strippedBuf.Write(buf[startIndex:index])
-	return strippedBuf.String(), string(buf[index:])
-}
-
-// This returns the current stack trace string.  NOTE: the stack creation code
-// is excluded from the stack trace.
-func StackTrace() (current, context string) {
-	return stackTrace(3)
+	return errMsg.String()
 }
 
 // Return a wrapped error or nil if there is none.

@@ -42,6 +42,8 @@ func startHttpServers(c *C) []int {
 		test_utils.RandomListenPort(c),
 		test_utils.RandomListenPort(c),
 		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
+		test_utils.RandomListenPort(c),
 		test_utils.RandomListenPort(c)}
 
 	for _, port := range ports {
@@ -107,11 +109,10 @@ func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 
 	const numRequests = 100
 	receivedPorts := sendHttpRequests(c, pool, numRequests)
-	c.Assert(len(receivedPorts) < len(ports), IsFalse)
+	c.Assert(len(receivedPorts), Equals, 6)
 }
 
 func (s *LoadBalancedPoolSuite) TestShuffledFixedStrategy(c *C) {
-	c.Skip("bad test")
 	ports := startHttpServers(c)
 
 	// create pool
@@ -272,7 +273,6 @@ func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
 }
 
 func (s *LoadBalancedPoolSuite) TestConnectTimeout(c *C) {
-	c.Skip("bad test")
 	params := ConnectionParams{
 		MaxIdle:        1,
 		ConnectTimeout: 100 * time.Millisecond,
