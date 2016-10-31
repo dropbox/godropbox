@@ -67,6 +67,8 @@ type ResourcePool interface {
 
 	// This dissociates a resource location from the resource pool; afterwhich,
 	// the user can no longer get resource handles for the resource location.
+	// If the given resource location corresponds to a sub-pool, the unregistered
+	// sub-pool will enter lame duck mode.
 	Unregister(resourceLocation string) error
 
 	// This returns the list of registered resource location entries.

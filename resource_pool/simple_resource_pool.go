@@ -15,6 +15,23 @@ type idleHandle struct {
 	keepUntil *time.Time
 }
 
+type TooManyHandles struct {
+	location string
+}
+
+func (t TooManyHandles) Error() string {
+	return fmt.Sprintf("Too many handles to %s", t.location)
+}
+
+type OpenHandleError struct {
+	location string
+	err      error
+}
+
+func (o OpenHandleError) Error() string {
+	return fmt.Sprintf("Failed to open resource handle: %s (%v)", o.location, o.err)
+}
+
 // A resource pool implementation where all handles are associated to the
 // same resource location.
 type SimpleResourcePool struct {
@@ -98,9 +115,10 @@ func (p *SimpleResourcePool) Register(resourceLocation string) error {
 	return errors.New("SimpleResourcePool can only register one location")
 }
 
-// SimpleResourcePool does not support Unregister.
+// SimpleResourcePool will enter lame duck mode upon calling Unregister.
 func (p *SimpleResourcePool) Unregister(resourceLocation string) error {
-	return errors.New("SimpleResourcePool does not support Unregister")
+	p.EnterLameDuckMode()
+	return nil
 }
 
 func (p *SimpleResourcePool) ListRegistered() []string {
@@ -140,9 +158,7 @@ func (p *SimpleResourcePool) Get(unused string) (ManagedHandle, error) {
 		activeCount > p.options.MaxActiveHandles {
 
 		atomic.AddInt32(p.numActive, -1)
-		return nil, fmt.Errorf(
-			"Too many handles to %s",
-			p.location)
+		return nil, TooManyHandles{p.location}
 	}
 
 	highest := atomic.LoadInt32(p.activeHighWaterMark)
@@ -173,10 +189,7 @@ func (p *SimpleResourcePool) Get(unused string) (ManagedHandle, error) {
 	handle, err := p.options.Open(location)
 	if err != nil {
 		atomic.AddInt32(p.numActive, -1)
-		return nil, fmt.Errorf(
-			"Failed to open resource handle: %s (%v)",
-			p.location,
-			err)
+		return nil, OpenHandleError{p.location, err}
 	}
 
 	return NewManagedHandle(p.location, handle, p, p.options), nil

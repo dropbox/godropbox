@@ -171,6 +171,8 @@ func (p *RoundRobinResourcePool) Unregister(resourceLocation string) error {
 	}
 
 	if idx >= 0 {
+		_ = p.pools[idx].Pool.Unregister(p.pools[idx].ResourceLocation)
+		p.pools[idx].Pool.EnterLameDuckMode()
 		tail := p.pools[idx+1:]
 		p.pools = p.pools[0:idx]
 		p.pools = append(p.pools, tail...)

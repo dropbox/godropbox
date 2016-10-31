@@ -120,6 +120,7 @@ func (p *MultiResourcePool) Unregister(resourceLocation string) error {
 	defer p.rwMutex.Unlock()
 
 	if pool, inMap := p.locationPools[resourceLocation]; inMap {
+		_ = pool.Unregister("")
 		pool.EnterLameDuckMode()
 		delete(p.locationPools, resourceLocation)
 	}
