@@ -64,3 +64,52 @@ func (suite *Rand2Suite) TestPickN(c *C) {
 	c.Assert(picked, HasLen, len(pop))
 	c.Assert(remaining, HasLen, 0)
 }
+
+type shuffleInt []int
+
+func (c shuffleInt) Len() int {
+	return len(c)
+}
+
+func (c shuffleInt) Swap(i int, j int) {
+	c[i], c[j] = c[j], c[i]
+}
+
+func (s *Rand2Suite) TestShuffle(c *C) {
+	x := []int{0, 10, 20, 30, 40, 50}
+	orig := []int{0, 10, 20, 30, 40, 50}
+
+	passed := false
+	for i := 0; i < 1000; i++ {
+		Shuffle(shuffleInt(x))
+
+		c.Assert(len(x), Equals, len(orig))
+
+		same := true
+		for i, v := range x {
+			if v != orig[i] {
+				same = false
+				break
+			}
+		}
+
+		if same {
+			continue
+		}
+
+		vals := make(map[int]struct{})
+		for _, v := range x {
+			vals[v] = struct{}{}
+		}
+		c.Assert(len(vals), Equals, len(orig))
+
+		for _, v := range orig {
+			_, ok := vals[v]
+			c.Assert(ok, Equals, true)
+		}
+
+		passed = true
+	}
+
+	c.Assert(passed, Equals, true)
+}
