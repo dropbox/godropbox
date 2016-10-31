@@ -1,9 +1,8 @@
 package http2
 
 import (
-	"bytes"
+	"crypto/md5"
 	"encoding/binary"
-	"hash/crc32"
 	"net/http"
 	"sort"
 	"sync"
@@ -19,7 +18,7 @@ const (
 	connectionAttempts = 3
 
 	// Default instance mark down duration.
-	markDownDuration = 10 * time.Second
+	defaultMarkDownDuration = 10 * time.Second
 )
 
 type LBStrategy int
@@ -56,6 +55,12 @@ type LoadBalancedPool struct {
 	// Randomly generated seed for determenistic shuffle.
 	shuffleSeed int
 
+	// Number of instances to round-robin between
+	activeSetSize uint64
+
+	// How long to mark a server unusable for.
+	markDownDuration time.Duration
+
 	// UNIX epoch time in seconds that represents time till address is considered
 	// as down and unusable.
 	markDownUntil []int64
@@ -82,11 +87,12 @@ type shuffleSortHelper struct {
 	shuffleSeed int
 }
 
-func (s shuffleSortHelper) sortIdx(idx int) uint32 {
-	buffer := new(bytes.Buffer)
-	binary.Write(buffer, binary.BigEndian, int64(s.shuffleSeed))
-	binary.Write(buffer, binary.BigEndian, int64(s.instances[idx].instanceId))
-	return crc32.ChecksumIEEE(buffer.Bytes())
+func (s shuffleSortHelper) sortIdx(idx int) uint64 {
+	var buffer [16]byte
+	binary.LittleEndian.PutUint64(buffer[:8], uint64(s.shuffleSeed))
+	binary.LittleEndian.PutUint64(buffer[8:], uint64(s.instances[idx].instanceId))
+	sum := md5.Sum(buffer[:])
+	return binary.LittleEndian.Uint64(sum[:8])
 }
 func (s shuffleSortHelper) Len() int { return len(s.instances) }
 func (s shuffleSortHelper) Swap(i, j int) {
@@ -103,12 +109,14 @@ type LBPoolInstanceInfo struct {
 
 func NewLoadBalancedPool(params ConnectionParams) *LoadBalancedPool {
 	return &LoadBalancedPool{
-		instances:     make(map[string]*instancePool),
-		instanceList:  make(instancePoolSlice, 0),
-		shuffleSeed:   rand2.Int(),
-		markDownUntil: make([]int64, 0),
-		params:        params,
-		strategy:      LBRoundRobin,
+		instances:        make(map[string]*instancePool),
+		instanceList:     make(instancePoolSlice, 0),
+		shuffleSeed:      rand2.Int(),
+		markDownUntil:    make([]int64, 0),
+		params:           params,
+		strategy:         LBRoundRobin,
+		activeSetSize:    6,
+		markDownDuration: defaultMarkDownDuration,
 	}
 }
 
@@ -117,12 +125,28 @@ func (pool *LoadBalancedPool) SetStrategy(strategy LBStrategy) {
 	pool.strategy = strategy
 }
 
+// For the round robin strategy, sets the number of servers to round-robin
+// between.  The default is 6.
+func (pool *LoadBalancedPool) SetActiveSetSize(size uint64) {
+	pool.lock.Lock()
+	defer pool.lock.Unlock()
+	pool.activeSetSize = size
+}
+
+// When a server returns a 500, we mark it unusable.
+// Configure how long we will avoid sending requests to it.
+// Must be called before the pool is used.
+func (pool *LoadBalancedPool) SetMarkDownDuration(duration time.Duration) {
+	pool.markDownDuration = duration
+}
+
 func (pool *LoadBalancedPool) newInstancePool(info LBPoolInstanceInfo) *instancePool {
 	simplePool := NewSimplePool(info.Addr, pool.params)
 	return &instancePool{SimplePool: *simplePool, instanceId: info.InstanceId}
 }
 
 func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
+
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 	newInstances := make(map[string]*instancePool)
@@ -143,11 +167,7 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	}
 	switch pool.strategy {
 	case LBRoundRobin:
-		// In RoundRobin strategy, InstanceList is a randomly shuffled list of instances.
-		for i, _ := range newInstanceList {
-			randIdx := rand2.Intn(i + 1)
-			newInstanceList.Swap(i, randIdx)
-		}
+		sort.Sort(shuffleSortHelper{newInstanceList, pool.shuffleSeed})
 	case LBSortedFixed:
 		// In SortedFixed strategy, InstanceList is a sorted list, sorted by instanceId.
 		sort.Sort(newInstanceList)
@@ -214,7 +234,7 @@ func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
 			// to send requests in round robin manner, thus this provides extra
 			// protection when service may still be up but have higher rate of
 			// 500s for whatever reason.
-			pool.markInstanceDown(idx, instance, time.Now().Add(markDownDuration).Unix())
+			pool.markInstanceDown(idx, instance, time.Now().Add(pool.markDownDuration).Unix())
 		} else if isDown {
 			// If an instance was marked as down, but succeeded, reset the mark down timer, so
 			// instance is treated as healthy right away.
@@ -254,19 +274,25 @@ func (pool *LoadBalancedPool) getInstance() (
 	instance *instancePool,
 	isDown bool,
 	err error) {
+
 	pool.lock.RLock()
 	defer pool.lock.RUnlock()
 	if len(pool.instanceList) == 0 {
 		return 0, nil, false, errors.Newf("no available instances")
 	}
 	now := time.Now().Unix()
-	for i := 0; i < len(pool.instanceList); i++ {
+	numInstancesToTry := uint64(len(pool.instanceList))
+	if pool.strategy == LBRoundRobin &&
+		pool.activeSetSize < numInstancesToTry {
+		numInstancesToTry = pool.activeSetSize
+	}
+	for i := 0; uint64(i) < numInstancesToTry; i++ {
 		switch pool.strategy {
 		case LBRoundRobin:
 			// In RoundRobin strategy instanceIdx keeps changing, to
 			// achieve round robin load balancing.
 			instanceIdx := atomic.AddUint64(&pool.instanceIdx, 1)
-			idx = int(instanceIdx % uint64(len(pool.instanceList)))
+			idx = int(instanceIdx % numInstancesToTry)
 		case LBSortedFixed:
 			// In SortedFixed strategy instances are always traversed in same
 			// exact order.
@@ -288,6 +314,12 @@ func (pool *LoadBalancedPool) getInstance() (
 func (pool *LoadBalancedPool) GetSingleInstance() (Pool, error) {
 	_, instance, _, err := pool.getInstance()
 	return instance, err
+}
+
+func (pool *LoadBalancedPool) HasInstances() bool {
+	pool.lock.RLock()
+	defer pool.lock.RUnlock()
+	return len(pool.instanceList) > 0
 }
 
 // Returns a SimplePool for given instanceId, or an error if it does not exist.
@@ -318,6 +350,14 @@ func (pool *LoadBalancedPool) markInstanceDown(
 func (pool *LoadBalancedPool) markInstanceUp(
 	idx int, instance *instancePool) {
 	pool.markInstanceDown(idx, instance, 0)
+}
+
+func (pool *LoadBalancedPool) CloseIdleConnections() {
+	pool.lock.Lock()
+	defer pool.lock.Unlock()
+	for _, instance := range pool.instances {
+		instance.CloseIdleConnections()
+	}
 }
 
 func (pool *LoadBalancedPool) Close() {
