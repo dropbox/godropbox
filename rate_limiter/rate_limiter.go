@@ -1,22 +1,24 @@
 package rate_limiter
 
 import (
+	"math"
 	"sync"
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
 )
 
-const tickInterval = 100 * time.Millisecond
-const ticksPerSec = 10
+const UNLIMITED = math.MaxFloat64
+const TickInterval = 50 * time.Millisecond
+const TicksPerSec = 20
 
 // Interface for a thread-safe leaky bucket rate limiter.
 type RateLimiter interface {
 	// This returns the leaky bucket's maximum capacity.
 	MaxQuota() float64
 
-	// This sets the leaky bucket's maximum capacity.  The value must be
-	// non-negative.
+	// This sets the leaky bucket's maximum capacity.  The value must be non-negative.
+	// Zero means "throttle everything". UNLIMITED means "throttle nothing".
 	SetMaxQuota(q float64) error
 
 	// This returns the leaky bucket's fill rate.
@@ -36,8 +38,14 @@ type RateLimiter interface {
 	// this returns immediately.
 	Throttle(request float64) bool
 
+	// Like Throttle(), but does not block: returns false when NOT throttled,
+	// and true when the request would have blocked under Throttle().
+	TryThrottle(request float64) bool
+
 	// Stop the rate limiter.
 	Stop()
+
+	HasStopped() bool
 }
 
 // A thread-safe leaky bucket rate limiter.
@@ -62,19 +70,23 @@ type rateLimiterImpl struct {
 
 func newRateLimiter() *rateLimiterImpl {
 	m := &sync.Mutex{}
-	t := time.NewTicker(tickInterval)
+	t := time.NewTicker(TickInterval)
 
 	return &rateLimiterImpl{
 		mutex:       m,
 		cond:        sync.NewCond(m),
-		maxQuota:    0,
+		maxQuota:    UNLIMITED,
 		quotaPerSec: 0,
-		quota:       0,
+		quota:       UNLIMITED,
 		stopped:     false,
 		stopChan:    make(chan bool),
 		ticker:      t,
 		tickChan:    t.C,
 	}
+}
+
+func NewUnthrottledRateLimiter() (RateLimiter, error) {
+	return NewRateLimiter(UNLIMITED, UNLIMITED)
 }
 
 func NewRateLimiter(
@@ -115,7 +127,7 @@ func (l *rateLimiterImpl) fillBucket() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	tickQuota := l.quotaPerSec / ticksPerSec
+	tickQuota := l.quotaPerSec / TicksPerSec
 
 	l.quota += tickQuota
 	if l.quota > l.maxQuota {
@@ -203,6 +215,12 @@ func (l *rateLimiterImpl) setQuota(q float64) {
 // NOTE: When maxQuota is zero, or when the rate limiter is stopped,
 // this returns immediately.
 func (l *rateLimiterImpl) Throttle(request float64) bool {
+	return l.throttle(request, false /* tryOnce */)
+}
+func (l *rateLimiterImpl) TryThrottle(request float64) bool {
+	return l.throttle(request, true /* tryOnce */)
+}
+func (l *rateLimiterImpl) throttle(request float64, tryOnce bool) bool {
 	if request <= 0 {
 		return false
 	}
@@ -213,23 +231,28 @@ func (l *rateLimiterImpl) Throttle(request float64) bool {
 	throttled := false
 
 	for {
-		if l.maxQuota <= 0 || l.stopped {
-			return throttled
+		if l.maxQuota == UNLIMITED || l.stopped {
+			return false
 		}
 
-		request -= l.quota
-		l.quota = 0
-
-		if request <= 0 {
-			l.quota = -request
+		if request <= l.quota {
+			l.quota -= request
 			if l.quota > 0 {
 				// Mitigate Lost Wakeups.
 				// Still possible, but less likely.
 				l.cond.Signal()
 			}
+			// NB: always false for the tryOnce case.
 			return throttled
 		}
 
+		if tryOnce {
+			// We would have blocked.
+			return true
+		}
+
+		request -= l.quota
+		l.quota = 0
 		l.cond.Wait()
 		throttled = true
 	}
@@ -246,10 +269,17 @@ func (l *rateLimiterImpl) Stop() {
 
 	l.stopped = true
 
-	l.stopChan <- true
+	close(l.stopChan)
 	l.ticker.Stop()
 
 	l.cond.Broadcast()
+}
+
+func (l *rateLimiterImpl) HasStopped() bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	return l.stopped
 }
 
 // A mock rate limiter for external unittesting.  The bucket is fill via the Tick call.
