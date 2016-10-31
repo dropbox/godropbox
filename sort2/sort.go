@@ -3,6 +3,7 @@ package sort2
 import (
 	"bytes"
 	"sort"
+	"time"
 )
 
 //
@@ -289,4 +290,30 @@ func (s ByteArraySlice) Sort() {
 
 func ByteArrays(s [][]byte) {
 	sort.Sort(ByteArraySlice(s))
+}
+
+//
+// TimeSlice ----------------------------------------------------------------
+//
+
+type TimeSlice []time.Time
+
+func (s TimeSlice) Len() int {
+	return len(s)
+}
+
+func (s TimeSlice) Less(i, j int) bool {
+	return s[i].Before(s[j])
+}
+
+func (s TimeSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s TimeSlice) Sort() {
+	sort.Sort(s)
+}
+
+func Times(s []time.Time) {
+	sort.Sort(TimeSlice(s))
 }
