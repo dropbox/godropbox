@@ -3,31 +3,35 @@ package errors
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
+	"unicode"
 )
 
 func TestStackTrace(t *testing.T) {
 	const testMsg = "test error"
 	er := New(testMsg)
-	e := er.(*DropboxBaseError)
 
-	if e.Msg != testMsg {
-		t.Errorf("error message %s != expected %s", e.Msg, testMsg)
+	if er.GetMessage() != testMsg {
+		t.Errorf("error message %s != expected %s", er.GetMessage(), testMsg)
 	}
 
-	if strings.Index(e.Stack, "godropbox/errors/errors.go") != -1 {
+	if strings.Index(er.GetStack(), "github.com/dropbox/godropbox/errors/errors.go") != -1 {
 		t.Error("stack trace generation code should not be in the error stack trace")
 	}
 
-	if strings.Index(e.Stack, "TestStackTrace") == -1 {
+	if strings.Index(er.GetStack(), "TestStackTrace") == -1 {
 		t.Error("stack trace must have test code in it")
 	}
 
-	// compile-time test to ensure that DropboxError conforms to error interface
-	var err error = e
-	_ = err
+	for i, r := range er.GetStack() {
+		if !(unicode.IsSpace(r) || unicode.IsPrint(r)) {
+			t.Errorf("stack trace has an unexpected rune at index %v (%q)", i, r)
+			break
+		}
+	}
 }
 
 func TestWrappedError(t *testing.T) {
@@ -54,33 +58,27 @@ func TestWrappedError(t *testing.T) {
 	}
 }
 
+func TestStackAddrs(t *testing.T) {
+	pat := regexp.MustCompile("^0x[a-h0-9]+( 0x[a-h0-9]+)*$")
+	er := New("big trouble")
+	if !pat.MatchString(er.StackAddrs()) {
+		t.Errorf("StackAddrs didn't match `%s`: %q", pat, er.StackAddrs())
+	}
+}
+
 // ---------------------------------------
 // minimal example + test for custom error
 //
 type databaseError struct {
-	Msg     string
-	Code    int
-	Stack   string
-	Context string
+	DropboxError
+	code int
 }
 
 // "constructor" for creating error (needs to store return value of StackTrace() to get the
 // )
 func newDatabaseError(msg string, code int) databaseError {
-	stack, context := StackTrace()
-	return databaseError{msg, code, stack, context}
+	return databaseError{DropboxError: New(msg), code: code}
 }
-
-// needed to satisfy "error" interface
-func (e databaseError) Error() string {
-	return DefaultError(e)
-}
-
-// for the DropboxError interface
-func (e databaseError) GetMessage() string { return e.Msg }
-func (e databaseError) GetStack() string   { return e.Stack }
-func (e databaseError) GetContext() string { return e.Context }
-func (e databaseError) GetInner() error    { return nil }
 
 // ---------------------------------------
 
@@ -154,5 +152,36 @@ func TestRootError(t *testing.T) {
 	err = RootError(syscall.ECONNREFUSED)
 	if err != syscall.ECONNREFUSED {
 		t.Fatalf("expected ECONNREFUSED on valid nested error: %T %v", err, err)
+	}
+}
+
+// Benchmarks creation of new errors.
+// Current expected range is ~0.1-0.2ms to create errors from 100 go routines
+// simultaneously. This is fairly close to just spinning up go routines
+// and putting stuff on channels and doing some very simple work, thus
+// error creation should be cheap enough for all most all use cases.
+func BenchmarkNew(b *testing.B) {
+	a := func() error {
+		b := func() error {
+			c := func() error {
+				return New("Hello world, grab me a stack trace!")
+			}
+			return c()
+		}
+		return b()
+	}
+	nRoutines := 100
+	errChan := make(chan error, nRoutines)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for k := 0; k < nRoutines; k++ {
+			go func() {
+				err := a()
+				errChan <- err
+			}()
+		}
+		for k := 0; k < nRoutines; k++ {
+			<-errChan
+		}
 	}
 }
