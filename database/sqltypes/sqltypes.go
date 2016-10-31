@@ -243,7 +243,7 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	case []byte:
 		v = Value{String{bindVal, false}}
 	case time.Time:
-		v = Value{String{[]byte(bindVal.Format("2006-01-02 15:04:05")), true}}
+		v = Value{String{[]byte(bindVal.Format("2006-01-02 15:04:05.000000000")), true}}
 	case Numeric, Fractional, String:
 		v = Value{bindVal.(InnerValue)}
 	case Value:

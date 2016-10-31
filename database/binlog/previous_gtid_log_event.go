@@ -28,7 +28,7 @@ type PreviousGtidsLogEvent struct {
 type GtidSet map[string][]GtidRange
 
 type GtidRange struct {
-	Start, End uint64
+	Start, End uint64 // NOTE: End is EXCLUSIVE
 }
 
 func (p *PreviousGtidsLogEvent) GtidSet() GtidSet {

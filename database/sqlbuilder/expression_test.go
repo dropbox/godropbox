@@ -2,6 +2,7 @@ package sqlbuilder
 
 import (
 	"bytes"
+	"time"
 
 	gc "gopkg.in/check.v1"
 )
@@ -73,6 +74,22 @@ func (s *ExprSuite) TestLikeExpr(c *gc.C) {
 		sql,
 		gc.Equals,
 		"`table1`.`col1` LIKE '\\%my\\_prefix%'")
+
+}
+
+func (s *ExprSuite) TestRegexExpr(c *gc.C) {
+	expr := RegexpL(table1Col1, "[[:<:]]log|[[.low-line.]]log")
+
+	buf := &bytes.Buffer{}
+
+	err := expr.SerializeSql(buf)
+	c.Assert(err, gc.IsNil)
+
+	sql := buf.String()
+	c.Assert(
+		sql,
+		gc.Equals,
+		"`table1`.`col1` REGEXP '[[:<:]]log|[[.low-line.]]log'")
 
 }
 
@@ -461,4 +478,70 @@ func (s *ExprSuite) TestMinus(c *gc.C) {
 
 	sql := buf.String()
 	c.Assert(sql, gc.Equals, "1 - 2")
+}
+
+func (s *ExprSuite) TestInterval(c *gc.C) {
+	testTable := []struct {
+		interval    time.Duration
+		expected    string
+		expectedErr error
+	}{
+		{
+			interval: 50 * time.Microsecond,
+			expected: "INTERVAL '0:0:0:50' HOUR_MICROSECOND",
+		},
+		{
+			interval: -50 * time.Microsecond,
+			expected: "INTERVAL '-0:0:0:50' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50*time.Microsecond + 50*time.Second,
+			expected: "INTERVAL '0:0:50:50' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50*time.Microsecond +
+				50*time.Second +
+				50*time.Minute,
+			expected: "INTERVAL '0:50:50:50' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50*time.Microsecond +
+				50*time.Second +
+				50*time.Minute +
+				50*time.Hour,
+			expected: "INTERVAL '50:50:50:50' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50 * time.Hour,
+			expected: "INTERVAL '50:0:0:0' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50*time.Hour + 50*time.Minute,
+			expected: "INTERVAL '50:50:0:0' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50*time.Hour + 50*time.Minute + 50*time.Second,
+			expected: "INTERVAL '50:50:50:0' HOUR_MICROSECOND",
+		},
+		{
+			interval: 0,
+			expected: "INTERVAL '0:0:0:0' HOUR_MICROSECOND",
+		},
+		{
+			interval: 50 * time.Nanosecond,
+			expected: "INTERVAL '0:0:0:0' HOUR_MICROSECOND",
+		},
+	}
+	buf := &bytes.Buffer{}
+
+	for i, tt := range testTable {
+		buf.Reset()
+		err := Interval(tt.interval).SerializeSql(buf)
+		c.Assert(err, gc.Equals, tt.expectedErr,
+			gc.Commentf("experiment #%d", i))
+		if err == nil {
+			c.Assert(buf.String(), gc.Equals, tt.expected,
+				gc.Commentf("experiment #%d", i))
+		}
+	}
 }

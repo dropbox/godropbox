@@ -67,7 +67,7 @@ func (s *StmtSuite) TestSelectWhereDate(c *gc.C) {
 		sql,
 		gc.Equals,
 		"SELECT `table1`.`col1` FROM `db`.`table1` "+
-			"WHERE `table1`.`col4`>'1999-01-02 03:04:05'")
+			"WHERE `table1`.`col4`>'1999-01-02 03:04:05.000000000'")
 }
 
 func (s *StmtSuite) TestSelectAndWhere(c *gc.C) {
@@ -219,6 +219,17 @@ func (s *StmtSuite) TestSelectWithSharedLock(c *gc.C) {
 			"WHERE `table1`.`col1`>123 LOCK IN SHARE MODE")
 }
 
+func (s *StmtSuite) TestSelectDistinct(c *gc.C) {
+	q := table1.Select(table1Col1).Distinct()
+	sql, err := q.String("db")
+
+	c.Assert(err, gc.IsNil)
+	c.Assert(
+		sql,
+		gc.Equals,
+		"SELECT DISTINCT `table1`.`col1` FROM `db`.`table1`")
+}
+
 //
 // INSERT statement tests
 //
@@ -273,7 +284,7 @@ func (s *StmtSuite) TestInsertDate(c *gc.C) {
 		sql,
 		gc.Equals,
 		"INSERT INTO `db`.`table1` (`table1`.`col4`) "+
-			"VALUES ('1999-01-02 03:04:05')")
+			"VALUES ('1999-01-02 03:04:05.000000000')")
 }
 
 func (s *StmtSuite) TestInsertIgnore(c *gc.C) {

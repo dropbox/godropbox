@@ -185,7 +185,7 @@ func (s *LogFileV4EventReaderSuite) TestFailedMagicCheck(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid binary log magic marker"
+	const expected = "Invalid binary log magic marker"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	header, err := s.reader.peekHeaderBytes(4)
@@ -207,7 +207,7 @@ func (s *LogFileV4EventReaderSuite) TestV1FailFormatCheck(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nBinary log reader does not support V1 binlog"
+	const expected = "Binary log reader does not support V1 binlog"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	header, err := s.reader.peekHeaderBytes(4)
@@ -227,7 +227,7 @@ func (s *LogFileV4EventReaderSuite) TestImplicitV3FailFormatCheck(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nBinary log reader does not support V3 binlog"
+	const expected = "Binary log reader does not support V3 binlog"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	header, err := s.reader.peekHeaderBytes(4)
@@ -249,7 +249,7 @@ func (s *LogFileV4EventReaderSuite) TestV3FailFormatCheck(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nBinary log reader does not support V1 binlog"
+	const expected = "Binary log reader does not support V1 binlog"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	header, err := s.reader.peekHeaderBytes(4)
@@ -284,7 +284,7 @@ func (s *LogFileV4EventReaderSuite) TestBadFDEFormatVersion(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid binlog format version: 5"
+	const expected = "Invalid binlog format version: 5"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	c.Assert(event, NotNil)
@@ -319,7 +319,7 @@ func (s *LogFileV4EventReaderSuite) TestBadExtraHeadersSize(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid extra headers size: 11"
+	const expected = "Invalid extra headers size: 11"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	c.Assert(event, NotNil)
@@ -358,7 +358,7 @@ func (s *LogFileV4EventReaderSuite) TestBadChecksumAlgorithm(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid checksum algorithm: 255 (UNDEFINED)"
+	const expected = "Invalid checksum algorithm: 255 (UNDEFINED)"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	c.Assert(event, NotNil)
@@ -397,7 +397,7 @@ func (s *LogFileV4EventReaderSuite) TestBadFixedLengthDataSizeForFDE(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid fixed length data size: "
+	const expected = "Invalid fixed length data size: "
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	c.Assert(event, NotNil)
@@ -439,7 +439,7 @@ func (s *LogFileV4EventReaderSuite) TestBadFixedLengthDataSizeForNonFDE(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid fixed length data size: "
+	const expected = "Invalid fixed length data size: "
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	c.Assert(event, NotNil)
