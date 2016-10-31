@@ -4,6 +4,7 @@ package sqlbuilder
 import (
 	"bytes"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,9 +30,9 @@ func (o *orderByClause) SerializeSql(out *bytes.Buffer) error {
 	}
 
 	if o.ascent {
-		out.WriteString(" ASC")
+		_, _ = out.WriteString(" ASC")
 	} else {
-		out.WriteString(" DESC")
+		_, _ = out.WriteString(" DESC")
 	}
 
 	return nil
@@ -73,7 +74,7 @@ func serializeClauses(
 	}
 
 	for _, c := range clauses[1:] {
-		out.Write(separator)
+		_, _ = out.Write(separator)
 
 		if c == nil {
 			return errors.Newf("nil clause.  Generated sql: %s", out.String())
@@ -108,7 +109,7 @@ func (conj *conjunctExpression) SerializeSql(out *bytes.Buffer) (err error) {
 
 	useParentheses := len(clauses) > 1
 	if useParentheses {
-		out.WriteByte('(')
+		_ = out.WriteByte('(')
 	}
 
 	if err = serializeClauses(clauses, conj.conjunction, out); err != nil {
@@ -116,7 +117,7 @@ func (conj *conjunctExpression) SerializeSql(out *bytes.Buffer) (err error) {
 	}
 
 	if useParentheses {
-		out.WriteByte(')')
+		_ = out.WriteByte(')')
 	}
 
 	return nil
@@ -143,7 +144,7 @@ func (arith *arithmeticExpression) SerializeSql(out *bytes.Buffer) (err error) {
 
 	useParentheses := len(clauses) > 1
 	if useParentheses {
-		out.WriteByte('(')
+		_ = out.WriteByte('(')
 	}
 
 	if err = serializeClauses(clauses, arith.operator, out); err != nil {
@@ -151,7 +152,7 @@ func (arith *arithmeticExpression) SerializeSql(out *bytes.Buffer) (err error) {
 	}
 
 	if useParentheses {
-		out.WriteByte(')')
+		_ = out.WriteByte(')')
 	}
 
 	return nil
@@ -190,7 +191,7 @@ type listClause struct {
 
 func (list *listClause) SerializeSql(out *bytes.Buffer) error {
 	if list.includeParentheses {
-		out.WriteByte('(')
+		_ = out.WriteByte('(')
 	}
 
 	if err := serializeClauses(list.clauses, []byte(","), out); err != nil {
@@ -198,7 +199,7 @@ func (list *listClause) SerializeSql(out *bytes.Buffer) error {
 	}
 
 	if list.includeParentheses {
-		out.WriteByte(')')
+		_ = out.WriteByte(')')
 	}
 	return nil
 }
@@ -212,7 +213,7 @@ type negateExpression struct {
 }
 
 func (c *negateExpression) SerializeSql(out *bytes.Buffer) (err error) {
-	out.WriteString("NOT (")
+	_, _ = out.WriteString("NOT (")
 
 	if c.nested == nil {
 		return errors.Newf("nil nested.  Generated sql: %s", out.String())
@@ -221,7 +222,7 @@ func (c *negateExpression) SerializeSql(out *bytes.Buffer) (err error) {
 		return
 	}
 
-	out.WriteByte(')')
+	_ = out.WriteByte(')')
 	return nil
 }
 
@@ -247,7 +248,7 @@ func (c *binaryExpression) SerializeSql(out *bytes.Buffer) (err error) {
 		return
 	}
 
-	out.Write(c.operator)
+	_, _ = out.Write(c.operator)
 
 	if c.rhs == nil {
 		return errors.Newf("nil rhs.  Generated sql: %s", out.String())
@@ -287,9 +288,9 @@ func (c *funcExpression) SerializeSql(out *bytes.Buffer) (err error) {
 			c.funcName,
 			out.String())
 	}
-	out.WriteString(c.funcName)
+	_, _ = out.WriteString(c.funcName)
 	if c.args == nil {
-		out.WriteString("()")
+		_, _ = out.WriteString("()")
 	} else {
 		return c.args.SerializeSql(out)
 	}
@@ -313,6 +314,48 @@ func SqlFunc(funcName string, expressions ...Expression) Expression {
 		}
 	}
 	return f
+}
+
+type intervalExpression struct {
+	isExpression
+	duration time.Duration
+	negative bool
+}
+
+var intervalSep = ":"
+
+func (c *intervalExpression) SerializeSql(out *bytes.Buffer) (err error) {
+	hours := c.duration / time.Hour
+	minutes := (c.duration % time.Hour) / time.Minute
+	sec := (c.duration % time.Minute) / time.Second
+	msec := (c.duration % time.Second) / time.Microsecond
+	_, _ = out.WriteString("INTERVAL '")
+	if c.negative {
+		_, _ = out.WriteString("-")
+	}
+	_, _ = out.WriteString(strconv.FormatInt(int64(hours), 10))
+	_, _ = out.WriteString(intervalSep)
+	_, _ = out.WriteString(strconv.FormatInt(int64(minutes), 10))
+	_, _ = out.WriteString(intervalSep)
+	_, _ = out.WriteString(strconv.FormatInt(int64(sec), 10))
+	_, _ = out.WriteString(intervalSep)
+	_, _ = out.WriteString(strconv.FormatInt(int64(msec), 10))
+	_, _ = out.WriteString("' HOUR_MICROSECOND")
+	return nil
+}
+
+// Interval returns a representation of duration
+// in a form "INTERVAL `hour:min:sec:microsec` HOUR_MICROSECOND"
+func Interval(duration time.Duration) Expression {
+	negative := false
+	if duration < 0 {
+		negative = true
+		duration = -duration
+	}
+	return &intervalExpression{
+		duration: duration,
+		negative: negative,
+	}
 }
 
 var likeEscaper = strings.NewReplacer("_", "\\_", "%", "\\%")
@@ -352,6 +395,14 @@ func Like(lhs, rhs Expression) BoolExpression {
 
 func LikeL(lhs Expression, val string) BoolExpression {
 	return Like(lhs, Literal(val))
+}
+
+func Regexp(lhs, rhs Expression) BoolExpression {
+	return newBoolExpression(lhs, rhs, []byte(" REGEXP "))
+}
+
+func RegexpL(lhs Expression, val string) BoolExpression {
+	return Regexp(lhs, Literal(val))
 }
 
 // Returns a representation of "c[0] + ... + c[n-1]" for c in clauses
@@ -525,12 +576,12 @@ func (c *inExpression) SerializeSql(out *bytes.Buffer) error {
 	}
 
 	if c.rhs == nil {
-		out.WriteString("FALSE")
+		_, _ = out.WriteString("FALSE")
 		return nil
 	}
 
-	out.WriteString(buf.String())
-	out.WriteString(" IN ")
+	_, _ = out.WriteString(buf.String())
+	_, _ = out.WriteString(" IN ")
 
 	err = c.rhs.SerializeSql(out)
 	if err != nil {
@@ -640,13 +691,13 @@ type ifExpression struct {
 }
 
 func (exp *ifExpression) SerializeSql(out *bytes.Buffer) error {
-	out.WriteString("IF(")
-	exp.conditional.SerializeSql(out)
-	out.WriteString(",")
-	exp.trueExpression.SerializeSql(out)
-	out.WriteString(",")
-	exp.falseExpression.SerializeSql(out)
-	out.WriteString(")")
+	_, _ = out.WriteString("IF(")
+	_ = exp.conditional.SerializeSql(out)
+	_, _ = out.WriteString(",")
+	_ = exp.trueExpression.SerializeSql(out)
+	_, _ = out.WriteString(",")
+	_ = exp.falseExpression.SerializeSql(out)
+	_, _ = out.WriteString(")")
 	return nil
 }
 
@@ -674,8 +725,8 @@ func ColumnValue(col NonAliasColumn) Expression {
 }
 
 func (cv *columnValueExpression) SerializeSql(out *bytes.Buffer) error {
-	out.WriteString("VALUES(")
-	cv.column.SerializeSqlForColumnList(out)
-	out.WriteByte(')')
+	_, _ = out.WriteString("VALUES(")
+	_ = cv.column.SerializeSqlForColumnList(out)
+	_ = out.WriteByte(')')
 	return nil
 }

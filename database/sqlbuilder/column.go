@@ -75,13 +75,13 @@ func (c *baseColumn) setTableName(table string) error {
 
 func (c *baseColumn) SerializeSqlForColumnList(out *bytes.Buffer) error {
 	if c.table != "" {
-		out.WriteByte('`')
-		out.WriteString(c.table)
-		out.WriteString("`.")
+		_ = out.WriteByte('`')
+		_, _ = out.WriteString(c.table)
+		_, _ = out.WriteString("`.")
 	}
-	out.WriteString("`")
-	out.WriteString(c.name)
-	out.WriteByte('`')
+	_, _ = out.WriteString("`")
+	_, _ = out.WriteString(c.name)
+	_ = out.WriteByte('`')
 	return nil
 }
 
@@ -207,9 +207,9 @@ type aliasColumn struct {
 }
 
 func (c *aliasColumn) SerializeSql(out *bytes.Buffer) error {
-	out.WriteByte('`')
-	out.WriteString(c.name)
-	out.WriteByte('`')
+	_ = out.WriteByte('`')
+	_, _ = out.WriteString(c.name)
+	_ = out.WriteByte('`')
 	return nil
 }
 
@@ -226,16 +226,16 @@ func (c *aliasColumn) SerializeSqlForColumnList(out *bytes.Buffer) error {
 			out.String())
 	}
 
-	out.WriteByte('(')
+	_ = out.WriteByte('(')
 	if c.expression == nil {
 		return errors.Newf("nil alias clause.  Generate sql: %s", out.String())
 	}
 	if err := c.expression.SerializeSql(out); err != nil {
 		return err
 	}
-	out.WriteString(") AS `")
-	out.WriteString(c.name)
-	out.WriteByte('`')
+	_, _ = out.WriteString(") AS `")
+	_, _ = out.WriteString(c.name)
+	_ = out.WriteByte('`')
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 
 	. "github.com/dropbox/godropbox/gocheck2"
 	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+
 	. "gopkg.in/check.v1"
 )
 

@@ -259,6 +259,12 @@ func (r *logStreamV4EventReader) NextEvent() (Event, error) {
 					r.nextLogFileNum),
 			}
 		}
+
+		r.logger.Infof(
+			"Reached end of file %s%d. Next log file is: %s",
+			r.logPrefix,
+			r.nextLogFileNum,
+			string(rotate.NewLogName()))
 	} else {
 		// We need to manually compute next filenum
 		if r.nextLogFileNum < maxLogFileNum {
@@ -266,17 +272,9 @@ func (r *logStreamV4EventReader) NextEvent() (Event, error) {
 		} else {
 			nextFileNum = 0
 		}
-	}
 
-	if isRotate {
 		r.logger.Infof(
-			"Rotate log file from %s%d to: %s",
-			r.logPrefix,
-			r.nextLogFileNum,
-			string(rotate.NewLogName()))
-	} else {
-		r.logger.Infof(
-			"Found stop event. Rotating log file from %s%d to : %s%d",
+			"Detected stop event in %s%d. Next log file is: %s%d",
 			r.logPrefix,
 			r.nextLogFileNum,
 			r.logPrefix,

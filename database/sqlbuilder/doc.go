@@ -5,7 +5,7 @@
 // For instances, the generated statements does not currently work for
 // PostgreSQL since column identifiers are escaped with backquotes.
 // Patches to support other sql flavors are welcome! (see
-// https://github.com/dropbox/godropbox/issues/33 for additional details).
+// https://godropbox/issues/33 for additional details).
 //
 // Known limitations for SELECT queries:
 //  - does not support subqueries (since mysql is bad at it)

@@ -2,6 +2,7 @@ package binlog
 
 import (
 	. "github.com/dropbox/godropbox/gocheck2"
+
 	. "gopkg.in/check.v1"
 
 	mysql_proto "github.com/dropbox/godropbox/proto/mysql"

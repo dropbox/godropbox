@@ -131,19 +131,19 @@ func (t *Table) ForceIndex(index string) *Table {
 // Generates the sql string for the current table expression.  Note: the
 // generated string may not be a valid/executable sql statement.
 func (t *Table) SerializeSql(database string, out *bytes.Buffer) error {
-	out.WriteString("`")
-	out.WriteString(database)
-	out.WriteString("`.`")
-	out.WriteString(t.Name())
-	out.WriteString("`")
+	_, _ = out.WriteString("`")
+	_, _ = out.WriteString(database)
+	_, _ = out.WriteString("`.`")
+	_, _ = out.WriteString(t.Name())
+	_, _ = out.WriteString("`")
 
 	if t.forcedIndex != "" {
 		if !validIdentifierName(t.forcedIndex) {
 			return errors.Newf("'%s' is not a valid identifier for an index", t.forcedIndex)
 		}
-		out.WriteString(" FORCE INDEX (`")
-		out.WriteString(t.forcedIndex)
-		out.WriteString("`)")
+		_, _ = out.WriteString(" FORCE INDEX (`")
+		_, _ = out.WriteString(t.forcedIndex)
+		_, _ = out.WriteString("`)")
 	}
 
 	return nil
@@ -272,18 +272,18 @@ func (t *joinTable) SerializeSql(
 
 	switch t.join_type {
 	case INNER_JOIN:
-		out.WriteString(" JOIN ")
+		_, _ = out.WriteString(" JOIN ")
 	case LEFT_JOIN:
-		out.WriteString(" LEFT JOIN ")
+		_, _ = out.WriteString(" LEFT JOIN ")
 	case RIGHT_JOIN:
-		out.WriteString(" RIGHT JOIN ")
+		_, _ = out.WriteString(" RIGHT JOIN ")
 	}
 
 	if err = t.rhs.SerializeSql(database, out); err != nil {
 		return
 	}
 
-	out.WriteString(" ON ")
+	_, _ = out.WriteString(" ON ")
 	if err = t.onCondition.SerializeSql(out); err != nil {
 		return
 	}

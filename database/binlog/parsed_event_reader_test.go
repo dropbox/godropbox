@@ -188,7 +188,7 @@ func (s *ParsedV4EventReaderSuite) TestInvalidSetExtraHeadersSize(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid extra headers size"
+	const expected = "Invalid extra headers size"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	_, ok := event.(*RawV4Event)
@@ -208,7 +208,7 @@ func (s *ParsedV4EventReaderSuite) TestInvalidSetFixedLengthDataSize(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid fixed length data's size"
+	const expected = "Invalid fixed length data's size"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	_, ok := event.(*RawV4Event)
@@ -236,7 +236,7 @@ func (s *ParsedV4EventReaderSuite) TestParseError(c *C) {
 	c.Assert(err, NotNil)
 	c.Log(err)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nParse error"
+	const expected = "Parse error"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 }

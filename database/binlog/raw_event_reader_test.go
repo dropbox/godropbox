@@ -283,7 +283,7 @@ func (s *RawV4EventReaderSuite) TestInvalidNegBodyLength(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nInvalid event size"
+	const expected = "Invalid event size"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 
 	// Gave up reading after the header
@@ -335,7 +335,7 @@ func (s *RawV4EventReaderSuite) TestPeekHeaderBytesTooFarAhead(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nBuffer full"
+	const expected = "Buffer full"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 }
 
@@ -384,7 +384,7 @@ func (s *RawV4EventReaderSuite) TestConsumeHeaderBytesWithoutPeeking(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nConsuming more bytes than"
+	const expected = "Consuming more bytes than"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 }
 
@@ -407,6 +407,6 @@ func (s *RawV4EventReaderSuite) TestInvalidEOFMidBodyConsumeHeaderBytes(c *C) {
 	// gocheck.ErrorMatches does not seem to work correctly
 	c.Assert(err, NotNil)
 	c.Assert(err, Not(Equals), io.EOF)
-	const expected = "ERROR:\nCannot consume header bytes"
+	const expected = "Cannot consume header bytes"
 	c.Assert(err.Error()[:len(expected)], Equals, expected)
 }
