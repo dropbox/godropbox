@@ -14,6 +14,7 @@ import (
 	"github.com/dropbox/godropbox/errors"
 )
 
+// A Source that can be concurrently used by multiple goroutines.
 type lockedSource struct {
 	mutex sync.Mutex
 	src   rand.Source
@@ -39,10 +40,14 @@ func NewSource(seed int64) rand.Source {
 	}
 }
 
-func init() {
+// Generates a seed based on the current time and the process ID.
+func GetSeed() int64 {
 	now := time.Now()
-	seed := now.Unix() + int64(now.Nanosecond()) + 12345*int64(os.Getpid())
-	rand.Seed(seed)
+	return now.Unix() + int64(now.Nanosecond()) + 12345*int64(os.Getpid())
+}
+
+func init() {
+	rand.Seed(GetSeed())
 }
 
 var (
@@ -176,4 +181,20 @@ func PickN(population []interface{}, n int) (
 	}
 
 	return
+}
+
+// A subset of sort.Interface used for random shuffle.
+type Swapper interface {
+	// Len is the number of elements in the collection.
+	Len() int
+	// Swap swaps the elements with indexes i and j.
+	Swap(i int, j int)
+}
+
+// Randomly shuffles the collection in place.
+func Shuffle(collection Swapper) {
+	// Fisher-Yates shuffle.
+	for i := collection.Len() - 1; i >= 0; i-- {
+		collection.Swap(i, Intn(i+1))
+	}
 }
