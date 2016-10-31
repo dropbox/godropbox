@@ -32,9 +32,13 @@ type ConnectionOptions struct {
 	NowFunc func() time.Time
 
 	// This specifies the timeout for any Read() operation.
+	// Note that setting this to 0 (i.e. not setting it) will make
+	// read operations block indefinitely.
 	ReadTimeout time.Duration
 
 	// This specifies the timeout for any Write() operation.
+	// Note that setting this to 0 (i.e. not setting it) will make
+	// write operations block indefinitely.
 	WriteTimeout time.Duration
 }
 
