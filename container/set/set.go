@@ -45,6 +45,13 @@ type Set interface {
 
 // Returns a new set which is the union of s1 and s2.  s1 and s2 are unmodified.
 func Union(s1 Set, s2 Set) Set {
+	if s1 == nil || s2 == nil {
+		if s1 == nil {
+			return s2
+		} else {
+			return s1
+		}
+	}
 	s3 := s1.Copy()
 	s3.Union(s2)
 	return s3
