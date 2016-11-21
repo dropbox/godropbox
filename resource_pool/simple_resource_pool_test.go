@@ -1,6 +1,7 @@
 package resource_pool
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,6 +36,9 @@ func (c *mockConn) Close() error {
 
 type fakeDialer struct {
 	id *int32
+
+	mutex sync.Mutex
+	conns []*mockConn
 }
 
 func newFakeDialer() *fakeDialer {
@@ -52,11 +56,17 @@ func (d *fakeDialer) MaxId() int {
 
 func (d *fakeDialer) FakeDial(location string) (interface{}, error) {
 	id := atomic.AddInt32(d.id, 1)
-	return &mockConn{
+
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	conn := &mockConn{
 		id:       int(id),
 		location: location,
 		isClosed: false,
-	}, nil
+	}
+
+	d.conns = append(d.conns, conn)
+	return conn, nil
 }
 
 func closeMockConn(handle interface{}) error {
@@ -490,6 +500,18 @@ func (s *SimpleResourcePoolSuite) TestMaxIdleTime(c *C) {
 	err = cTemp.Release()
 	c.Assert(err, IsNil)
 	c.Assert(pool.NumIdle(), Equals, 1)
+
+	// Advance the clock to expire remaining idle connections.
+	mockClock.Advance(10000)
+	handler := pool.getIdleHandle()
+	c.Assert(handler, IsNil)
+
+	for i, conn := range dialer.conns {
+		c.Log(i, conn.isClosed)
+	}
+	for _, conn := range dialer.conns {
+		c.Assert(conn.isClosed, Equals, true)
+	}
 }
 
 func (s *SimpleResourcePoolSuite) TestLameDuckMode(c *C) {
