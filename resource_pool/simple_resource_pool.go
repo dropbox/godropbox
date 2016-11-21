@@ -270,7 +270,7 @@ func (p *SimpleResourcePool) getIdleHandle() ManagedHandle {
 		}
 	}
 	if i > 0 {
-		toClose = p.idleHandles[0 : i-1]
+		toClose = p.idleHandles[0:i]
 	}
 
 	if i < len(p.idleHandles) {
