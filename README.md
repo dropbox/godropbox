@@ -34,7 +34,6 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Cuong Do
 - Daisy Zhou
 - Daniel Hauenstein
-- Daniel Reiter
 - Daniel Reiter Horn
 - Daniel Sommermann
 - Daniel Tahara
