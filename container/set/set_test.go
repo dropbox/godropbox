@@ -71,6 +71,11 @@ func (suite *SetSuite) TestUnion(c *C) {
 	c.Assert(s2.Contains(1), IsFalse)
 	c.Assert(s2.Contains(2), IsTrue)
 	c.Assert(s2.Contains(4), IsTrue)
+
+	c.Assert(Union(nil, s2).Contains(2), IsTrue)
+	c.Assert(Union(s2, nil).Contains(2), IsTrue)
+	c.Assert(Union(nil, s2).Contains(3), IsFalse)
+	c.Assert(Union(s2, nil).Contains(3), IsFalse)
 }
 
 func (suite *SetSuite) TestIntersect(c *C) {

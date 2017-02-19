@@ -77,5 +77,6 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Todd Eisenberger
 - Vadim Graboys
 - Vladislav Supalov
+- Viacheslav Bakhmutov
 - Xinyao Hu
 - Zviad Metreveli

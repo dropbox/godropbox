@@ -10,9 +10,7 @@ import (
 // handled by the provided ShardManager.
 type ShardedClient struct {
 	manager ShardManager
-
-	// When true, use ascii protocol.  Otherwise, use binary protocol.
-	useAsciiProtocol bool
+	builder ClientShardBuilder
 }
 
 var (
@@ -24,22 +22,12 @@ var (
 // This creates a new ShardedClient.
 func NewShardedClient(
 	manager ShardManager,
-	useAsciiProtocol bool) Client {
+	builder ClientShardBuilder) Client {
 
 	return &ShardedClient{
-		manager:          manager,
-		useAsciiProtocol: useAsciiProtocol,
+		manager: manager,
+		builder: builder,
 	}
-}
-
-func (s *ShardedClient) newRawClient(
-	shard int,
-	conn net2.ManagedConn) ClientShard {
-
-	if s.useAsciiProtocol {
-		return NewRawAsciiClient(shard, conn)
-	}
-	return NewRawBinaryClient(shard, conn)
 }
 
 func (c *ShardedClient) release(rawClient ClientShard, conn net2.ManagedConn) {
@@ -78,7 +66,7 @@ func (c *ShardedClient) Get(key string) GetResponse {
 		return NewGetResponse(key, StatusKeyNotFound, 0, nil, 0)
 	}
 
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
 	result := client.Get(key)
@@ -117,7 +105,7 @@ func (c *ShardedClient) getMultiHelper(
 			results[key] = NewGetResponse(key, StatusKeyNotFound, 0, nil, 0)
 		}
 	} else {
-		client := c.newRawClient(shard, conn)
+		client := c.builder(shard, conn)
 		defer c.release(client, conn)
 
 		results = client.GetMulti(keys)
@@ -132,8 +120,15 @@ func (c *ShardedClient) getMultiHelper(
 
 // See Client interface for documentation.
 func (c *ShardedClient) GetMulti(keys []string) map[string]GetResponse {
-	shardMapping := c.manager.GetShardsForKeys(keys)
+	return c.getMulti(c.manager.GetShardsForKeys(keys))
+}
 
+// See Client interface for documentation.
+func (c *ShardedClient) GetSentinels(keys []string) map[string]GetResponse {
+	return c.getMulti(c.manager.GetShardsForSentinelsFromKeys(keys))
+}
+
+func (c *ShardedClient) getMulti(shardMapping map[int]*ShardMapping) map[string]GetResponse {
 	resultsChannel := make(chan map[string]GetResponse, len(shardMapping))
 	for shard, mapping := range shardMapping {
 		go c.getMultiHelper(
@@ -154,199 +149,8 @@ func (c *ShardedClient) GetMulti(keys []string) map[string]GetResponse {
 }
 
 func (c *ShardedClient) mutate(
-	mutateFunc func(Client, *Item) MutateResponse,
-	item *Item) MutateResponse {
-	shard, conn, err := c.manager.GetShard(item.Key)
-	if shard == -1 {
-		return NewMutateErrorResponse(item.Key, c.unmappedError(item.Key))
-	}
-	if err != nil {
-		return NewMutateErrorResponse(item.Key, c.connectionError(shard, err))
-	}
-	if conn == nil {
-		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(item.Key, StatusNoError, 0, c.useAsciiProtocol)
-	}
-
-	client := c.newRawClient(shard, conn)
-	defer c.release(client, conn)
-
-	return mutateFunc(client, item)
-}
-
-// A helper used to specify a set mutation operation on a shard client.
-func setMutator(shardClient Client, shardItem *Item) MutateResponse {
-	return shardClient.Set(shardItem)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) Set(item *Item) MutateResponse {
-	return c.mutate(setMutator, item)
-}
-
-func (c *ShardedClient) mutateMultiHelper(
-	mutateMultiFunc func(Client, []*Item) []MutateResponse,
-	shard int,
-	conn net2.ManagedConn,
-	connErr error,
-	items []*Item,
-	warmingUp bool,
-	resultsChannel chan []MutateResponse) {
-
-	var results []MutateResponse
-	if shard == -1 {
-		results = make([]MutateResponse, 0, len(items))
-		for _, item := range items {
-			results = append(
-				results,
-				NewMutateErrorResponse(item.Key, c.unmappedError(item.Key)))
-		}
-	} else if connErr != nil {
-		results = make([]MutateResponse, 0, len(items))
-		for _, item := range items {
-			results = append(
-				results,
-				NewMutateErrorResponse(
-					item.Key,
-					c.connectionError(shard, connErr)))
-		}
-	} else if conn == nil {
-		results = make([]MutateResponse, 0, len(items))
-		for _, item := range items {
-			// NOTE: zero is an invalid version id.
-			results = append(
-				results,
-				NewMutateResponse(
-					item.Key,
-					StatusNoError,
-					0,
-					c.useAsciiProtocol))
-		}
-	} else {
-		client := c.newRawClient(shard, conn)
-		defer c.release(client, conn)
-
-		results = mutateMultiFunc(client, items)
-	}
-
-	// If server is warming up, we override all failures with success message.
-	if warmingUp {
-		for idx, item := range items {
-			if results[idx].Error() != nil {
-				results[idx] = NewMutateResponse(
-					item.Key,
-					StatusNoError,
-					0,
-					c.useAsciiProtocol)
-			}
-		}
-	}
-
-	resultsChannel <- results
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) mutateMulti(
-	mutateMultiFunc func(Client, []*Item) []MutateResponse,
-	items []*Item) []MutateResponse {
-	shardMapping := c.manager.GetShardsForItems(items)
-
-	resultsChannel := make(chan []MutateResponse, len(shardMapping))
-	for shard, mapping := range shardMapping {
-		go c.mutateMultiHelper(
-			mutateMultiFunc,
-			shard,
-			mapping.Connection,
-			mapping.ConnErr,
-			mapping.Items,
-			false,
-			resultsChannel)
-	}
-
-	results := make([]MutateResponse, 0, len(items))
-	for i := 0; i < len(shardMapping); i++ {
-		results = append(results, (<-resultsChannel)...)
-	}
-	return results
-}
-
-// A helper used to specify a SetMulti mutation operation on a shard client.
-func setMultiMutator(shardClient Client, shardItems []*Item) []MutateResponse {
-	return shardClient.SetMulti(shardItems)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) SetMulti(items []*Item) []MutateResponse {
-	return c.mutateMulti(setMultiMutator, items)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) SetSentinels(items []*Item) []MutateResponse {
-	shardMapping := c.manager.GetShardsForSentinels(items)
-
-	resultsChannel := make(chan []MutateResponse, len(shardMapping))
-	for shard, mapping := range shardMapping {
-		go c.mutateMultiHelper(
-			setMultiMutator,
-			shard,
-			mapping.Connection,
-			mapping.ConnErr,
-			mapping.Items,
-			mapping.WarmingUp,
-			resultsChannel)
-	}
-
-	results := make([]MutateResponse, 0, len(items))
-	for i := 0; i < len(shardMapping); i++ {
-		results = append(results, (<-resultsChannel)...)
-	}
-	return results
-}
-
-// A helper used to specify an Add mutation operation on a shard client.
-func addMutator(shardClient Client, shardItem *Item) MutateResponse {
-	return shardClient.Add(shardItem)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) Add(item *Item) MutateResponse {
-	return c.mutate(addMutator, item)
-}
-
-// A helper used to specify a AddMulti mutation operation on a shard client.
-func addMultiMutator(shardClient Client, shardItems []*Item) []MutateResponse {
-	return shardClient.AddMulti(shardItems)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) AddMulti(items []*Item) []MutateResponse {
-	return c.mutateMulti(addMultiMutator, items)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) Replace(item *Item) MutateResponse {
-	shard, conn, err := c.manager.GetShard(item.Key)
-	if shard == -1 {
-		return NewMutateErrorResponse(item.Key, c.unmappedError(item.Key))
-	}
-	if err != nil {
-		return NewMutateErrorResponse(
-			item.Key,
-			c.connectionError(shard, err))
-	}
-	if conn == nil {
-		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(item.Key, StatusNoError, 0, c.useAsciiProtocol)
-	}
-
-	client := c.newRawClient(shard, conn)
-	defer c.release(client, conn)
-
-	return client.Replace(item)
-}
-
-// See Client interface for documentation.
-func (c *ShardedClient) Delete(key string) MutateResponse {
+	key string,
+	mutateFunc func(Client) MutateResponse) MutateResponse {
 	shard, conn, err := c.manager.GetShard(key)
 	if shard == -1 {
 		return NewMutateErrorResponse(key, c.unmappedError(key))
@@ -356,21 +160,34 @@ func (c *ShardedClient) Delete(key string) MutateResponse {
 	}
 	if conn == nil {
 		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol)
+		return NewMutateResponse(key, StatusNoError, 0)
 	}
 
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
-	return client.Delete(key)
+	return mutateFunc(client)
 }
 
-func (c *ShardedClient) deleteMultiHelper(
+// See Client interface for documentation.
+func (c *ShardedClient) Set(item *Item) MutateResponse {
+	return c.mutate(
+		item.Key,
+		func(shardClient Client) MutateResponse {
+			return shardClient.Set(item)
+		})
+}
+
+func (c *ShardedClient) mutateMultiHelper(
+	mutateMultiFunc func(Client, *ShardMapping) []MutateResponse,
 	shard int,
-	conn net2.ManagedConn,
-	connErr error,
-	keys []string,
+	mapping *ShardMapping,
 	resultsChannel chan []MutateResponse) {
+
+	keys := mapping.Keys
+	conn := mapping.Connection
+	connErr := mapping.ConnErr
+	warmingUp := mapping.WarmingUp
 
 	var results []MutateResponse
 	if shard == -1 {
@@ -393,76 +210,164 @@ func (c *ShardedClient) deleteMultiHelper(
 			// NOTE: zero is an invalid version id.
 			results = append(
 				results,
-				NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol))
+				NewMutateResponse(key, StatusNoError, 0))
 		}
 	} else {
-		client := c.newRawClient(shard, conn)
+		client := c.builder(shard, conn)
 		defer c.release(client, conn)
 
-		results = client.DeleteMulti(keys)
+		results = mutateMultiFunc(client, mapping)
 	}
+
+	// If server is warming up, we override all failures with success message.
+	if warmingUp {
+		for idx, key := range keys {
+			if results[idx].Error() != nil {
+				results[idx] = NewMutateResponse(key, StatusNoError, 0)
+			}
+		}
+	}
+
 	resultsChannel <- results
 }
 
 // See Client interface for documentation.
-func (c *ShardedClient) DeleteMulti(keys []string) []MutateResponse {
-	shardMapping := c.manager.GetShardsForKeys(keys)
+func (c *ShardedClient) mutateMulti(
+	shards map[int]*ShardMapping,
+	mutateMultiFunc func(Client, *ShardMapping) []MutateResponse) []MutateResponse {
 
-	resultsChannel := make(chan []MutateResponse, len(shardMapping))
-	for shard, mapping := range shardMapping {
-		go c.deleteMultiHelper(
+	numKeys := 0
+
+	resultsChannel := make(chan []MutateResponse, len(shards))
+	for shard, mapping := range shards {
+		numKeys += len(mapping.Keys)
+		go c.mutateMultiHelper(
+			mutateMultiFunc,
 			shard,
-			mapping.Connection,
-			mapping.ConnErr,
-			mapping.Keys,
+			mapping,
 			resultsChannel)
 	}
 
-	results := make([]MutateResponse, 0, len(keys))
-	for i := 0; i < len(shardMapping); i++ {
+	results := make([]MutateResponse, 0, numKeys)
+	for i := 0; i < len(shards); i++ {
 		results = append(results, (<-resultsChannel)...)
 	}
 	return results
 }
 
+// A helper used to specify a SetMulti mutation operation on a shard client.
+func setMultiMutator(shardClient Client, mapping *ShardMapping) []MutateResponse {
+	return shardClient.SetMulti(mapping.Items)
+}
+
+// A helper used to specify a CasMulti mutation operation on a shard client.
+func casMultiMutator(shardClient Client, mapping *ShardMapping) []MutateResponse {
+	return shardClient.CasMulti(mapping.Items)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) SetMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(c.manager.GetShardsForItems(items), setMultiMutator)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) SetSentinels(items []*Item) []MutateResponse {
+	return c.mutateMulti(c.manager.GetShardsForSentinelsFromItems(items), setMultiMutator)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) CasMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(c.manager.GetShardsForItems(items), casMultiMutator)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) CasSentinels(items []*Item) []MutateResponse {
+	return c.mutateMulti(c.manager.GetShardsForSentinelsFromItems(items), casMultiMutator)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) Add(item *Item) MutateResponse {
+	return c.mutate(
+		item.Key,
+		func(shardClient Client) MutateResponse {
+			return shardClient.Add(item)
+		})
+}
+
+// A helper used to specify a AddMulti mutation operation on a shard client.
+func addMultiMutator(shardClient Client, mapping *ShardMapping) []MutateResponse {
+	return shardClient.AddMulti(mapping.Items)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) AddMulti(items []*Item) []MutateResponse {
+	return c.mutateMulti(c.manager.GetShardsForItems(items), addMultiMutator)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) Replace(item *Item) MutateResponse {
+	return c.mutate(
+		item.Key,
+		func(shardClient Client) MutateResponse {
+			return shardClient.Replace(item)
+		})
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) Delete(key string) MutateResponse {
+	return c.mutate(
+		key,
+		func(shardClient Client) MutateResponse {
+			return shardClient.Delete(key)
+		})
+}
+
+// A helper used to specify a DeleteMulti mutation operation on a shard client.
+func deleteMultiMutator(shardClient Client, mapping *ShardMapping) []MutateResponse {
+	return shardClient.DeleteMulti(mapping.Keys)
+}
+
+// See Client interface for documentation.
+func (c *ShardedClient) DeleteMulti(keys []string) []MutateResponse {
+	return c.mutateMulti(c.manager.GetShardsForKeys(keys), deleteMultiMutator)
+}
+
 // See Client interface for documentation.
 func (c *ShardedClient) Append(key string, value []byte) MutateResponse {
-	shard, conn, err := c.manager.GetShard(key)
-	if shard == -1 {
-		return NewMutateErrorResponse(key, c.unmappedError(key))
-	}
-	if err != nil {
-		return NewMutateErrorResponse(key, c.connectionError(shard, err))
-	}
-	if conn == nil {
-		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol)
-	}
-
-	client := c.newRawClient(shard, conn)
-	defer c.release(client, conn)
-
-	return client.Append(key, value)
+	return c.mutate(
+		key,
+		func(shardClient Client) MutateResponse {
+			return shardClient.Append(key, value)
+		})
 }
 
 // See Client interface for documentation.
 func (c *ShardedClient) Prepend(key string, value []byte) MutateResponse {
+	return c.mutate(
+		key,
+		func(shardClient Client) MutateResponse {
+			return shardClient.Prepend(key, value)
+		})
+}
+
+func (c *ShardedClient) count(
+	key string,
+	countFunc func(Client) CountResponse) CountResponse {
 	shard, conn, err := c.manager.GetShard(key)
 	if shard == -1 {
-		return NewMutateErrorResponse(key, c.unmappedError(key))
+		return NewCountErrorResponse(key, c.unmappedError(key))
 	}
 	if err != nil {
-		return NewMutateErrorResponse(key, c.connectionError(shard, err))
+		return NewCountErrorResponse(key, c.connectionError(shard, err))
 	}
 	if conn == nil {
-		// NOTE: zero is an invalid version id.
-		return NewMutateResponse(key, StatusNoError, 0, c.useAsciiProtocol)
+		return NewCountResponse(key, StatusNoError, 0)
 	}
 
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
-	return client.Prepend(key, value)
+	return countFunc(client)
 }
 
 // See Client interface for documentation.
@@ -472,21 +377,11 @@ func (c *ShardedClient) Increment(
 	initValue uint64,
 	expiration uint32) CountResponse {
 
-	shard, conn, err := c.manager.GetShard(key)
-	if shard == -1 {
-		return NewCountErrorResponse(key, c.unmappedError(key))
-	}
-	if err != nil {
-		return NewCountErrorResponse(key, c.connectionError(shard, err))
-	}
-	if conn == nil {
-		return NewCountResponse(key, StatusNoError, 0)
-	}
-
-	client := c.newRawClient(shard, conn)
-	defer c.release(client, conn)
-
-	return client.Increment(key, delta, initValue, expiration)
+	return c.count(
+		key,
+		func(shardClient Client) CountResponse {
+			return shardClient.Increment(key, delta, initValue, expiration)
+		})
 }
 
 // See Client interface for documentation.
@@ -496,21 +391,11 @@ func (c *ShardedClient) Decrement(
 	initValue uint64,
 	expiration uint32) CountResponse {
 
-	shard, conn, err := c.manager.GetShard(key)
-	if shard == -1 {
-		return NewCountErrorResponse(key, c.unmappedError(key))
-	}
-	if err != nil {
-		return NewCountErrorResponse(key, c.connectionError(shard, err))
-	}
-	if conn == nil {
-		return NewCountResponse(key, StatusNoError, 0)
-	}
-
-	client := c.newRawClient(shard, conn)
-	defer c.release(client, conn)
-
-	return client.Decrement(key, delta, initValue, expiration)
+	return c.count(
+		key,
+		func(shardClient Client) CountResponse {
+			return shardClient.Decrement(key, delta, initValue, expiration)
+		})
 }
 
 func (c *ShardedClient) flushHelper(
@@ -521,7 +406,7 @@ func (c *ShardedClient) flushHelper(
 	if conn == nil {
 		return NewErrorResponse(c.connectionError(shard, nil))
 	}
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Flush(expiration)
@@ -558,7 +443,7 @@ func (c *ShardedClient) statHelper(
 			c.connectionError(shard, nil),
 			make(map[int](map[string]string)))
 	}
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Stat(statsKey)
@@ -600,7 +485,7 @@ func (c *ShardedClient) versionHelper(
 			c.connectionError(shard, nil),
 			make(map[int]string))
 	}
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Version()
@@ -643,7 +528,7 @@ func (c *ShardedClient) verbosityHelper(
 	if conn == nil {
 		return NewErrorResponse(c.connectionError(shard, nil))
 	}
-	client := c.newRawClient(shard, conn)
+	client := c.builder(shard, conn)
 	defer c.release(client, conn)
 
 	return client.Verbosity(verbosity)

@@ -7,17 +7,27 @@ import (
 )
 
 type MockClient struct {
-	data    map[string]*Item
-	version uint64
-	mutex   sync.Mutex
+	data                   map[string]*Item
+	version                uint64
+	mutex                  sync.Mutex
+	forceGetMisses         bool // return StatusKeyNotFound for all gets
+	forceSetInternalErrors bool // return StatusInternalError for all sets
 }
 
 func NewMockClient() Client {
 	return &MockClient{data: make(map[string]*Item)}
 }
 
+func NewMockClientErrorAllSets() Client {
+	return &MockClient{data: make(map[string]*Item), forceSetInternalErrors: true}
+}
+
+func NewMockClientMissAllGets() Client {
+	return &MockClient{data: make(map[string]*Item), forceGetMisses: true}
+}
+
 func (c *MockClient) getHelper(key string) GetResponse {
-	if v, ok := c.data[key]; ok {
+	if v, ok := c.data[key]; ok && !c.forceGetMisses {
 		return NewGetResponse(
 			key,
 			StatusNoError,
@@ -48,8 +58,18 @@ func (c *MockClient) GetMulti(keys []string) map[string]GetResponse {
 	return res
 }
 
+func (c *MockClient) GetSentinels(keys []string) map[string]GetResponse {
+	return c.GetMulti(keys)
+}
+
 func (c *MockClient) setHelper(item *Item) MutateResponse {
 	c.version++
+	if c.forceSetInternalErrors {
+		return NewMutateResponse(
+			item.Key,
+			StatusInternalError,
+			0)
+	}
 
 	newItem := &Item{
 		Key:           item.Key,
@@ -68,23 +88,28 @@ func (c *MockClient) setHelper(item *Item) MutateResponse {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusNoError,
-			newItem.DataVersionId,
-			false)
+			newItem.DataVersionId)
 	} else if !ok {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyNotFound,
-			0,
-			false)
+			0)
 	} else {
 		// CAS mismatch
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyExists,
-			0,
-			false)
+			0)
 	}
 
+}
+
+func (c *MockClient) casHelper(item *Item) MutateResponse {
+	if item.DataVersionId == 0 {
+		return c.addHelper(item)
+	} else {
+		return c.setHelper(item)
+	}
 }
 
 // This sets a single entry into memcache.  If the item's data version id
@@ -115,6 +140,21 @@ func (c *MockClient) SetSentinels(items []*Item) []MutateResponse {
 	return c.SetMulti(items)
 }
 
+func (c *MockClient) CasMulti(items []*Item) []MutateResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	res := make([]MutateResponse, len(items))
+	for i, item := range items {
+		res[i] = c.casHelper(item)
+	}
+	return res
+}
+
+func (c *MockClient) CasSentinels(items []*Item) []MutateResponse {
+	return c.CasMulti(items)
+}
+
 func (c *MockClient) addHelper(item *Item) MutateResponse {
 	c.version++
 
@@ -131,14 +171,12 @@ func (c *MockClient) addHelper(item *Item) MutateResponse {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusNoError,
-			newItem.DataVersionId,
-			false)
+			newItem.DataVersionId)
 	} else {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyExists,
-			0,
-			false)
+			0)
 	}
 }
 
@@ -182,8 +220,7 @@ func (c *MockClient) Delete(key string) MutateResponse {
 		return NewMutateResponse(
 			key,
 			StatusKeyNotFound,
-			0,
-			false)
+			0)
 	}
 
 	delete(c.data, key)
@@ -191,8 +228,7 @@ func (c *MockClient) Delete(key string) MutateResponse {
 	return NewMutateResponse(
 		key,
 		StatusNoError,
-		0,
-		false)
+		0)
 }
 
 // Batch version of the Delete method.  Note that the response entries

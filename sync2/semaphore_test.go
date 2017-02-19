@@ -142,7 +142,7 @@ func (suite *SemaphoreSuite) TestLotsOfWaiters(t *C) {
 	for found := 0; found < 1000; found++ {
 		select {
 		case <-c:
-		case <-time.After(20 * time.Millisecond):
+		case <-time.After(200 * time.Millisecond):
 			t.Fatalf("Not all GoRoutines finished in time, Found: %d", found)
 		}
 	}

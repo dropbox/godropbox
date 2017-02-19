@@ -34,7 +34,7 @@ func (s *RateLimiterSuite) TearDownTest(c *C) {
 
 func (s *RateLimiterSuite) Tick(c *C) {
 	s.tickChan <- time.Time{}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 50; i++ {
 		if len(s.tickChan) == 0 {
 			time.Sleep(5 * time.Millisecond)
 			return
@@ -44,14 +44,21 @@ func (s *RateLimiterSuite) Tick(c *C) {
 	c.FailNow()
 }
 
+func (s *RateLimiterSuite) NTicks(c *C, N int) {
+	for i := 0; i < N; i++ {
+		s.Tick(c)
+	}
+}
+
 func (s *RateLimiterSuite) TestSetMaxQuota(c *C) {
 	s.limiter.setQuota(100)
 	c.Assert(s.limiter.Quota(), Equals, 100.0)
+	c.Assert(s.limiter.MaxQuota(), Equals, UNLIMITED)
 
 	err := s.limiter.SetMaxQuota(-1)
 	c.Assert(err, NotNil)
 	c.Assert(s.limiter.Quota(), Equals, 100.0)
-	c.Assert(s.limiter.MaxQuota(), Equals, 0.0)
+	c.Assert(s.limiter.MaxQuota(), Equals, UNLIMITED)
 
 	err = s.limiter.SetMaxQuota(1000)
 	c.Assert(err, IsNil)
@@ -67,6 +74,11 @@ func (s *RateLimiterSuite) TestSetMaxQuota(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(s.limiter.Quota(), Equals, 0.0)
 	c.Assert(s.limiter.MaxQuota(), Equals, 0.0)
+
+	err = s.limiter.SetMaxQuota(UNLIMITED)
+	c.Assert(err, IsNil)
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
+	c.Assert(s.limiter.MaxQuota(), Equals, UNLIMITED)
 }
 
 func (s *RateLimiterSuite) TestSetQuotaPerSec(c *C) {
@@ -81,6 +93,10 @@ func (s *RateLimiterSuite) TestSetQuotaPerSec(c *C) {
 	err = s.limiter.SetQuotaPerSec(0)
 	c.Assert(err, IsNil)
 	c.Assert(s.limiter.QuotaPerSec(), Equals, 0.0)
+
+	err = s.limiter.SetQuotaPerSec(UNLIMITED)
+	c.Assert(err, IsNil)
+	c.Assert(s.limiter.QuotaPerSec(), Equals, UNLIMITED)
 }
 
 func (s *RateLimiterSuite) TestFillBucket(c *C) {
@@ -88,40 +104,44 @@ func (s *RateLimiterSuite) TestFillBucket(c *C) {
 	c.Assert(err, IsNil)
 	err = s.limiter.SetQuotaPerSec(40)
 	c.Assert(err, IsNil)
+	c.Assert(s.limiter.Throttle(37), Equals, false)
 	c.Assert(s.limiter.Quota(), Equals, 0.0)
+
+	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 2.0)
 	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 4.0)
 	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 6.0)
+	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 8.0)
+	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 10.0)
 	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 12.0)
 	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 14.0)
+	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 16.0)
+	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 18.0)
 	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 20.0)
 	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 22.0)
+	s.Tick(c)
 	c.Assert(s.limiter.Quota(), Equals, 24.0)
 	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 28.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 32.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 36.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 37.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 37.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 37.0)
+	c.Assert(s.limiter.Quota(), Equals, 26.0)
 	s.limiter.Throttle(10)
-	c.Assert(s.limiter.Quota(), Equals, 27.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 31.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 35.0)
-	s.Tick(c)
-	c.Assert(s.limiter.Quota(), Equals, 37.0)
-	s.Tick(c)
+	c.Assert(s.limiter.Quota(), Equals, 16.0)
+	s.NTicks(c, 4)
+	c.Assert(s.limiter.Quota(), Equals, 24.0)
+	s.NTicks(c, 4)
+	c.Assert(s.limiter.Quota(), Equals, 32.0)
+	s.NTicks(c, 2)
+	c.Assert(s.limiter.Quota(), Equals, 36.0)
+	s.NTicks(c, 4)
 	c.Assert(s.limiter.Quota(), Equals, 37.0)
 }
 
@@ -130,10 +150,12 @@ func (s *RateLimiterSuite) TestBasicThrottle(c *C) {
 	c.Assert(err, IsNil)
 	err = s.limiter.SetQuotaPerSec(10)
 	c.Assert(err, IsNil)
+	c.Assert(s.limiter.Throttle(10), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
 
 	doneChan := make(chan bool)
 	go func() {
-		s.limiter.Throttle(4)
+		s.limiter.Throttle(2)
 		doneChan <- true
 	}()
 
@@ -156,14 +178,66 @@ func (s *RateLimiterSuite) TestBasicThrottle(c *C) {
 	}
 }
 
+func (s *RateLimiterSuite) TestTryThrottle(c *C) {
+	err := s.limiter.SetQuotaPerSec(10)
+	c.Assert(err, IsNil)
+
+	err = s.limiter.SetMaxQuota(0)
+	c.Assert(err, IsNil)
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
+	c.Assert(s.limiter.TryThrottle(1), Equals, true)
+	s.NTicks(c, 10)
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
+	c.Assert(s.limiter.TryThrottle(1), Equals, true)
+
+	err = s.limiter.SetMaxQuota(UNLIMITED)
+	c.Assert(err, IsNil)
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
+	c.Assert(s.limiter.TryThrottle(1), Equals, false)
+
+	err = s.limiter.SetMaxQuota(10)
+	c.Assert(err, IsNil)
+
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
+	s.NTicks(c, 20)
+	c.Assert(s.limiter.Quota(), Equals, 10.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 6.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 2.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, true)
+	c.Assert(s.limiter.Quota(), Equals, 2.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, true)
+	c.Assert(s.limiter.Quota(), Equals, 2.0)
+	s.NTicks(c, 2)
+	c.Assert(s.limiter.Quota(), Equals, 3.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, true)
+	c.Assert(s.limiter.Quota(), Equals, 3.0)
+	s.NTicks(c, 4)
+	c.Assert(s.limiter.Quota(), Equals, 5.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 1.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, true)
+	c.Assert(s.limiter.Quota(), Equals, 1.0)
+	s.NTicks(c, 16)
+	c.Assert(s.limiter.Quota(), Equals, 9.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 5.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 1.0)
+	c.Assert(s.limiter.TryThrottle(4), Equals, true)
+	c.Assert(s.limiter.Quota(), Equals, 1.0)
+}
+
 func (s *RateLimiterSuite) TestOversizedThrottle(c *C) {
 	err := s.limiter.SetMaxQuota(10)
 	c.Assert(err, IsNil)
 	err = s.limiter.SetQuotaPerSec(10)
 	c.Assert(err, IsNil)
+	c.Assert(s.limiter.Throttle(10), Equals, false)
+	c.Assert(s.limiter.Quota(), Equals, 0.0)
 
-	s.Tick(c)
-	s.Tick(c)
+	s.NTicks(c, 2)
 
 	doneChan := make(chan bool)
 	go func() {
@@ -171,7 +245,7 @@ func (s *RateLimiterSuite) TestOversizedThrottle(c *C) {
 		doneChan <- true
 	}()
 
-	for i := 2; i < 17; i++ {
+	for i := 2; i < 34; i++ {
 		select {
 		case <-doneChan:
 			c.FailNow()

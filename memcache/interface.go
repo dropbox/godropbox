@@ -1,6 +1,8 @@
 package memcache
 
 import (
+	"io"
+
 	"github.com/dropbox/godropbox/net2"
 )
 
@@ -119,6 +121,10 @@ type StatResponse interface {
 	Entries() map[int](map[string]string)
 }
 
+// NOTE(mihnea) - ideally we should be able to separate methods that are state-aware
+// (i.e. GetSentinels / SetSentinels) away from this interface and into a new
+// interface (e.g. StateAwareClient / ConsistentCachingClient). Such an interface should also
+// have fewer methods (e.g. no Increment, Flush, etc.)
 type Client interface {
 	// This retrieves a single entry from memcache.
 	Get(key string) GetResponse
@@ -126,9 +132,16 @@ type Client interface {
 	// Batch version of the Get method.
 	GetMulti(keys []string) map[string]GetResponse
 
+	// *** This method is specific to Dropbox zookeeper-managed memcache ***
+	// This is the same as GetMulti.  The only difference is that GetMulti will
+	// only read from ACTIVE memcache shards, while GetSentinels will read from
+	// both ACTIVE and WRITE_ONLY memcache shards.
+	GetSentinels(keys []string) map[string]GetResponse
+
 	// This sets a single entry into memcache.  If the item's data version id
 	// (aka CAS) is nonzero, the set operation can only succeed if the item
-	// exists in memcache and has a same data version id.
+	// exists in memcache and has a same data version id; otherwise, this will
+	// do an unconditional set.
 	Set(item *Item) MutateResponse
 
 	// Batch version of the Set method.  Note that the response entries
@@ -136,10 +149,21 @@ type Client interface {
 	SetMulti(items []*Item) []MutateResponse
 
 	// *** This method is specific to Dropbox zookeeper-managed memcache ***
-	// This is the same as SetMutli.  The only difference is that SetMulti will
+	// This is the same as SetMulti.  The only difference is that SetMulti will
 	// only write to ACTIVE memcache shards, while SetSentinels will write to
 	// both ACTIVE and WRITE_ONLY memcache shards.
 	SetSentinels(items []*Item) []MutateResponse
+
+	// Just like SetMulti, but if item's data version id (aka CAS) is zero,
+	// it will do a **conditional** add (will fail if the item already exists
+	// in memcache).
+	CasMulti(items []*Item) []MutateResponse
+
+	// *** This method is specific to Dropbox zookeeper-managed memcache ***
+	// This is the same as CasMulti.  The only difference is that CasMulti will
+	// only write to ACTIVE memcache shards, while CasSentinels will write to
+	// both ACTIVE and WRITE_ONLY memcache shards.
+	CasSentinels(items []*Item) []MutateResponse
 
 	// This adds a single entry into memcache.  Note: Add will fail if the
 	// item already exist in memcache.
@@ -235,14 +259,17 @@ type ClientShard interface {
 	IsValidState() bool
 }
 
+// The ClientShardBuilder creates ClientShard by shard id and connection.
+type ClientShardBuilder func(shard int, channel io.ReadWriter) ClientShard
+
 // Used for returning shard mapping results from ShardManager's
 // GetShardsForKeys/GetShardsForItems calls.
 type ShardMapping struct {
 	Connection net2.ManagedConn
 	ConnErr    error
-	Keys       []string // Populated for GetShardsForKeys
-	Items      []*Item  // Populated for GetShardsForItems
-	WarmingUp  bool     // Populated for GetShardsForSentinels
+	Keys       []string // Populated by the 4 GetShards* methods
+	Items      []*Item  // Populated by GetShardsForItems and GetShardsForSentinelsFromItems
+	WarmingUp  bool     // Populated by GetShardsForSentinels
 }
 
 // The ShardManager decides which memcache shard a key/item belongs to, and
@@ -266,9 +293,15 @@ type ShardManager interface {
 
 	// *** This method is specific to Dropbox zookeeper-managed memcache ***
 	// This returns a (shard id -> (connection, list of items)) mapping for
-	// the requested sentinel items.  Sential items that do not belong to any
+	// the requested sentinel keys. Sentinel keys that do not belong to any
 	// shard are mapped to shard id -1.
-	GetShardsForSentinels(items []*Item) map[int]*ShardMapping
+	GetShardsForSentinelsFromKeys(keys []string) map[int]*ShardMapping
+
+	// *** This method is specific to Dropbox zookeeper-managed memcache ***
+	// This returns a (shard id -> (connection, list of items)) mapping for
+	// the requested sentinel items. Sentinel items that do not belong to any
+	// shard are mapped to shard id -1.
+	GetShardsForSentinelsFromItems(items []*Item) map[int]*ShardMapping
 
 	// This return a (shard id -> connection) mapping for all shards.
 	GetAllShards() map[int]net2.ManagedConn
