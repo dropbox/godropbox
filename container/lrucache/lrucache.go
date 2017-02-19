@@ -72,6 +72,9 @@ func (cache *LRUCache) Delete(key string) (val interface{}, existed bool) {
 	if existed {
 		cache.itemsList.Remove(elem)
 		delete(cache.itemsMap, key)
+
+		kv := elem.Value.(*keyValue)
+		val = kv.value
 	}
 
 	return val, existed
