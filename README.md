@@ -1,4 +1,4 @@
-# godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.svg)](https://godoc.org/github.com/dropbox/godropbox) [![Build Status](https://travis-ci.org/dropbox/godropbox.svg)](https://travis-ci.org/dropbox/godropbox)
+# godropbox [![GoDoc](https://godoc.org/github.com/dropbox/godropbox?status.svg)](https://godoc.org/github.com/dropbox/godropbox) [![Build Status](https://travis-ci.org/dropbox/godropbox.svg)](https://travis-ci.org/dropbox/godropbox) [![codebeat badge](https://codebeat.co/badges/939783d1-f56d-4e7c-94ae-4df5f435c505)](https://codebeat.co/projects/github-com-dropbox-godropbox)
 
 Common libraries for writing go services/applications on Linux servers.
 
