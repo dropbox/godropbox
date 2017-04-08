@@ -254,7 +254,7 @@ func Alias(name string, c Expression) Column {
 }
 
 // This is a strict subset of the actual allowed identifiers
-var validIdentifierRegexp = regexp.MustCompile("^[a-zA-Z_]\\w*$")
+var validIdentifierRegexp = regexp.MustCompile("^[0-9a-zA-Z_]*\\w*[a-zA-Z]\\w*$")
 
 // Returns true if the given string is suitable as an identifier.
 func validIdentifierName(name string) bool {

@@ -136,6 +136,16 @@ func (s *ColumnSuite) TestAliasColumnSetTableName(c *gc.C) {
 	c.Assert(err, gc.NotNil)
 }
 
+func (s *ColumnSuite) TestAliasColumnSerializeSqlForColumnListSingleLetterAlias(
+c *gc.C) {
+
+	col := Alias("w", SqlFunc("max", table1Col1))
+
+	buf := &bytes.Buffer{}
+	err := col.SerializeSqlForColumnList(buf)
+	c.Assert(err, gc.IsNil)
+}
+
 //
 // tests for deferredLookkupColumnName
 //
