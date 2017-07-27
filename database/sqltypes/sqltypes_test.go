@@ -18,6 +18,7 @@ import (
 )
 
 func Test(t *testing.T) {
+	TestingT(t)
 }
 
 type SqlTypesSuite struct {
@@ -32,7 +33,7 @@ func (s *SqlTypesSuite) TestNull(c *C) {
 
 	b := bytes.NewBuffer(nil)
 	n.EncodeSql(b)
-	c.Assert(b.String(), Equals, "")
+	c.Assert(b.String(), Equals, "null")
 
 	n.EncodeAscii(b)
 	c.Assert(b.String(), Equals, "nullnull")
@@ -54,14 +55,14 @@ func TestNumeric(t *testing.T) {
 func TestTime(t *testing.T) {
 	date := time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC)
 	v, _ := BuildValue(date)
-	if v.String() != "1999-01-02 03:04:05.000000000" {
-		t.Errorf("Expecting 1999-01-02 03:04:05.000000000, got %s", v.String())
+	if v.String() != "1999-01-02 03:04:05.000000" {
+		t.Errorf("Expecting 1999-01-02 03:04:05.000000, got %s", v.String())
 	}
 
 	b := &bytes.Buffer{}
 	v.EncodeSql(b)
-	if b.String() != "'1999-01-02 03:04:05.000000000'" {
-		t.Errorf("Expecting '1999-01-02 03:04:05.000000000', got %s", b.String())
+	if b.String() != "'1999-01-02 03:04:05.000000'" {
+		t.Errorf("Expecting '1999-01-02 03:04:05.000000', got %s", b.String())
 	}
 }
 
@@ -213,7 +214,7 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 
 	err = ConvertAssign(v, &n64)
 	c.Assert(err, IsNil)
-	c.Assert(n64, Equals, int64(1))
+	c.Assert(n64, Equals, uint64(1))
 	c.Assert(v.IsNumeric(), IsTrue)
 	c.Assert(v.String(), Equals, "1")
 
@@ -241,7 +242,7 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 	v, err = BuildValue(time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC))
 	c.Assert(err, IsNil)
 	c.Assert(v.IsString(), IsTrue)
-	c.Assert(v.String(), Equals, "2012-02-24 23:19:43")
+	c.Assert(v.String(), Equals, "2012-02-24 23:19:43.000000")
 
 	v, err = BuildValue(Numeric([]byte("123")))
 	c.Assert(err, IsNil)
@@ -269,6 +270,39 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 
 	v, err = BuildValue(float32(1.23))
 	c.Assert(err, NotNil)
+}
+
+func (s *SqlTypesSuite) TestBuildValuePointer(c *C) {
+	// nil pointer
+	var i *int
+	v, err := BuildValue(i)
+	c.Assert(err, IsNil)
+	c.Assert(v.IsNull(), IsTrue)
+
+	var t *time.Time
+	v, err = BuildValue(t)
+	c.Assert(err, IsNil)
+	c.Assert(v.IsNull(), IsTrue)
+
+	// non-nil pointer
+	in := int(-1)
+	var out int
+	v, err = BuildValue(&in)
+	c.Assert(err, IsNil)
+	c.Assert(v.IsNull(), IsFalse)
+	c.Assert(v.IsNumeric(), IsTrue)
+	c.Assert(v.String(), Equals, "-1")
+
+	err = ConvertAssign(v, &out)
+	c.Assert(err, IsNil)
+	c.Assert(out, Equals, in)
+
+	t2 := time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC)
+	v, err = BuildValue(&t2)
+	c.Assert(err, IsNil)
+	c.Assert(v.IsNull(), IsFalse)
+	c.Assert(v.IsString(), IsTrue)
+	c.Assert(v.String(), Equals, "2012-02-24 23:19:43.000000")
 }
 
 func TestConvertAssignDefault(t *testing.T) {

@@ -67,7 +67,7 @@ func (s *StmtSuite) TestSelectWhereDate(c *gc.C) {
 		sql,
 		gc.Equals,
 		"SELECT `table1`.`col1` FROM `db`.`table1` "+
-			"WHERE `table1`.`col4`>'1999-01-02 03:04:05.000000000'")
+			"WHERE `table1`.`col4`>'1999-01-02 03:04:05.000000'")
 }
 
 func (s *StmtSuite) TestSelectAndWhere(c *gc.C) {
@@ -284,7 +284,7 @@ func (s *StmtSuite) TestInsertDate(c *gc.C) {
 		sql,
 		gc.Equals,
 		"INSERT INTO `db`.`table1` (`table1`.`col4`) "+
-			"VALUES ('1999-01-02 03:04:05.000000000')")
+			"VALUES ('1999-01-02 03:04:05.000000')")
 }
 
 func (s *StmtSuite) TestInsertIgnore(c *gc.C) {
