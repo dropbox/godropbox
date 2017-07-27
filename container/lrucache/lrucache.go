@@ -1,4 +1,4 @@
-// A standard LRU cache.
+// Package lrucache is a standard LRU cache.
 package lrucache
 
 import (
@@ -70,13 +70,10 @@ func (cache *LRUCache) Delete(key string) (val interface{}, existed bool) {
 	elem, existed := cache.itemsMap[key]
 
 	if existed {
+		val = elem.Value.(*keyValue).value
 		cache.itemsList.Remove(elem)
 		delete(cache.itemsMap, key)
-
-		kv := elem.Value.(*keyValue)
-		val = kv.value
 	}
-
 	return val, existed
 }
 
