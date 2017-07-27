@@ -10,6 +10,17 @@ import (
 	. "gopkg.in/check.v1"
 )
 
+type CustomHandler struct {
+	Handler func(witer http.ResponseWriter, req *http.Request)
+}
+
+func (c *CustomHandler) ServeHTTP(
+	writer http.ResponseWriter,
+	req *http.Request) {
+
+	c.Handler(writer, req)
+}
+
 type TestServer struct {
 	*httptest.Server
 
@@ -35,7 +46,7 @@ func SetupTestServer(ssl bool) (*TestServer, string) {
 	serveMux.HandleFunc(
 		"/",
 		func(writer http.ResponseWriter, req *http.Request) {
-			writer.Write([]byte("ok"))
+			_, _ = writer.Write([]byte("ok"))
 		})
 	serveMux.HandleFunc(
 		"/redirect",
@@ -61,7 +72,7 @@ func RandomListenPort(c *C) int {
 	sock, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 	port := sock.Addr().(*net.TCPAddr).Port
-	sock.Close()
+	_ = sock.Close()
 	return port
 }
 
@@ -71,7 +82,7 @@ func EnsureListen(c *C, hostport string) {
 	for i := 0; i < 10; i++ {
 		conn, err := net.Dial("tcp", hostport)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return
 		}
 		time.Sleep(time.Duration(50*(i+1)) * time.Millisecond)

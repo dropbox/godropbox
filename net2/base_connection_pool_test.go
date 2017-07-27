@@ -3,6 +3,7 @@ package net2
 import (
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,7 +25,8 @@ var _ = Suite(&BaseConnectionPoolSuite{})
 
 type mockConn struct {
 	id            int
-	latency       time.Duration
+	readLatency   time.Duration
+	writeLatency  time.Duration
 	nowFunc       func() time.Time
 	readDeadline  *time.Time
 	writeDeadline *time.Time
@@ -32,14 +34,14 @@ type mockConn struct {
 
 func (c *mockConn) Id() int { return c.id }
 func (c *mockConn) Read(b []byte) (n int, err error) {
-	if c.readDeadline == nil || c.readDeadline.Sub(c.nowFunc()) > c.latency {
+	if c.readDeadline == nil || c.readDeadline.Sub(c.nowFunc()) > c.readLatency {
 		return 0, nil
 	} else {
 		return 0, fmt.Errorf("timeout")
 	}
 }
 func (c *mockConn) Write(b []byte) (n int, err error) {
-	if c.writeDeadline == nil || c.writeDeadline.Sub(c.nowFunc()) > c.latency {
+	if c.writeDeadline == nil || c.writeDeadline.Sub(c.nowFunc()) > c.writeLatency {
 		return 0, nil
 	} else {
 		return 0, fmt.Errorf("timeout")
@@ -63,9 +65,12 @@ func (c *mockConn) SetWriteDeadline(t time.Time) error {
 }
 
 type fakeDialer struct {
-	id      int
-	latency time.Duration
-	nowFunc func() time.Time
+	id           int
+	dialTimeout  bool
+	dialLatency  time.Duration
+	readLatency  time.Duration
+	writeLatency time.Duration
+	nowFunc      func() time.Time
 }
 
 func (d *fakeDialer) MaxId() int {
@@ -81,11 +86,19 @@ func (d *fakeDialer) FakeDial(
 		nowFunc = time.Now
 	}
 
+	if d.dialLatency > 0 {
+		time.Sleep(d.dialLatency)
+	}
+	if d.dialTimeout {
+		return nil, fmt.Errorf("timeout")
+	}
+
 	d.id += 1
 	return &mockConn{
-		id:      d.id,
-		latency: d.latency,
-		nowFunc: nowFunc,
+		id:           d.id,
+		readLatency:  d.readLatency,
+		writeLatency: d.writeLatency,
+		nowFunc:      nowFunc,
 	}, nil
 }
 
@@ -109,7 +122,7 @@ func (s *BaseConnectionPoolSuite) TestRecycleConnections(c *C) {
 		NowFunc:            mockClock.Now,
 	}
 
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c1, err := pool.Get("foo", "bar")
@@ -168,7 +181,7 @@ func (s *BaseConnectionPoolSuite) TestDiscardConnections(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -284,7 +297,7 @@ func (s *BaseConnectionPoolSuite) TestMaxIdleConnections(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -346,7 +359,7 @@ func (s *BaseConnectionPoolSuite) TestMaxIdleTime(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -430,7 +443,7 @@ func (s *BaseConnectionPoolSuite) TestLameDuckMode(c *C) {
 		Dial:               dialer.FakeDial,
 		NowFunc:            mockClock.Now,
 	}
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -491,8 +504,8 @@ func (s *BaseConnectionPoolSuite) TestLameDuckMode(c *C) {
 func (s *BaseConnectionPoolSuite) TestReadTimeout(c *C) {
 	mockClock := time2.MockClock{}
 	dialer := fakeDialer{
-		latency: 10 * time.Nanosecond,
-		nowFunc: mockClock.Now,
+		readLatency: 10 * time.Nanosecond,
+		nowFunc:     mockClock.Now,
 	}
 
 	options := ConnectionOptions{
@@ -501,7 +514,7 @@ func (s *BaseConnectionPoolSuite) TestReadTimeout(c *C) {
 		ReadTimeout: 5 * time.Nanosecond,
 	}
 
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c1, err := pool.Get("foo", "bar")
@@ -519,7 +532,7 @@ func (s *BaseConnectionPoolSuite) TestReadTimeout(c *C) {
 		NowFunc:     mockClock.Now,
 		ReadTimeout: 20 * time.Nanosecond,
 	}
-	pool = NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool = NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c1, err = pool.Get("foo", "bar")
@@ -535,8 +548,8 @@ func (s *BaseConnectionPoolSuite) TestReadTimeout(c *C) {
 func (s *BaseConnectionPoolSuite) TestWriteTimeout(c *C) {
 	mockClock := time2.MockClock{}
 	dialer := fakeDialer{
-		latency: 10 * time.Nanosecond,
-		nowFunc: mockClock.Now,
+		writeLatency: 10 * time.Nanosecond,
+		nowFunc:      mockClock.Now,
 	}
 
 	options := ConnectionOptions{
@@ -545,7 +558,7 @@ func (s *BaseConnectionPoolSuite) TestWriteTimeout(c *C) {
 		WriteTimeout: 5 * time.Nanosecond,
 	}
 
-	pool := NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool := NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c1, err := pool.Get("foo", "bar")
@@ -563,7 +576,7 @@ func (s *BaseConnectionPoolSuite) TestWriteTimeout(c *C) {
 		NowFunc:      mockClock.Now,
 		WriteTimeout: 20 * time.Nanosecond,
 	}
-	pool = NewSimpleConnectionPool(options).(*BaseConnectionPool)
+	pool = NewSimpleConnectionPool(options)
 	pool.Register("foo", "bar")
 
 	c1, err = pool.Get("foo", "bar")
@@ -574,4 +587,48 @@ func (s *BaseConnectionPoolSuite) TestWriteTimeout(c *C) {
 
 	_, err = c1.Write([]byte{})
 	c.Assert(err, IsNil)
+}
+
+func (s *BaseConnectionPoolSuite) TestManyConcurrentDialsWhichTimeout(c *C) {
+	dialer := fakeDialer{
+		dialTimeout: true,
+		dialLatency: 10 * time.Millisecond,
+	}
+
+	options := ConnectionOptions{
+		Dial:               dialer.FakeDial,
+		DialMaxConcurrency: 2,
+	}
+	pool := NewSimpleConnectionPool(options)
+	pool.Register("foo", "bar")
+
+	// Make sure the dialTimeout actually works.
+	startTime := time.Now()
+	conn, err := pool.Get("foo", "bar")
+	duration := time.Now().Sub(startTime)
+	c.Assert(conn, IsNil)
+	c.Assert(err, NotNil)
+	c.Assert(duration > dialer.dialLatency, IsTrue)
+	c.Assert(duration < dialer.dialLatency*2, IsTrue)
+
+	// Spin up 10 go-routines that all try to connect.
+	// Expectation is that waiting for all of these to complete shouldn't take
+	// much longer than dialTimeout.
+	startTime = time.Now()
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			conn2, err2 := pool.Get("foo", "bar")
+			c.Assert(conn2, IsNil)
+			c.Assert(err2, NotNil)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	duration = time.Now().Sub(startTime)
+	c.Assert(duration > dialer.dialLatency, IsTrue)
+	c.Assert(duration < dialer.dialLatency*2, IsTrue)
 }

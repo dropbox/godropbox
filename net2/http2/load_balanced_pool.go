@@ -1,8 +1,6 @@
 package http2
 
 import (
-	"crypto/md5"
-	"encoding/binary"
 	"net/http"
 	"sort"
 	"sync"
@@ -16,9 +14,6 @@ import (
 const (
 	// Number of attempts to try to connect to a target host.
 	connectionAttempts = 3
-
-	// Default instance mark down duration.
-	defaultMarkDownDuration = 10 * time.Second
 )
 
 type LBStrategy int
@@ -41,7 +36,34 @@ const (
 	//
 	// Note: Order of hosts to try is specific to instance of LoadBalancedPool.
 	LBShuffledFixed LBStrategy = 2
+	// In 'LBConsistentHashing' strategy, requests will be routed to host(s) that are
+	// the closest to the hash for the request key in the consistent hash ring. The number
+	// of closest hosts to send the request to can be more than 1 in order to load-balance
+	// between the different hosts, which is important in the case of hot-keys. Load balancing
+	// is done by picking a random host from the closest set of host(s). The default behavior
+	// is to use only a single host.
+	// LBConsistentHashing will prefer availability over consistency. In the case some server
+	// is down, it will try new servers in the hash-ring
+	LBConsistentHashing LBStrategy = 3
 )
+
+type ConsistentHashFunc func(key []byte, seed uint32) uint32
+
+type LoadBalancedPoolParams struct {
+	// Parameters for creating SimplePool-s.
+	ConnParams ConnectionParams
+
+	// How long to mark a server unusable for.
+	MarkDownDuration time.Duration
+	// Load balancing strategy.
+	Strategy LBStrategy
+	// Number of instances to round-robin between
+	ActiveSetSize uint64
+	// Specifies consistent hash function to use.
+	HashFunction ConsistentHashFunc
+	// Specifies the seed for hashing.
+	HashSeed uint32
+}
 
 type LoadBalancedPool struct {
 	lock sync.RWMutex
@@ -49,11 +71,19 @@ type LoadBalancedPool struct {
 	// Maps "host:port" -> instancePool.
 	instances    map[string]*instancePool
 	instanceList instancePoolSlice
+
+	// shuffleSeed is used for shuffle sorting
+	shuffleSeed int
+	// hashSeed is used for consistent hashing
+	hashSeed uint32
+	// hashFunction is used for consistent hashing
+	hashFunction ConsistentHashFunc
+	// instanceHashes stores the hashes for the instances.
+	instanceHashes []uint32
+
 	// Atomic counter that is used for round robining instances
 	// from instanceList.
 	instanceIdx uint64
-	// Randomly generated seed for determenistic shuffle.
-	shuffleSeed int
 
 	// Number of instances to round-robin between
 	activeSetSize uint64
@@ -74,32 +104,6 @@ type instancePool struct {
 	instanceId int
 }
 
-type instancePoolSlice []*instancePool
-
-func (s instancePoolSlice) Len() int      { return len(s) }
-func (s instancePoolSlice) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// instancePoolSlice sorts by instanceId in descending order.
-func (s instancePoolSlice) Less(i, j int) bool { return s[i].instanceId > s[j].instanceId }
-
-type shuffleSortHelper struct {
-	instances   []*instancePool
-	shuffleSeed int
-}
-
-func (s shuffleSortHelper) sortIdx(idx int) uint64 {
-	var buffer [16]byte
-	binary.LittleEndian.PutUint64(buffer[:8], uint64(s.shuffleSeed))
-	binary.LittleEndian.PutUint64(buffer[8:], uint64(s.instances[idx].instanceId))
-	sum := md5.Sum(buffer[:])
-	return binary.LittleEndian.Uint64(sum[:8])
-}
-func (s shuffleSortHelper) Len() int { return len(s.instances) }
-func (s shuffleSortHelper) Swap(i, j int) {
-	s.instances[i], s.instances[j] = s.instances[j], s.instances[i]
-}
-func (s shuffleSortHelper) Less(i, j int) bool { return s.sortIdx(i) < s.sortIdx(j) }
-
 type LBPoolInstanceInfo struct {
 	// Optional InstanceId that can later on be used to look up specific instances
 	// from the LoadBalancedPool.
@@ -107,17 +111,20 @@ type LBPoolInstanceInfo struct {
 	Addr       string
 }
 
-func NewLoadBalancedPool(params ConnectionParams) *LoadBalancedPool {
+func NewLoadBalancedPool(params LoadBalancedPoolParams) *LoadBalancedPool {
 	return &LoadBalancedPool{
 		instances:        make(map[string]*instancePool),
 		instanceList:     make(instancePoolSlice, 0),
 		shuffleSeed:      rand2.Int(),
 		markDownUntil:    make([]int64, 0),
-		params:           params,
-		strategy:         LBRoundRobin,
-		activeSetSize:    6,
-		markDownDuration: defaultMarkDownDuration,
+		params:           params.ConnParams,
+		strategy:         params.Strategy,
+		activeSetSize:    params.ActiveSetSize,
+		markDownDuration: params.MarkDownDuration,
+		hashSeed:         params.HashSeed,
+		hashFunction:     params.HashFunction,
 	}
+
 }
 
 // Sets Load Balancing strategy. Must be called before pool is actually put to use.
@@ -145,6 +152,24 @@ func (pool *LoadBalancedPool) newInstancePool(info LBPoolInstanceInfo) *instance
 	return &instancePool{SimplePool: *simplePool, instanceId: info.InstanceId}
 }
 
+func (pool *LoadBalancedPool) sortInstances(instances instancePoolSlice, hashes []uint32) {
+	switch pool.strategy {
+	case LBRoundRobin:
+		sort.Sort(shuffleSortHelper{shuffleSeed: pool.shuffleSeed, instances: instances})
+	// In ShuffledFixed strategy, InstanceList is a deterministically shuffled list.
+	case LBShuffledFixed:
+		sort.Sort(shuffleSortHelper{shuffleSeed: pool.shuffleSeed, instances: instances})
+	// In SortedFixed strategy, InstanceList is a sorted list, sorted by instanceId.
+	case LBSortedFixed:
+		sort.Sort(instances)
+	// In LBConsistentHashing strategy, InstanceList is sorted based on consistent-hashing
+	case LBConsistentHashing:
+		hashHelper := consistentHashSortHelper{
+			Instances: instances, Hashes: hashes}
+		sort.Sort(hashHelper)
+	}
+}
+
 func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 
 	pool.lock.Lock()
@@ -165,16 +190,18 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 			newInstanceList = append(newInstanceList, instance)
 		}
 	}
-	switch pool.strategy {
-	case LBRoundRobin:
-		sort.Sort(shuffleSortHelper{newInstanceList, pool.shuffleSeed})
-	case LBSortedFixed:
-		// In SortedFixed strategy, InstanceList is a sorted list, sorted by instanceId.
-		sort.Sort(newInstanceList)
-	case LBShuffledFixed:
-		// In ShuffledFixed strategy, InstanceList is a deterministically shuffled list.
-		sort.Sort(shuffleSortHelper{newInstanceList, pool.shuffleSeed})
+
+	var instanceHashes []uint32
+	if pool.strategy == LBConsistentHashing {
+		// we need to recompute the new hashes
+		instanceHashes = make([]uint32, len(newInstanceList))
+		for i, instance := range newInstanceList {
+			instanceHashes[i] = hashInstance(pool.hashSeed, pool.hashFunction, instance)
+		}
 	}
+
+	// Each strategy has a specific sorter that knows how to sort the instances
+	pool.sortInstances(newInstanceList, instanceHashes)
 
 	for addr, instancePool := range pool.instances {
 		// Close out all InstancePools that are not needed anymore.
@@ -184,7 +211,9 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	}
 	pool.instances = newInstances
 	pool.instanceList = newInstanceList
+	pool.instanceHashes = instanceHashes
 	pool.markDownUntil = make([]int64, len(newInstanceList))
+
 }
 
 //
@@ -195,16 +224,17 @@ func (pool *LoadBalancedPool) Do(req *http.Request) (resp *http.Response, err er
 	return pool.DoWithTimeout(req, 0)
 }
 
-// Issues an HTTP request, distributing more load to relatively unloaded instances.
-func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
-	timeout time.Duration) (*http.Response, error) {
+func (pool *LoadBalancedPool) DoWithParams(
+	req *http.Request,
+	params DoParams) (*http.Response, error) {
+
 	var requestErr error = nil
 	deadline := time.Time{}
-	if timeout > 0 {
-		deadline = time.Now().Add(timeout)
+	if params.Timeout > 0 {
+		deadline = time.Now().Add(params.Timeout)
 	}
 	for i := 0; ; i++ {
-		idx, instance, isDown, err := pool.getInstance()
+		idx, instance, isDown, err := pool.getInstance(params.Key, params.MaxInstances)
 		if err != nil {
 			return nil, errors.Wrap(err, "can't get HTTP connection")
 		}
@@ -217,7 +247,7 @@ func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
 
 		var timer *time.Timer
 		if !deadline.IsZero() {
-			timeout = deadline.Sub(time.Now())
+			timeout := deadline.Sub(time.Now())
 			if timeout > 0 {
 				timer = time.AfterFunc(timeout, func() {
 					instance.transport.CancelRequest(req)
@@ -254,9 +284,14 @@ func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
 	}
 }
 
-// Checks out an HTTP connection from an instance pool, favoring less loaded instances.
-func (pool *LoadBalancedPool) Get() (*http.Client, error) {
-	_, instance, _, err := pool.getInstance()
+// Issues an HTTP request, distributing more load to relatively unloaded instances.
+func (pool *LoadBalancedPool) DoWithTimeout(req *http.Request,
+	timeout time.Duration) (*http.Response, error) {
+	return pool.DoWithParams(req, DoParams{Timeout: timeout})
+}
+
+func (pool *LoadBalancedPool) GetWithKey(key []byte, limit int) (*http.Client, error) {
+	_, instance, _, err := pool.getInstance(key, limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't get HTTP connection")
 	}
@@ -267,9 +302,14 @@ func (pool *LoadBalancedPool) Get() (*http.Client, error) {
 	return conn, err
 }
 
+// Checks out an HTTP connection from an instance pool, favoring less loaded instances.
+func (pool *LoadBalancedPool) Get() (*http.Client, error) {
+	return pool.GetWithKey(nil, 1)
+}
+
 // Returns instance that isn't marked down, if all instances are
 // marked as down it will just choose a next one.
-func (pool *LoadBalancedPool) getInstance() (
+func (pool *LoadBalancedPool) getInstance(key []byte, maxInstances int) (
 	idx int,
 	instance *instancePool,
 	isDown bool,
@@ -282,10 +322,46 @@ func (pool *LoadBalancedPool) getInstance() (
 	}
 	now := time.Now().Unix()
 	numInstancesToTry := uint64(len(pool.instanceList))
+
+	start := 0
+	// map used to implement soft swapping to avoid picking the same instance multiple times
+	// when we randomly pick instances for consistent-hashing. We could have used this actually
+	// for the other strategies.
+	// TODO(bashar): get rid of the random shuffle for the other strategies
+	var idxMap map[int]int
+
 	if pool.strategy == LBRoundRobin &&
 		pool.activeSetSize < numInstancesToTry {
 		numInstancesToTry = pool.activeSetSize
+	} else if pool.strategy == LBConsistentHashing {
+
+		// we must have a key
+		if len(key) == 0 {
+			return 0, nil, false, errors.Newf("key was not specified for consistent-hashing")
+		} else if maxInstances <= 0 {
+			return 0, nil, false, errors.Newf(
+				"invalid maxInstances for consistent-hashing: %v", maxInstances)
+		}
+
+		// in case we're asked to try more than the number of servers we have
+		if maxInstances > int(numInstancesToTry) {
+			maxInstances = int(numInstancesToTry)
+		}
+
+		// let's find the closest server to start. We don't start from 0 in that case
+		hash := pool.hashFunction(key, pool.hashSeed)
+		// we need to find the closest server that hashes to >= hash.
+		start = sort.Search(len(pool.instanceList), func(i int) bool {
+			return pool.instanceHashes[i] >= hash
+		})
+
+		// In the case where hash > all elements, sort.Search returns len(pool.instanceList).
+		// Hence, we mod the result
+		start = start % len(pool.instanceHashes)
+
+		idxMap = make(map[int]int)
 	}
+
 	for i := 0; uint64(i) < numInstancesToTry; i++ {
 		switch pool.strategy {
 		case LBRoundRobin:
@@ -301,6 +377,31 @@ func (pool *LoadBalancedPool) getInstance() (
 			// In ShuffledFixed strategy instances are also always traversed in
 			// same exact order.
 			idx = i
+		case LBConsistentHashing:
+			// In ConsistentHashing strategy instances are picked up randomly between
+			// start and start + numInstancesToTry. This is to load balance between
+			// the alive servers that are closest to the key in the hash space
+
+			// consistent-hashing will prefer availability over consistency. In the case some
+			// server is down, we will try new servers in the hash-ring. The way we do this is by
+			// picking random instances next (excluding already picked instances). That's why we
+			// do a 'soft-swap' between already picked instance and move the start offset by 1
+			// every time. We don't touch the pool.instanceList to make sure we don't
+			// screw up any order. The swap below guarantees that start always has an idx that
+			// has never been tried before.
+			newStart := i + start
+			idx = (newStart + rand2.Intn(maxInstances)) % len(pool.instanceList)
+			// we need to swap idxMap[newStart] with idxMap[idx] (or fill them).
+			var ok bool
+			if idxMap[idx], ok = idxMap[idx]; ok {
+				idxMap[newStart] = idxMap[idx]
+			} else {
+				idxMap[newStart] = idx
+			}
+			idxMap[idx] = newStart
+
+			// we need to pick the correct idx after the swap
+			idx = idxMap[newStart]
 		}
 
 		if pool.markDownUntil[idx] < now {
@@ -312,7 +413,7 @@ func (pool *LoadBalancedPool) getInstance() (
 
 // Returns a Pool for an instance selected based on load balancing strategy.
 func (pool *LoadBalancedPool) GetSingleInstance() (Pool, error) {
-	_, instance, _, err := pool.getInstance()
+	_, instance, _, err := pool.getInstance(nil, 1)
 	return instance, err
 }
 
@@ -366,4 +467,12 @@ func (pool *LoadBalancedPool) Close() {
 	for _, instance := range pool.instances {
 		instance.Close()
 	}
+}
+
+func hashInstance(
+	hashSeed uint32,
+	hashFunction ConsistentHashFunc,
+	instance *instancePool) uint32 {
+
+	return hashFunction([]byte(instance.Addr()), hashSeed)
 }

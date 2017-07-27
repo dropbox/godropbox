@@ -2,7 +2,9 @@ package http2
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -92,24 +94,6 @@ func (s *SimplePoolSuite) TestResponseTimeout(c *C) {
 	c.Assert(err, IsNil)
 	_, err = pool.Do(req)
 	c.Assert(err, NotNil)
-}
-
-func (s *SimplePoolSuite) TestSSL(c *C) {
-	server, addr := test_utils.SetupTestServer(true)
-	defer server.Close()
-
-	params := ConnectionParams{
-		MaxIdle:         1,
-		ResponseTimeout: 1 * time.Second,
-		UseSSL:          true,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	pool := NewSimplePool(addr, params)
-	req, err := http.NewRequest("GET", "/", nil)
-	c.Assert(err, IsNil)
-	resp, err := pool.Do(req)
-	c.Assert(err, IsNil)
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 }
 
 func (s *SimplePoolSuite) TestConnectionRefused(c *C) {
@@ -425,4 +409,173 @@ func (s *SimplePoolSuite) TestRedirect(c *C) {
 			c.FailNow()
 		}
 	}
+}
+
+// generate self-signed certs
+func (s *SimplePoolSuite) genCerts(c *C) (*x509.CertPool, tls.Certificate) {
+	caCertPem, certPem, keyPem, err := test_utils.GenerateCertWithCAPrefs(
+		"localhost",
+		true,
+		1*time.Hour)
+	c.Assert(err, IsNil)
+	caCertPool := x509.NewCertPool()
+	ok := caCertPool.AppendCertsFromPEM(caCertPem)
+	c.Assert(ok, IsTrue)
+	sslCert, err := tls.X509KeyPair(certPem, keyPem)
+	c.Assert(err, IsNil)
+	c.Assert(sslCert, NotNil)
+
+	return caCertPool, sslCert
+}
+
+// Creates http2 server and returns its listener
+func (s *SimplePoolSuite) http2Serve(
+	c *C,
+	tlsConfig *tls.Config,
+	handler *test_utils.CustomHandler) net.Listener {
+
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", tlsConfig)
+	c.Assert(err, IsNil)
+
+	srv := &http.Server{
+		Handler:     handler,
+		TLSConfig:   tlsConfig,
+		ReadTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		_ = srv.Serve(listener)
+	}()
+
+	return listener
+}
+
+func (s *SimplePoolSuite) TestHttp2(c *C) {
+	// generate test certs
+	caCertPool, sslCert := s.genCerts(c)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{sslCert},
+		// for http2, since custom tls config is used.
+		NextProtos: []string{
+			"h2",
+		},
+	}
+	listener := s.http2Serve(
+		c,
+		tlsConfig,
+		&test_utils.CustomHandler{
+			Handler: func(writer http.ResponseWriter, req *http.Request) {
+				writer.WriteHeader(http.StatusOK)
+				c.Assert(req.ProtoMajor, Equals, 2)
+			},
+		})
+	srvAddr := listener.Addr().String()
+	defer listener.Close()
+
+	pool := NewSimplePool(srvAddr, ConnectionParams{
+		ResponseTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			RootCAs:    caCertPool,
+			ServerName: "localhost",
+		},
+		UseSSL: true,
+	})
+	req, err := http.NewRequest("GET", "/", nil)
+	c.Assert(err, IsNil)
+	resp, err := pool.Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+	c.Assert(resp.ProtoMajor, Equals, 2)
+}
+
+func (s *SimplePoolSuite) TestHttp2FollowRedirect(c *C) {
+	// generate test certs
+	caCertPool, sslCert := s.genCerts(c)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{sslCert},
+		// for http2, since custom tls config is used.
+		NextProtos: []string{
+			"h2",
+		},
+	}
+
+	listener := s.http2Serve(
+		c,
+		tlsConfig,
+		&test_utils.CustomHandler{
+			Handler: func(writer http.ResponseWriter, req *http.Request) {
+				if req.URL.Path == "/redirect" {
+					http.Redirect(writer, req, "/", http.StatusMovedPermanently)
+				} else {
+					writer.WriteHeader(http.StatusOK)
+					c.Assert(req.ProtoMajor, Equals, 2)
+				}
+			},
+		})
+	srvAddr := listener.Addr().String()
+	defer listener.Close()
+
+	// validate disabled DisableFollowRedirect option
+	connParams := ConnectionParams{
+		ResponseTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			RootCAs:    caCertPool,
+			ServerName: "localhost",
+		},
+		UseSSL:                true,
+		DisableFollowRedirect: true,
+	}
+
+	pool := NewSimplePool(srvAddr, connParams)
+
+	req, err := http.NewRequest("GET", "/redirect", nil)
+	c.Assert(err, IsNil)
+	resp, err := pool.Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusMovedPermanently)
+
+	// enabled DisableFollowRedirect option
+	connParams.DisableFollowRedirect = false
+	pool = NewSimplePool(srvAddr, connParams)
+
+	req, err = http.NewRequest("GET", "/redirect", nil)
+	c.Assert(err, IsNil)
+	resp, err = pool.Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+}
+
+// http2 client should not fail with http1.x server
+func (s *SimplePoolSuite) TestHttp2vsHttp1(c *C) {
+	// generate test certs
+	caCertPool, sslCert := s.genCerts(c)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{sslCert},
+		NextProtos:   []string{"http/1.1"},
+	}
+	listener := s.http2Serve(
+		c,
+		tlsConfig,
+		&test_utils.CustomHandler{
+			Handler: func(writer http.ResponseWriter, req *http.Request) {
+				writer.WriteHeader(http.StatusOK)
+			},
+		})
+	srvAddr := listener.Addr().String()
+	defer listener.Close()
+
+	pool := NewSimplePool(srvAddr, ConnectionParams{
+		ResponseTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			RootCAs:    caCertPool,
+			ServerName: "localhost",
+		},
+		UseSSL: true,
+	})
+	req, err := http.NewRequest("GET", "/", nil)
+	c.Assert(err, IsNil)
+	resp, err := pool.Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+	c.Assert(resp.ProtoMajor, Equals, 1)
 }

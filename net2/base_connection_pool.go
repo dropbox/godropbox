@@ -10,6 +10,10 @@ import (
 
 const defaultDialTimeout = 1 * time.Second
 
+func defaultDialFunc(network string, address string) (net.Conn, error) {
+	return net.DialTimeout(network, address, defaultDialTimeout)
+}
+
 func parseResourceLocation(resourceLocation string) (
 	network string,
 	address string) {
@@ -23,7 +27,7 @@ func parseResourceLocation(resourceLocation string) (
 }
 
 // A thin wrapper around the underlying resource pool.
-type BaseConnectionPool struct {
+type connectionPoolImpl struct {
 	options ConnectionOptions
 
 	pool rp.ResourcePool
@@ -37,9 +41,7 @@ func newBaseConnectionPool(
 
 	dial := options.Dial
 	if dial == nil {
-		dial = func(network string, address string) (net.Conn, error) {
-			return net.DialTimeout(network, address, defaultDialTimeout)
-		}
+		dial = defaultDialFunc
 	}
 
 	openFunc := func(loc string) (interface{}, error) {
@@ -61,7 +63,7 @@ func newBaseConnectionPool(
 		NowFunc:            options.NowFunc,
 	}
 
-	return &BaseConnectionPool{
+	return &connectionPoolImpl{
 		options: options,
 		pool:    createPool(poolOptions),
 	}
@@ -86,33 +88,33 @@ func NewMultiConnectionPool(options ConnectionOptions) ConnectionPool {
 }
 
 // See ConnectionPool for documentation.
-func (p *BaseConnectionPool) NumActive() int32 {
+func (p *connectionPoolImpl) NumActive() int32 {
 	return p.pool.NumActive()
 }
 
 // See ConnectionPool for documentation.
-func (p *BaseConnectionPool) ActiveHighWaterMark() int32 {
+func (p *connectionPoolImpl) ActiveHighWaterMark() int32 {
 	return p.pool.ActiveHighWaterMark()
 }
 
 // This returns the number of alive idle connections.  This method is not part
 // of ConnectionPool's API.  It is used only for testing.
-func (p *BaseConnectionPool) NumIdle() int {
+func (p *connectionPoolImpl) NumIdle() int {
 	return p.pool.NumIdle()
 }
 
 // BaseConnectionPool can only register a single (network, address) entry.
 // Register should be call before any Get calls.
-func (p *BaseConnectionPool) Register(network string, address string) error {
+func (p *connectionPoolImpl) Register(network string, address string) error {
 	return p.pool.Register(network + " " + address)
 }
 
 // BaseConnectionPool has nothing to do on Unregister.
-func (p *BaseConnectionPool) Unregister(network string, address string) error {
+func (p *connectionPoolImpl) Unregister(network string, address string) error {
 	return nil
 }
 
-func (p *BaseConnectionPool) ListRegistered() []NetworkAddress {
+func (p *connectionPoolImpl) ListRegistered() []NetworkAddress {
 	result := make([]NetworkAddress, 0, 1)
 	for _, location := range p.pool.ListRegistered() {
 		network, address := parseResourceLocation(location)
@@ -130,7 +132,7 @@ func (p *BaseConnectionPool) ListRegistered() []NetworkAddress {
 // This gets an active connection from the connection pool.  Note that network
 // and address arguments are ignored (The connections with point to the
 // network/address provided by the first Register call).
-func (p *BaseConnectionPool) Get(
+func (p *connectionPoolImpl) Get(
 	network string,
 	address string) (ManagedConn, error) {
 
@@ -142,16 +144,16 @@ func (p *BaseConnectionPool) Get(
 }
 
 // See ConnectionPool for documentation.
-func (p *BaseConnectionPool) Release(conn ManagedConn) error {
+func (p *connectionPoolImpl) Release(conn ManagedConn) error {
 	return conn.ReleaseConnection()
 }
 
 // See ConnectionPool for documentation.
-func (p *BaseConnectionPool) Discard(conn ManagedConn) error {
+func (p *connectionPoolImpl) Discard(conn ManagedConn) error {
 	return conn.DiscardConnection()
 }
 
 // See ConnectionPool for documentation.
-func (p *BaseConnectionPool) EnterLameDuckMode() {
+func (p *connectionPoolImpl) EnterLameDuckMode() {
 	p.pool.EnterLameDuckMode()
 }
