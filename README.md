@@ -37,6 +37,7 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Daniel Reiter Horn
 - Daniel Sommermann
 - Daniel Tahara
+- David Wetterau
 - David Zbarsky
 - Diwaker Gupta
 - Dmitry Kopytkov
@@ -49,6 +50,8 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Jamie Li
 - Jamie Turner
 - Jiten Vaidya
+- John Watson
+- Jonathan Lee
 - Kerry Xing
 - Kyle Consalus
 - Mark Chu-Carroll
@@ -60,13 +63,16 @@ See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
 - Mihnea Giurgea
 - Mike Solomon
 - Naomi Seyfer
+- Oliver Tan
 - Pascal Borreli
 - Pasin Manurangsi
 - Patrick Lee
 - Peng Kang
 - Preslav Le
+- Raghav Sharma
 - Rajat Goel
 - Rati Gelashvili
+- Ross Delinger
 - Ruslan Nigmatullin
 - Samir Goel
 - Sean Fellows
