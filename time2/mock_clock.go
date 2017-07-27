@@ -116,6 +116,10 @@ func (c *MockClock) After(d time.Duration) <-chan time.Time {
 	return w.c
 }
 
+func (c *MockClock) Sleep(d time.Duration) {
+	<-c.After(d)
+}
+
 func (c *MockClock) NextWakeupTime() time.Time {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
