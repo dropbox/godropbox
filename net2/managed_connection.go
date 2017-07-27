@@ -40,7 +40,7 @@ type ManagedConn interface {
 }
 
 // A physical implementation of ManagedConn
-type ManagedConnImpl struct {
+type managedConnImpl struct {
 	addr    NetworkAddress
 	handle  resource_pool.ManagedHandle
 	pool    ConnectionPool
@@ -60,7 +60,7 @@ func NewManagedConn(
 		Address: address,
 	}
 
-	return &ManagedConnImpl{
+	return &managedConnImpl{
 		addr:    addr,
 		handle:  handle,
 		pool:    pool,
@@ -68,39 +68,39 @@ func NewManagedConn(
 	}
 }
 
-func (c *ManagedConnImpl) rawConn() (net.Conn, error) {
+func (c *managedConnImpl) rawConn() (net.Conn, error) {
 	h, err := c.handle.Handle()
 	return h.(net.Conn), err
 }
 
 // See ManagedConn for documentation.
-func (c *ManagedConnImpl) RawConn() net.Conn {
+func (c *managedConnImpl) RawConn() net.Conn {
 	h, _ := c.handle.Handle()
 	return h.(net.Conn)
 }
 
 // See ManagedConn for documentation.
-func (c *ManagedConnImpl) Key() NetworkAddress {
+func (c *managedConnImpl) Key() NetworkAddress {
 	return c.addr
 }
 
 // See ManagedConn for documentation.
-func (c *ManagedConnImpl) Owner() ConnectionPool {
+func (c *managedConnImpl) Owner() ConnectionPool {
 	return c.pool
 }
 
 // See ManagedConn for documentation.
-func (c *ManagedConnImpl) ReleaseConnection() error {
+func (c *managedConnImpl) ReleaseConnection() error {
 	return c.handle.Release()
 }
 
 // See ManagedConn for documentation.
-func (c *ManagedConnImpl) DiscardConnection() error {
+func (c *managedConnImpl) DiscardConnection() error {
 	return c.handle.Discard()
 }
 
 // See net.Conn for documentation
-func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
+func (c *managedConnImpl) Read(b []byte) (n int, err error) {
 	conn, err := c.rawConn()
 	if err != nil {
 		return 0, err
@@ -131,7 +131,7 @@ func (c *ManagedConnImpl) Read(b []byte) (n int, err error) {
 }
 
 // See net.Conn for documentation
-func (c *ManagedConnImpl) Write(b []byte) (n int, err error) {
+func (c *managedConnImpl) Write(b []byte) (n int, err error) {
 	conn, err := c.rawConn()
 	if err != nil {
 		return 0, err
@@ -149,36 +149,36 @@ func (c *ManagedConnImpl) Write(b []byte) (n int, err error) {
 }
 
 // See net.Conn for documentation
-func (c *ManagedConnImpl) Close() error {
+func (c *managedConnImpl) Close() error {
 	return c.handle.Discard()
 }
 
 // See net.Conn for documentation
-func (c *ManagedConnImpl) LocalAddr() net.Addr {
+func (c *managedConnImpl) LocalAddr() net.Addr {
 	conn, _ := c.rawConn()
 	return conn.LocalAddr()
 }
 
 // See net.Conn for documentation
-func (c *ManagedConnImpl) RemoteAddr() net.Addr {
+func (c *managedConnImpl) RemoteAddr() net.Addr {
 	conn, _ := c.rawConn()
 	return conn.RemoteAddr()
 }
 
 // SetDeadline is disabled for managed connection (The deadline is set by
 // us, with respect to the read/write timeouts specified in ConnectionOptions).
-func (c *ManagedConnImpl) SetDeadline(t time.Time) error {
+func (c *managedConnImpl) SetDeadline(t time.Time) error {
 	return errors.New("Cannot set deadline for managed connection")
 }
 
 // SetReadDeadline is disabled for managed connection (The deadline is set by
 // us with respect to the read timeout specified in ConnectionOptions).
-func (c *ManagedConnImpl) SetReadDeadline(t time.Time) error {
+func (c *managedConnImpl) SetReadDeadline(t time.Time) error {
 	return errors.New("Cannot set read deadline for managed connection")
 }
 
 // SetWriteDeadline is disabled for managed connection (The deadline is set by
 // us with respect to the write timeout specified in ConnectionOptions).
-func (c *ManagedConnImpl) SetWriteDeadline(t time.Time) error {
+func (c *managedConnImpl) SetWriteDeadline(t time.Time) error {
 	return errors.New("Cannot set write deadline for managed connection")
 }

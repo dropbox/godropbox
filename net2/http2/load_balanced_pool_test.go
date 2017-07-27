@@ -2,10 +2,8 @@ package http2
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"runtime"
-	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -14,89 +12,16 @@ import (
 	"github.com/dropbox/godropbox/net2/http2/test_utils"
 )
 
-func Test(t *testing.T) {
-	TestingT(t)
-}
-
 type LoadBalancedPoolSuite struct {
 }
 
 var _ = Suite(&LoadBalancedPoolSuite{})
 
-func startHttpServers(c *C) []int {
-	// start an http server that responds with the port # it's listening on
-	startHttpServer := func(port int) {
-		serveMux := http.NewServeMux()
-		serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, "%d", port)
-		})
-		server := http.Server{
-			Addr:    fmt.Sprintf("%s:%d", "127.0.0.1", port),
-			Handler: serveMux,
-		}
-		server.ListenAndServe()
-	}
-
-	ports := []int{
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c)}
-
-	for _, port := range ports {
-		go startHttpServer(port)
-	}
-	for _, port := range ports {
-		test_utils.EnsureListen(c, fmt.Sprintf("127.0.0.1:%d", port))
-	}
-
-	return ports
-}
-
-func sendHttpRequests(c *C, pool *LoadBalancedPool, numRequests int) map[string]int {
-	responses := make(chan string, numRequests)
-	for i := 0; i < numRequests; i++ {
-		go func() {
-			req, err := http.NewRequest("GET", "/", nil)
-			c.Assert(err, IsNil)
-
-			resp, err := pool.Do(req)
-			c.Assert(err, IsNil)
-			c.Assert(resp.StatusCode, Equals, 200)
-
-			bodyBytes, err := ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
-			c.Assert(err, IsNil)
-			responses <- string(bodyBytes)
-		}()
-	}
-
-	// wait for responses and ensure all servers were accessed
-	receivedPorts := make(map[string]int)
-	for i := 0; i < numRequests; i++ {
-		select {
-		case portStr := <-responses:
-			count := receivedPorts[portStr]
-			receivedPorts[portStr] = count + 1
-
-		case <-time.After(5 * time.Second):
-			c.FailNow()
-		}
-	}
-	return receivedPorts
-}
-
 func (s *LoadBalancedPoolSuite) TestLoadBalancedPool(c *C) {
 	ports := startHttpServers(c)
 
 	// create pool
-	pool := NewLoadBalancedPool(ConnectionParams{
-		ConnectTimeout:  1 * time.Second,
-		ResponseTimeout: 5 * time.Second,
-	})
+	pool := NewLoadBalancedPool(DefaultLoadBalancedPoolParams())
 	infos := make([]LBPoolInstanceInfo, len(ports))
 	for i, port := range ports {
 		infos[i].Addr = fmt.Sprintf("127.0.0.1:%d", port)
@@ -116,10 +41,7 @@ func (s *LoadBalancedPoolSuite) TestShuffledFixedStrategy(c *C) {
 	ports := startHttpServers(c)
 
 	// create pool
-	pool := NewLoadBalancedPool(ConnectionParams{
-		ConnectTimeout:  1 * time.Second,
-		ResponseTimeout: 5 * time.Second,
-	})
+	pool := NewLoadBalancedPool(DefaultLoadBalancedPoolParams())
 	pool.SetStrategy(LBShuffledFixed)
 	infos := make([]LBPoolInstanceInfo, len(ports))
 	for i, port := range ports {
@@ -207,8 +129,9 @@ func (c *isSameOrderType) Info() *CheckerInfo {
 }
 
 func (s *LoadBalancedPoolSuite) TestDetermenisticShuffle(c *C) {
-	pool := NewLoadBalancedPool(ConnectionParams{})
-	pool.SetStrategy(LBShuffledFixed)
+	params := DefaultLoadBalancedPoolParams()
+	params.Strategy = LBShuffledFixed
+	pool := NewLoadBalancedPool(params)
 
 	infos := make([]LBPoolInstanceInfo, 20)
 	for i := range infos {
@@ -231,8 +154,7 @@ func (s *LoadBalancedPoolSuite) TestDetermenisticShuffle(c *C) {
 	instanceIdsOrder = s.getInstanceIdsOrder(pool)
 	c.Assert(originalInstanceIdsOrder, isSameOrder, instanceIdsOrder)
 
-	anotherPool := NewLoadBalancedPool(ConnectionParams{})
-	anotherPool.SetStrategy(LBShuffledFixed)
+	anotherPool := NewLoadBalancedPool(params)
 	anotherPool.Update(infos)
 	instanceIdsOrder = s.getInstanceIdsOrder(anotherPool)
 	c.Assert(originalInstanceIdsOrder, Not(isSameOrder), instanceIdsOrder)
@@ -242,10 +164,9 @@ func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
 	server, addr := test_utils.SetupTestServer(false)
 	defer server.Close()
 
-	params := ConnectionParams{
-		MaxIdle:         1,
-		ResponseTimeout: 100 * time.Millisecond,
-	}
+	params := DefaultLoadBalancedPoolParams()
+	params.ConnParams.MaxIdle = 1
+	params.ConnParams.ResponseTimeout = 100 * time.Millisecond
 	pool := NewLoadBalancedPool(params)
 	infos := []LBPoolInstanceInfo{
 		LBPoolInstanceInfo{
@@ -273,10 +194,9 @@ func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
 }
 
 func (s *LoadBalancedPoolSuite) TestConnectTimeout(c *C) {
-	params := ConnectionParams{
-		MaxIdle:        1,
-		ConnectTimeout: 100 * time.Millisecond,
-	}
+	params := DefaultLoadBalancedPoolParams()
+	params.ConnParams.MaxIdle = 1
+	params.ConnParams.ResponseTimeout = 100 * time.Millisecond
 	pool := NewLoadBalancedPool(params)
 	infos := []LBPoolInstanceInfo{
 		LBPoolInstanceInfo{
@@ -292,5 +212,5 @@ func (s *LoadBalancedPoolSuite) TestConnectTimeout(c *C) {
 	stTime := time.Now()
 	_, err = pool.Do(req)
 	c.Assert(err, NotNil)
-	c.Assert(time.Now().Sub(stTime) < params.ConnectTimeout*2, Equals, true)
+	c.Assert(time.Now().Sub(stTime) < params.ConnParams.ConnectTimeout*2, Equals, true)
 }

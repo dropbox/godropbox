@@ -9,7 +9,20 @@ import (
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/stats"
 )
+
+type DoParams struct {
+	// Timeout is optional and specifies timeout for Do operation
+	Timeout time.Duration
+	// Key is optional for most pools except those that shard requests
+	// (i.e., consistent-hashing)
+	Key []byte
+	// MaxInstances specifies how many instances to try at most. It's only
+	// relevant if a key is specified. This is useful for cases where we
+	// need to balance the load between multiple instances for the same key
+	MaxInstances int
+}
 
 // A generic interface for HTTP connection pools
 type Pool interface {
@@ -24,9 +37,16 @@ type Pool interface {
 	// Perform request and properly tear down connection if it times out.
 	DoWithTimeout(*http.Request, time.Duration) (*http.Response, error)
 
+	// Provides a more generic Do with extra options
+	DoWithParams(*http.Request, DoParams) (*http.Response, error)
+
 	// Returns http.Client to perform http requests with, preferable
 	// to just use Do() function instead of this.
 	Get() (*http.Client, error)
+
+	// Returns http.Client to perform http requests with, preferable
+	// to just use Do() function instead of this.
+	GetWithKey(key []byte, limit int) (*http.Client, error)
 
 	// Closes idle connections.  Active connections are uneffected.
 	// The user may continue to use the pool for further processing.
@@ -81,6 +101,9 @@ type ConnectionParams struct {
 
 	// Function to determine proxy
 	Proxy func(*http.Request) (*url.URL, error)
+
+	// For logging stats
+	StatsFactory stats.StatsFactory
 }
 
 func (p ConnectionParams) String() string {
@@ -92,7 +115,8 @@ func (p ConnectionParams) String() string {
 	return fmt.Sprintf(
 		"MaxConns: %d MaxIdle: %d UseSSL: %t TLSClientConfig: %+v "+
 			"ConnectionTimeout: %v ResponseTimeout: %v HostHeader %s "+
-			"UseRequestHost: %t DisableFollowRedirect: %t Dail: %v Proxy %v",
+			"UseRequestHost: %t DisableFollowRedirect: %t Dial: %p Proxy %p "+
+			"Name: %s",
 		p.MaxConns,
 		p.MaxIdle,
 		p.UseSSL,
@@ -103,7 +127,8 @@ func (p ConnectionParams) String() string {
 		p.UseRequestHost,
 		p.DisableFollowRedirect,
 		p.Dial,
-		p.Proxy)
+		p.Proxy,
+		p.Name)
 }
 
 type DialError struct {

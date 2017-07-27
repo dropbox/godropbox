@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/http2"
+
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/stats"
 	"github.com/dropbox/godropbox/sync2"
-	//	"github.com/dropbox/godropbox/stopwatch"
 )
 
 var (
@@ -34,6 +36,10 @@ type SimplePool struct {
 
 	// Override for testing
 	closeWait time.Duration
+
+	// stats
+	connAcquireMsSummary stats.SummaryStat
+	acquiredConnsGauge   stats.GaugeStat
 }
 
 // get from http://golang.org/src/pkg/net/http/transport.go
@@ -51,11 +57,19 @@ func getenvEitherCase(k string) string {
 // and SSL certificate validation; if you'd like to use a different hostname,
 // set params.HostHeader.
 func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
+	statsFactory := stats.NoOpStatsFactory
+	if params.StatsFactory != nil {
+		statsFactory = params.StatsFactory
+	}
+
+	tags := map[string]string{}
 	pool := &SimplePool{
-		addr:      addr,
-		params:    params,
-		client:    new(http.Client),
-		closeWait: 5 * time.Minute,
+		addr:                 addr,
+		params:               params,
+		client:               new(http.Client),
+		closeWait:            5 * time.Minute,
+		connAcquireMsSummary: statsFactory.NewSummary("pool_conn_acquire_ms", tags),
+		acquiredConnsGauge:   statsFactory.NewGauge("pool_acquired_conns", tags),
 	}
 
 	if params.MaxConns > 0 && params.ConnectionAcquireTimeout > 0 {
@@ -92,15 +106,19 @@ func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 		dial = params.Dial
 	}
 
-	pool.conns = NewConnectionTracker(params.MaxConns, dial)
+	pool.conns = NewConnectionTracker(params.MaxConns, dial, statsFactory)
 	transport.Dial = pool.conns.Dial
-
-	pool.transport = transport
-	pool.client.Transport = transport
 
 	if params.UseSSL {
 		transport.TLSClientConfig = params.TLSClientConfig
+
+			// Silenty ignore error for now, but probably need to change api
+			// to return error.
+			_ = http2.ConfigureTransport(transport)
 	}
+
+	pool.transport = transport
+	pool.client.Transport = transport
 
 	if params.DisableFollowRedirect {
 		pool.client.CheckRedirect = func(
@@ -135,8 +153,8 @@ func (pool *SimplePool) dialTimeout(network, addr string) (net.Conn, error) {
 	c, err := net.DialTimeout(network, pool.addr, pool.params.ConnectTimeout)
 	if err == nil {
 		tcp := c.(*net.TCPConn)
-		tcp.SetKeepAlive(true)
-		tcp.SetKeepAlivePeriod(10 * time.Second)
+		_ = tcp.SetKeepAlive(true)
+		_ = tcp.SetKeepAlivePeriod(10 * time.Second)
 	}
 	return c, err
 }
@@ -165,11 +183,16 @@ func (pool *SimplePool) Do(req *http.Request) (resp *http.Response, err error) {
 	}
 
 	if pool.connsLimiter != nil {
-		//sw := stopwatch.StartStopwatch("simple_pool-" + pool.params.Name + "-connection_acquire")
+		now := time.Now()
 		acquired := pool.connsLimiter.TryAcquire(pool.params.ConnectionAcquireTimeout)
-		//sw.Stop()
+		acquiredMs := time.Now().Sub(now).Seconds() * 1000
+		pool.connAcquireMsSummary.Observe(acquiredMs)
 		if acquired {
-			defer pool.connsLimiter.Release()
+			pool.acquiredConnsGauge.Inc()
+			defer func() {
+				pool.acquiredConnsGauge.Dec()
+				pool.connsLimiter.Release()
+			}()
 		} else {
 			return nil, DialError{errors.New(
 				"Dial Error: Reached maximum active requests for connection pool")}
@@ -197,12 +220,13 @@ func (pool *SimplePool) Do(req *http.Request) (resp *http.Response, err error) {
 	return
 }
 
-// Set a local timeout the actually cancels the request if we've given up.
-func (pool *SimplePool) DoWithTimeout(req *http.Request,
-	timeout time.Duration) (resp *http.Response, err error) {
+func (pool *SimplePool) DoWithParams(
+	req *http.Request,
+	params DoParams) (resp *http.Response, err error) {
+
 	var timer *time.Timer
-	if timeout > 0 {
-		timer = time.AfterFunc(timeout, func() {
+	if params.Timeout > 0 {
+		timer = time.AfterFunc(params.Timeout, func() {
 			pool.transport.CancelRequest(req)
 		})
 	}
@@ -213,6 +237,12 @@ func (pool *SimplePool) DoWithTimeout(req *http.Request,
 	return
 }
 
+// Set a local timeout the actually cancels the request if we've given up.
+func (pool *SimplePool) DoWithTimeout(req *http.Request,
+	timeout time.Duration) (resp *http.Response, err error) {
+	return pool.DoWithParams(req, DoParams{Timeout: timeout})
+}
+
 // Returns the HTTP client, which is thread-safe.
 //
 // Note that we use http.Client, rather than httputil.ClientConn, despite http.Client being higher-
@@ -220,6 +250,11 @@ func (pool *SimplePool) DoWithTimeout(req *http.Request,
 // provides functionality that's more comparable to pycurl/curllib.
 func (pool *SimplePool) Get() (*http.Client, error) {
 	return pool.client, nil
+}
+
+// SimplePool doesn't care about the key
+func (pool *SimplePool) GetWithKey(key []byte, limit int) (*http.Client, error) {
+	return pool.Get()
 }
 
 // Closes all idle connections in this pool

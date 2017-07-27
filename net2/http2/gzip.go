@@ -26,5 +26,5 @@ func (w gzipResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (w gzipResponseWriter) Close() {
-	w.gzWriter.Close()
+	_ = w.gzWriter.Close()
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dropbox/godropbox/errors"
+	"github.com/dropbox/godropbox/stats"
 )
 
 type DialFunc func(network string, add string) (net.Conn, error)
@@ -22,18 +23,24 @@ type ConnectionTracker struct {
 	connections map[int64]*trackedConn // guarded by mutex
 
 	disallowNewConn bool // guarded by mutex
+
+	// stats
+	dialMsSummary stats.SummaryStat
 }
 
 func NewConnectionTracker(
 	maxConnections int,
-	dial DialFunc) *ConnectionTracker {
+	dial DialFunc,
+	statsFactory stats.StatsFactory) *ConnectionTracker {
 
+	tags := map[string]string{}
 	ct := &ConnectionTracker{
 		maxConnections:  maxConnections,
 		dial:            dial,
 		next:            0,
 		connections:     make(map[int64]*trackedConn),
 		disallowNewConn: false,
+		dialMsSummary:   statsFactory.NewSummary("pool_dial_ms", tags),
 	}
 
 	return ct
@@ -82,7 +89,10 @@ func (c *ConnectionTracker) Dial(
 		return nil, err
 	}
 
+	now := time.Now()
 	conn, err := c.dial(network, addr)
+	dialMs := time.Now().Sub(now).Seconds() * 1000
+	c.dialMsSummary.Observe(dialMs)
 	if err != nil {
 		c.remove(marker.id)
 		return nil, DialError{errors.Wrap(err, "Dial Error:\n")}

@@ -98,9 +98,35 @@ func GetLocalIPs() ([]*net.IP, error) {
 	return ips, nil
 }
 
+var localhostIPNets []*net.IPNet
+
+func init() {
+	for _, mask := range []string{"127.0.0.1/8", "::1/128"} {
+		_, ipnet, err := net.ParseCIDR(mask)
+		if err != nil {
+			panic(err)
+		}
+		localhostIPNets = append(localhostIPNets, ipnet)
+	}
+}
+
+func IsLocalhostIp(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	for _, ipnet := range localhostIPNets {
+		if ipnet.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // Given a host string, return true if the host is an ip (v4/v6) localhost.
 func IsLocalhost(host string) bool {
-	return host == "localhost" ||
+	return IsLocalhostIp(host) ||
+		host == "localhost" ||
 		host == "ip6-localhost" ||
 		host == "ipv6-localhost"
 }
@@ -129,4 +155,25 @@ func ResolveIP4s(addrs []string) ([]string, error) {
 		resolvedAddrs = append(resolvedAddrs, ip.IP.String()+":"+hostPort[1])
 	}
 	return resolvedAddrs, lastErr
+}
+
+func LookupValidAddrs() (map[string]bool, error) {
+	hostName, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := net.LookupHost(hostName)
+	if err != nil {
+		return nil, err
+	}
+	validAddrs := make(map[string]bool)
+	validAddrs[hostName] = true
+	for _, addr := range addrs {
+		validAddrs[addr] = true
+	}
+	// Special case localhost/127.0.0.1 so that this works on devVMs. It should
+	// have no affect in production.
+	validAddrs["127.0.0.1"] = true
+	validAddrs["localhost"] = true
+	return validAddrs, nil
 }
