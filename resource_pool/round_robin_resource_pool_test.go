@@ -9,7 +9,7 @@ import (
 )
 
 type RoundRobinResourcePoolSuite struct {
-	pool *RoundRobinResourcePool
+	pool *roundRobinResourcePool
 }
 
 var _ = Suite(&RoundRobinResourcePoolSuite{})
@@ -32,7 +32,7 @@ func (s *RoundRobinResourcePoolSuite) SetupPool(
 	p, err := NewRoundRobinResourcePool(options, nil, pools...)
 	c.Assert(err, IsNil)
 
-	s.pool = p.(*RoundRobinResourcePool)
+	s.pool = p.(*roundRobinResourcePool)
 }
 
 func (s *RoundRobinResourcePoolSuite) CreateResourceLocationPool(

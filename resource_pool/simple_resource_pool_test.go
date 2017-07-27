@@ -102,7 +102,7 @@ func CheckIsClosed(c *C, handle ManagedHandle, isClosed bool) {
 	c.Assert(h.(*mockConn).isClosed, Equals, isClosed)
 }
 
-func closePoolConns(pool *SimpleResourcePool) {
+func closePoolConns(pool *simpleResourcePool) {
 	pool.closeHandles(pool.idleHandles)
 	pool.idleHandles = make([]*idleHandle, 0, 0)
 }
@@ -119,7 +119,7 @@ func (s *SimpleResourcePoolSuite) TestRecycleHandles(c *C) {
 		NowFunc:            mockClock.Now,
 	}
 
-	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool := NewSimpleResourcePool(options).(*simpleResourcePool)
 	pool.Register("bar")
 
 	c1, err := pool.Get("bar")
@@ -180,7 +180,7 @@ func (s *SimpleResourcePoolSuite) TestDoubleFree(c *C) {
 		NowFunc:        mockClock.Now,
 	}
 
-	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool := NewSimpleResourcePool(options).(*simpleResourcePool)
 	pool.Register("bar")
 
 	c1, err := pool.Get("bar")
@@ -233,7 +233,7 @@ func (s *SimpleResourcePoolSuite) TestDiscards(c *C) {
 		Close:          closeMockConn,
 		NowFunc:        mockClock.Now,
 	}
-	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool := NewSimpleResourcePool(options).(*simpleResourcePool)
 	pool.Register("bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -364,7 +364,7 @@ func (s *SimpleResourcePoolSuite) TestMaxIdleHandles(c *C) {
 		Close:          closeMockConn,
 		NowFunc:        mockClock.Now,
 	}
-	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool := NewSimpleResourcePool(options).(*simpleResourcePool)
 	pool.Register("bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -427,7 +427,7 @@ func (s *SimpleResourcePoolSuite) TestMaxIdleTime(c *C) {
 		Close:          closeMockConn,
 		NowFunc:        mockClock.Now,
 	}
-	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool := NewSimpleResourcePool(options).(*simpleResourcePool)
 	pool.Register("bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
@@ -524,7 +524,7 @@ func (s *SimpleResourcePoolSuite) TestLameDuckMode(c *C) {
 		Close:          closeMockConn,
 		NowFunc:        mockClock.Now,
 	}
-	pool := NewSimpleResourcePool(options).(*SimpleResourcePool)
+	pool := NewSimpleResourcePool(options).(*simpleResourcePool)
 	pool.Register("bar")
 
 	c.Assert(pool.NumActive(), Equals, int32(0))
