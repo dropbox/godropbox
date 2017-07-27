@@ -22,7 +22,7 @@ func shuffle(pools []*ResourceLocationPool) {
 
 // A resource pool implementation which returns handles from the registered
 // resource locations in a round robin fashion.
-type RoundRobinResourcePool struct {
+type roundRobinResourcePool struct {
 	options Options
 
 	createPool func(Options) ResourcePool
@@ -68,7 +68,7 @@ func NewRoundRobinResourcePool(
 
 	shuffle(pools)
 
-	return &RoundRobinResourcePool{
+	return &roundRobinResourcePool{
 		options:    options,
 		createPool: createPool,
 		rwMutex:    sync.RWMutex{},
@@ -79,7 +79,7 @@ func NewRoundRobinResourcePool(
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) NumActive() int32 {
+func (p *roundRobinResourcePool) NumActive() int32 {
 	total := int32(0)
 
 	p.rwMutex.RLock()
@@ -92,7 +92,7 @@ func (p *RoundRobinResourcePool) NumActive() int32 {
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) ActiveHighWaterMark() int32 {
+func (p *roundRobinResourcePool) ActiveHighWaterMark() int32 {
 	high := int32(0)
 
 	p.rwMutex.RLock()
@@ -108,7 +108,7 @@ func (p *RoundRobinResourcePool) ActiveHighWaterMark() int32 {
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) NumIdle() int {
+func (p *roundRobinResourcePool) NumIdle() int {
 	total := 0
 
 	p.rwMutex.RLock()
@@ -121,7 +121,7 @@ func (p *RoundRobinResourcePool) NumIdle() int {
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) Register(resourceLocation string) error {
+func (p *roundRobinResourcePool) Register(resourceLocation string) error {
 	if resourceLocation == "" {
 		return errors.New("Registering invalid resource location")
 	}
@@ -158,7 +158,7 @@ func (p *RoundRobinResourcePool) Register(resourceLocation string) error {
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) Unregister(resourceLocation string) error {
+func (p *roundRobinResourcePool) Unregister(resourceLocation string) error {
 	p.rwMutex.Lock()
 	defer p.rwMutex.Unlock()
 
@@ -181,7 +181,7 @@ func (p *RoundRobinResourcePool) Unregister(resourceLocation string) error {
 	return nil
 }
 
-func (p *RoundRobinResourcePool) ListRegistered() []string {
+func (p *roundRobinResourcePool) ListRegistered() []string {
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
 
@@ -193,7 +193,7 @@ func (p *RoundRobinResourcePool) ListRegistered() []string {
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) Get(key string) (ManagedHandle, error) {
+func (p *roundRobinResourcePool) Get(key string) (ManagedHandle, error) {
 
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
@@ -215,21 +215,21 @@ func (p *RoundRobinResourcePool) Get(key string) (ManagedHandle, error) {
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) Release(handle ManagedHandle) error {
+func (p *roundRobinResourcePool) Release(handle ManagedHandle) error {
 	// NOTE: check if the handle belongs to this pool is expensive, so we'll
 	// just skip the check.
 	return handle.Release()
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) Discard(handle ManagedHandle) error {
+func (p *roundRobinResourcePool) Discard(handle ManagedHandle) error {
 	// NOTE: check if the handle belongs to this pool is expensive, so we'll
 	// just skip the check.
 	return handle.Discard()
 }
 
 // See ResourcePool for documentation.
-func (p *RoundRobinResourcePool) EnterLameDuckMode() {
+func (p *roundRobinResourcePool) EnterLameDuckMode() {
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
 

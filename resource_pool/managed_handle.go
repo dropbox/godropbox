@@ -34,7 +34,7 @@ type ManagedHandle interface {
 }
 
 // A physical implementation of ManagedHandle
-type ManagedHandleImpl struct {
+type managedHandleImpl struct {
 	location string
 	handle   interface{}
 	pool     ResourcePool
@@ -49,7 +49,7 @@ func NewManagedHandle(
 	pool ResourcePool,
 	options Options) ManagedHandle {
 
-	h := &ManagedHandleImpl{
+	h := &managedHandleImpl{
 		location: resourceLocation,
 		handle:   handle,
 		pool:     pool,
@@ -61,12 +61,12 @@ func NewManagedHandle(
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) ResourceLocation() string {
+func (c *managedHandleImpl) ResourceLocation() string {
 	return c.location
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) Handle() (interface{}, error) {
+func (c *managedHandleImpl) Handle() (interface{}, error) {
 	if atomic.LoadInt32(&c.isActive) == 0 {
 		return c.handle, errors.New("Resource handle is no longer valid")
 	}
@@ -74,12 +74,12 @@ func (c *ManagedHandleImpl) Handle() (interface{}, error) {
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) Owner() ResourcePool {
+func (c *managedHandleImpl) Owner() ResourcePool {
 	return c.pool
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) ReleaseUnderlyingHandle() interface{} {
+func (c *managedHandleImpl) ReleaseUnderlyingHandle() interface{} {
 	if atomic.CompareAndSwapInt32(&c.isActive, 1, 0) {
 		return c.handle
 	}
@@ -87,11 +87,11 @@ func (c *ManagedHandleImpl) ReleaseUnderlyingHandle() interface{} {
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) Release() error {
+func (c *managedHandleImpl) Release() error {
 	return c.pool.Release(c)
 }
 
 // See ManagedHandle for documentation.
-func (c *ManagedHandleImpl) Discard() error {
+func (c *managedHandleImpl) Discard() error {
 	return c.pool.Discard(c)
 }

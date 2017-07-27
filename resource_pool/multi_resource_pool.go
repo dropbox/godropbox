@@ -10,7 +10,7 @@ import (
 // entries.  The handles to each resource location entry acts independently.
 // For example "tcp localhost:11211" could act as memcache
 // shard 0 and "tcp localhost:11212" could act as memcache shard 1.
-type MultiResourcePool struct {
+type multiResourcePool struct {
 	options Options
 
 	createPool func(Options) ResourcePool
@@ -35,7 +35,7 @@ func NewMultiResourcePool(
 		createPool = NewSimpleResourcePool
 	}
 
-	return &MultiResourcePool{
+	return &multiResourcePool{
 		options:       options,
 		createPool:    createPool,
 		rwMutex:       sync.RWMutex{},
@@ -45,7 +45,7 @@ func NewMultiResourcePool(
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) NumActive() int32 {
+func (p *multiResourcePool) NumActive() int32 {
 	total := int32(0)
 
 	p.rwMutex.RLock()
@@ -58,7 +58,7 @@ func (p *MultiResourcePool) NumActive() int32 {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) ActiveHighWaterMark() int32 {
+func (p *multiResourcePool) ActiveHighWaterMark() int32 {
 	high := int32(0)
 
 	p.rwMutex.RLock()
@@ -74,7 +74,7 @@ func (p *MultiResourcePool) ActiveHighWaterMark() int32 {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) NumIdle() int {
+func (p *multiResourcePool) NumIdle() int {
 	total := 0
 
 	p.rwMutex.RLock()
@@ -87,7 +87,7 @@ func (p *MultiResourcePool) NumIdle() int {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) Register(resourceLocation string) error {
+func (p *multiResourcePool) Register(resourceLocation string) error {
 	if resourceLocation == "" {
 		return errors.New("Registering invalid resource location")
 	}
@@ -115,7 +115,7 @@ func (p *MultiResourcePool) Register(resourceLocation string) error {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) Unregister(resourceLocation string) error {
+func (p *multiResourcePool) Unregister(resourceLocation string) error {
 	p.rwMutex.Lock()
 	defer p.rwMutex.Unlock()
 
@@ -127,7 +127,7 @@ func (p *MultiResourcePool) Unregister(resourceLocation string) error {
 	return nil
 }
 
-func (p *MultiResourcePool) ListRegistered() []string {
+func (p *multiResourcePool) ListRegistered() []string {
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
 
@@ -140,7 +140,7 @@ func (p *MultiResourcePool) ListRegistered() []string {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) Get(
+func (p *multiResourcePool) Get(
 	resourceLocation string) (ManagedHandle, error) {
 
 	pool := p.getPool(resourceLocation)
@@ -153,7 +153,7 @@ func (p *MultiResourcePool) Get(
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) Release(handle ManagedHandle) error {
+func (p *multiResourcePool) Release(handle ManagedHandle) error {
 	pool := p.getPool(handle.ResourceLocation())
 	if pool == nil {
 		return errors.New(
@@ -165,7 +165,7 @@ func (p *MultiResourcePool) Release(handle ManagedHandle) error {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) Discard(handle ManagedHandle) error {
+func (p *multiResourcePool) Discard(handle ManagedHandle) error {
 	pool := p.getPool(handle.ResourceLocation())
 	if pool == nil {
 		return errors.New(
@@ -177,7 +177,7 @@ func (p *MultiResourcePool) Discard(handle ManagedHandle) error {
 }
 
 // See ResourcePool for documentation.
-func (p *MultiResourcePool) EnterLameDuckMode() {
+func (p *multiResourcePool) EnterLameDuckMode() {
 	p.rwMutex.Lock()
 	defer p.rwMutex.Unlock()
 
@@ -188,7 +188,7 @@ func (p *MultiResourcePool) EnterLameDuckMode() {
 	}
 }
 
-func (p *MultiResourcePool) getPool(resourceLocation string) ResourcePool {
+func (p *multiResourcePool) getPool(resourceLocation string) ResourcePool {
 	p.rwMutex.RLock()
 	defer p.rwMutex.RUnlock()
 

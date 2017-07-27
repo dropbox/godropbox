@@ -7,7 +7,7 @@ import (
 )
 
 type MultiResourcePoolSuite struct {
-	pool *MultiResourcePool
+	pool *multiResourcePool
 }
 
 var _ = Suite(&MultiResourcePoolSuite{})
@@ -23,7 +23,7 @@ func (s *MultiResourcePoolSuite) SetUpTest(c *C) {
 		NowFunc:        mockClock.Now,
 	}
 
-	s.pool = NewMultiResourcePool(options, nil).(*MultiResourcePool)
+	s.pool = NewMultiResourcePool(options, nil).(*multiResourcePool)
 }
 
 func (s *MultiResourcePoolSuite) TestRegisterAndGet(c *C) {
