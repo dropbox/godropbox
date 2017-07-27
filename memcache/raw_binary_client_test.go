@@ -152,6 +152,18 @@ func (s *RawBinaryClientSuite) TestSendRequest(c *C) {
 	s.verifyRequestMessage(c, opAdd)
 }
 
+func (s *RawBinaryClientSuite) TestSendRequestKeyTooLong(c *C) {
+	var key [256]byte
+	err := s.client.sendRequest(
+		opAdd,
+		testCas,
+		key[:],
+		testValue,
+		testFlags,
+		testExpiry)
+	c.Assert(err, NotNil)
+}
+
 func (s *RawBinaryClientSuite) TestRecvResponse(c *C) {
 	/*
 	    Byte/     0       |       1       |       2       |       3       |

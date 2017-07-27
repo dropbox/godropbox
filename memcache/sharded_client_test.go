@@ -16,7 +16,7 @@ type MockShardManager struct {
 	shardMap map[int]*ShardMapping
 }
 
-func (m *MockShardManager) GetShardsForSentinels(items []*Item) map[int]*ShardMapping {
+func (m *MockShardManager) GetShardsForSentinelsFromItems(items []*Item) map[int]*ShardMapping {
 	m.Assert(items, HasLen, 1)
 	return m.shardMap
 }
@@ -44,10 +44,11 @@ var _ = Suite(&ShardedClientSuite{})
 
 func (s *ShardedClientSuite) SetUpTest(c *C) {
 	s.sm = &MockShardManager{C: c}
-	s.mc = NewShardedClient(s.sm, false)
+	s.mc = NewShardedClient(s.sm, NewRawBinaryClient)
 }
 
 func (s *ShardedClientSuite) TestSetSentinels(c *C) {
+	keys := []string{"key"}
 	items := []*Item{
 		&Item{
 			Key:   "key",
@@ -60,6 +61,7 @@ func (s *ShardedClientSuite) TestSetSentinels(c *C) {
 		0: &ShardMapping{
 			ConnErr:    nil,
 			Connection: nil,
+			Keys:       keys,
 			Items:      items,
 			WarmingUp:  false,
 		},
@@ -75,6 +77,7 @@ func (s *ShardedClientSuite) TestSetSentinels(c *C) {
 		0: &ShardMapping{
 			ConnErr:    nil,
 			Connection: BadMemcacheConn{},
+			Keys:       keys,
 			Items:      items,
 			WarmingUp:  true,
 		},

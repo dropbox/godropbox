@@ -42,6 +42,8 @@ type BaseShardManager struct {
 	logInfo  func(v ...interface{})
 }
 
+var _ ShardManager = (*BaseShardManager)(nil)
+
 // Initializes the BaseShardManager.
 func (m *BaseShardManager) Init(
 	shardFunc func(key string, numShard int) (shard int),
@@ -187,26 +189,35 @@ func (m *BaseShardManager) GetShardsForItems(
 				}
 			}
 			entry.Items = make([]*Item, 0, 1)
+			entry.Keys = make([]string, 0, 1)
 			results[shardId] = entry
 		}
 		entry.Items = append(entry.Items, item)
+		entry.Keys = append(entry.Keys, item.Key)
 	}
 
 	return results
 }
 
 // See ShardManager interface for documentation.
-func (m *BaseShardManager) GetShardsForSentinels(
-	items []*Item) map[int]*ShardMapping {
+func (m *BaseShardManager) GetShardsForSentinelsFromKeys(
+	keys []string) map[int]*ShardMapping {
 
 	m.rwMutex.RLock()
 	defer m.rwMutex.RUnlock()
 
+	return m.getShardsForSentinelsLocked(keys)
+}
+
+// This method assumes that m.rwMutex is locked.
+func (m *BaseShardManager) getShardsForSentinelsLocked(
+	keys []string) map[int]*ShardMapping {
+
 	numShards := len(m.shardStates)
 	results := make(map[int]*ShardMapping)
 
-	for _, item := range items {
-		shardId := m.getShardId(item.Key, numShards)
+	for _, key := range keys {
+		shardId := m.getShardId(key, numShards)
 
 		entry, inMap := results[shardId]
 		if !inMap {
@@ -230,8 +241,37 @@ func (m *BaseShardManager) GetShardsForSentinels(
 					connSkippedByAddr.Add(state.Address, 1)
 				}
 			}
-			entry.Items = make([]*Item, 0, 1)
+			entry.Keys = make([]string, 0, 1)
 			results[shardId] = entry
+		}
+		entry.Keys = append(entry.Keys, key)
+	}
+
+	return results
+}
+
+// See ShardManager interface for documentation.
+func (m *BaseShardManager) GetShardsForSentinelsFromItems(
+	items []*Item) map[int]*ShardMapping {
+
+	keys := make([]string, len(items))
+	for i, item := range items {
+		keys[i] = item.Key
+	}
+
+	m.rwMutex.RLock()
+	defer m.rwMutex.RUnlock()
+
+	numShards := len(m.shardStates)
+	results := m.getShardsForSentinelsLocked(keys)
+
+	// Now fill in all entries with items.
+	for _, item := range items {
+		shardId := m.getShardId(item.Key, numShards)
+
+		entry := results[shardId]
+		if len(entry.Items) == 0 {
+			entry.Items = make([]*Item, 0, len(entry.Keys))
 		}
 		entry.Items = append(entry.Items, item)
 	}
