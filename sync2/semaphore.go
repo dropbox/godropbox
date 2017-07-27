@@ -46,21 +46,26 @@ func (sem *boundedSemaphore) Acquire() {
 // timeout, false otherwise.
 func (sem *boundedSemaphore) TryAcquire(timeout time.Duration) bool {
 	if timeout > 0 {
+		// Wait until we get a slot or timeout expires.
 		tm := time.NewTimer(timeout)
 		defer tm.Stop()
 		select {
 		case <-sem.slots:
 			return true
 		case <-tm.C:
-			return false
+			// Timeout expired. In very rare cases this might happen even if
+			// there is a slot available, e.g. GC pause after we create the timer
+			// and select randomly picked this one out of the two available channels.
+			// We should do one final immediate check below.
 		}
-	} else {
-		select {
-		case <-sem.slots:
-			return true
-		default:
-			return false
-		}
+	}
+
+	// Return true if we have a slot available immediately and false otherwise.
+	select {
+	case <-sem.slots:
+		return true
+	default:
+		return false
 	}
 }
 
