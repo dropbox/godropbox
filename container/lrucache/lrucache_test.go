@@ -36,7 +36,7 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 
 	v, ok = cache.Get("1")
 	c.Assert(ok, IsFalse)
-	c.Assert(v, Equals, nil)
+	c.Assert(v, IsNil)
 
 	v, ok = cache.Get("2")
 	c.Assert(ok, IsTrue)
@@ -46,11 +46,11 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 
 	v, ok = cache.Get("1")
 	c.Assert(ok, IsFalse)
-	c.Assert(v, Equals, nil)
+	c.Assert(v, IsNil)
 
 	v, ok = cache.Get("3")
 	c.Assert(ok, IsFalse)
-	c.Assert(v, Equals, nil)
+	c.Assert(v, IsNil)
 
 	v, ok = cache.Get("2")
 	c.Assert(ok, IsTrue)
@@ -68,7 +68,7 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 
 	v, existed = cache.Delete("2")
 	c.Assert(existed, IsFalse)
-	c.Assert(v, Equals, nil)
+	c.Assert(v, IsNil)
 	c.Assert(cache.Len(), Equals, 1)
 
 	// deletion doesn't affect the max-size

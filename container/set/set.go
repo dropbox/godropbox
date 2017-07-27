@@ -3,6 +3,9 @@ package set
 // An unordered collection of unique elements which supports lookups, insertions, deletions,
 // iteration, and common binary set operations.  It is not guaranteed to be thread-safe.
 type Set interface {
+	// Returns a new empty Set of the same type.
+	New() Set
+
 	// Returns a new Set that contains exactly the same elements as this set.
 	Copy() Set
 
@@ -45,6 +48,13 @@ type Set interface {
 
 // Returns a new set which is the union of s1 and s2.  s1 and s2 are unmodified.
 func Union(s1 Set, s2 Set) Set {
+	if s1 == nil {
+		if s2 == nil {
+			return nil
+		}
+
+		return s2.Copy()
+	}
 	s3 := s1.Copy()
 	s3.Union(s2)
 	return s3
@@ -53,6 +63,13 @@ func Union(s1 Set, s2 Set) Set {
 // Returns a new set which is the intersect of s1 and s2.  s1 and s2 are
 // unmodified.
 func Intersect(s1 Set, s2 Set) Set {
+	if s1 == nil {
+		if s2 == nil {
+			return nil
+		}
+
+		return s2.New()
+	}
 	s3 := s1.Copy()
 	s3.Intersect(s2)
 	return s3
@@ -61,6 +78,13 @@ func Intersect(s1 Set, s2 Set) Set {
 // Returns a new set which is the difference between s1 and s2.  s1 and s2 are
 // unmodified.
 func Subtract(s1 Set, s2 Set) Set {
+	if s1 == nil {
+		if s2 == nil {
+			return nil
+		}
+
+		return s2.New()
+	}
 	s3 := s1.Copy()
 	s3.Subtract(s2)
 	return s3
@@ -97,10 +121,12 @@ func (s setImpl) Len() int {
 	return len(s.data)
 }
 
+func (s setImpl) New() Set {
+	return NewSet()
+}
+
 func (s setImpl) Copy() Set {
-	res := NewSet()
-	res.Union(s)
-	return res
+	return copySet(s)
 }
 
 func (s setImpl) Init() {
@@ -156,7 +182,7 @@ func (s setImpl) Union(s2 Set) {
 func (s setImpl) Intersect(s2 Set) {
 	var toRemove []interface{}
 	for key := range s.data {
-		if !s2.Contains(key) {
+		if s2 == nil || !s2.Contains(key) {
 			toRemove = append(toRemove, key)
 		}
 	}
@@ -206,10 +232,12 @@ func (s keyedSetImpl) Len() int {
 	return len(s.data)
 }
 
+func (s keyedSetImpl) New() Set {
+	return NewKeyedSet(s.keyfunc)
+}
+
 func (s keyedSetImpl) Copy() Set {
-	res := NewKeyedSet(s.keyfunc)
-	res.Union(s)
-	return res
+	return copySet(s)
 }
 
 func (s keyedSetImpl) Init() {
@@ -267,7 +295,7 @@ func (s keyedSetImpl) Union(s2 Set) {
 func (s keyedSetImpl) Intersect(s2 Set) {
 	var toRemove []interface{}
 	for _, v := range s.data {
-		if !s2.Contains(v) {
+		if s2 == nil || !s2.Contains(v) {
 			toRemove = append(toRemove, v)
 		}
 	}
@@ -333,9 +361,21 @@ func subset(s Set, s2 Set) (isSubset bool) {
 }
 
 func subtract(s Set, s2 Set) {
+	if s2 == nil {
+		return
+	}
 	s2.Do(func(item interface{}) { s.Remove(item) })
 }
 
 func union(s Set, s2 Set) {
+	if s2 == nil {
+		return
+	}
 	s2.Do(func(item interface{}) { s.Add(item) })
+}
+
+func copySet(s Set) Set {
+	res := s.New()
+	res.Union(s)
+	return res
 }

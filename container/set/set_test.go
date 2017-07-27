@@ -64,6 +64,7 @@ func (suite *SetSuite) TestUnion(c *C) {
 
 	s1.Union(s2)
 
+	c.Assert(s1.Len(), Equals, 3)
 	c.Assert(s1.Contains(1), IsTrue)
 	c.Assert(s1.Contains(2), IsTrue)
 	c.Assert(s1.Contains(4), IsTrue)
@@ -71,6 +72,40 @@ func (suite *SetSuite) TestUnion(c *C) {
 	c.Assert(s2.Contains(1), IsFalse)
 	c.Assert(s2.Contains(2), IsTrue)
 	c.Assert(s2.Contains(4), IsTrue)
+
+	s3 := Union(nil, s2)
+	c.Assert(s3.Len(), Equals, 2)
+	c.Assert(s3.Contains(2), IsTrue)
+	c.Assert(s3.Contains(4), IsTrue)
+
+	// Ensure s3 is a copy.
+	s3.Add(1)
+	c.Assert(s3.Len(), Equals, 3)
+	c.Assert(s2.Len(), Equals, 2)
+
+	s3 = Union(s2, nil)
+	c.Assert(s3.Len(), Equals, 2)
+	c.Assert(s3.Contains(2), IsTrue)
+	c.Assert(s3.Contains(4), IsTrue)
+
+	// Ensure s3 is a copy.
+	s3.Add(1)
+	c.Assert(s3.Len(), Equals, 3)
+	c.Assert(s2.Len(), Equals, 2)
+
+	s1 = NewSet()
+	s1.Add(1)
+
+	s3 = Union(s2, s1)
+	c.Assert(s3.Len(), Equals, 3)
+	c.Assert(s3.Contains(1), IsTrue)
+	c.Assert(s3.Contains(2), IsTrue)
+	c.Assert(s3.Contains(4), IsTrue)
+
+	c.Assert(s2.Len(), Equals, 2)
+	c.Assert(s1.Len(), Equals, 1)
+
+	c.Assert(Union(nil, nil), IsNil)
 }
 
 func (suite *SetSuite) TestIntersect(c *C) {
@@ -84,13 +119,38 @@ func (suite *SetSuite) TestIntersect(c *C) {
 
 	s1.Intersect(s2)
 
+	c.Assert(s1.Len(), Equals, 1)
 	c.Assert(s1.Contains(1), IsFalse)
 	c.Assert(s1.Contains(2), IsTrue)
 	c.Assert(s1.Contains(4), IsFalse)
 
+	c.Assert(s2.Len(), Equals, 2)
 	c.Assert(s2.Contains(1), IsFalse)
 	c.Assert(s2.Contains(2), IsTrue)
 	c.Assert(s2.Contains(4), IsTrue)
+
+	s1 = NewSet(1, 2)
+
+	s3 := Intersect(s1, s2)
+	c.Assert(s3.Len(), Equals, 1)
+	c.Assert(s3.Contains(2), IsTrue)
+
+	c.Assert(s1.Len(), Equals, 2)
+	c.Assert(s2.Len(), Equals, 2)
+
+	s3 = Intersect(s1, nil)
+	c.Assert(s3.Len(), Equals, 0)
+
+	c.Assert(s1.Len(), Equals, 2)
+	c.Assert(s2.Len(), Equals, 2)
+
+	s3 = Intersect(nil, s2)
+	c.Assert(s3.Len(), Equals, 0)
+
+	c.Assert(s1.Len(), Equals, 2)
+	c.Assert(s2.Len(), Equals, 2)
+
+	c.Assert(Intersect(nil, nil), IsNil)
 }
 
 func (suite *SetSuite) TestSubtract(c *C) {
@@ -104,13 +164,34 @@ func (suite *SetSuite) TestSubtract(c *C) {
 
 	s1.Subtract(s2)
 
+	c.Assert(s1.Len(), Equals, 1)
 	c.Assert(s1.Contains(1), IsTrue)
 	c.Assert(s1.Contains(2), IsFalse)
 	c.Assert(s1.Contains(4), IsFalse)
 
+	c.Assert(s2.Len(), Equals, 2)
 	c.Assert(s2.Contains(1), IsFalse)
 	c.Assert(s2.Contains(2), IsTrue)
 	c.Assert(s2.Contains(4), IsTrue)
+
+	s1 = NewKeyedSet(identity, 1, 2)
+
+	s3 := Subtract(s1, s2)
+	c.Assert(s3.Len(), Equals, 1)
+	c.Assert(s3.Contains(1), IsTrue)
+
+	c.Assert(s1.Len(), Equals, 2)
+	c.Assert(s2.Len(), Equals, 2)
+
+	s3 = Subtract(s1, nil)
+	c.Assert(s3.Len(), Equals, 2)
+	c.Assert(s3.Contains(1), IsTrue)
+	c.Assert(s3.Contains(2), IsTrue)
+
+	s3 = Subtract(nil, s1)
+	c.Assert(s3.Len(), Equals, 0)
+
+	c.Assert(Subtract(nil, nil), IsNil)
 }
 
 func (suite *SetSuite) TestSubsets(c *C) {
