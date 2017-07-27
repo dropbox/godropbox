@@ -8,6 +8,8 @@ import (
 type Clock interface {
 	Now() time.Time
 	Since(t time.Time) time.Duration
+	After(d time.Duration) <-chan time.Time
+	Sleep(d time.Duration)
 }
 
 type realClock struct{}
@@ -20,4 +22,12 @@ func (c *realClock) Now() time.Time {
 
 func (c *realClock) Since(t time.Time) time.Duration {
 	return time.Since(t)
+}
+
+func (c *realClock) After(d time.Duration) <-chan time.Time {
+	return time.After(d)
+}
+
+func (c *realClock) Sleep(d time.Duration) {
+	time.Sleep(d)
 }
