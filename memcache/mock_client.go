@@ -1,23 +1,49 @@
 package memcache
 
 import (
+	"strconv"
 	"sync"
 
 	"github.com/dropbox/godropbox/errors"
 )
 
 type MockClient struct {
-	data    map[string]*Item
-	version uint64
-	mutex   sync.Mutex
+	data                   map[string]*Item
+	version                uint64
+	mutex                  sync.Mutex
+	forceGetMisses         bool // return StatusKeyNotFound for all gets
+	forceSetInternalErrors bool // return StatusInternalError for all sets
+	forceFailEverything    bool // return StatusInternalError for all functions
 }
+type Operation int
+
+const (
+	Increment Operation = iota
+	Decrement
+)
 
 func NewMockClient() Client {
 	return &MockClient{data: make(map[string]*Item)}
 }
 
+func NewMockClientErrorAllSets() Client {
+	return &MockClient{data: make(map[string]*Item), forceSetInternalErrors: true}
+}
+
+func NewMockClientMissAllGets() Client {
+	return &MockClient{data: make(map[string]*Item), forceGetMisses: true}
+}
+
+func NewMockClientFailEverything() Client {
+	return &MockClient{data: make(map[string]*Item), forceFailEverything: true}
+}
+
 func (c *MockClient) getHelper(key string) GetResponse {
-	if v, ok := c.data[key]; ok {
+	if c.forceFailEverything {
+		return NewGetResponse(
+			key, StatusInternalError, 0, nil, 0)
+	}
+	if v, ok := c.data[key]; ok && !c.forceGetMisses {
 		return NewGetResponse(
 			key,
 			StatusNoError,
@@ -48,8 +74,18 @@ func (c *MockClient) GetMulti(keys []string) map[string]GetResponse {
 	return res
 }
 
+func (c *MockClient) GetSentinels(keys []string) map[string]GetResponse {
+	return c.GetMulti(keys)
+}
+
 func (c *MockClient) setHelper(item *Item) MutateResponse {
 	c.version++
+	if c.forceSetInternalErrors || c.forceFailEverything {
+		return NewMutateResponse(
+			item.Key,
+			StatusInternalError,
+			0)
+	}
 
 	newItem := &Item{
 		Key:           item.Key,
@@ -68,23 +104,28 @@ func (c *MockClient) setHelper(item *Item) MutateResponse {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusNoError,
-			newItem.DataVersionId,
-			false)
+			newItem.DataVersionId)
 	} else if !ok {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyNotFound,
-			0,
-			false)
+			0)
 	} else {
 		// CAS mismatch
 		return NewMutateResponse(
 			newItem.Key,
 			StatusKeyExists,
-			0,
-			false)
+			0)
 	}
 
+}
+
+func (c *MockClient) casHelper(item *Item) MutateResponse {
+	if item.DataVersionId == 0 {
+		return c.addHelper(item)
+	} else {
+		return c.setHelper(item)
+	}
 }
 
 // This sets a single entry into memcache.  If the item's data version id
@@ -115,9 +156,29 @@ func (c *MockClient) SetSentinels(items []*Item) []MutateResponse {
 	return c.SetMulti(items)
 }
 
+func (c *MockClient) CasMulti(items []*Item) []MutateResponse {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	res := make([]MutateResponse, len(items))
+	for i, item := range items {
+		res[i] = c.casHelper(item)
+	}
+	return res
+}
+
+func (c *MockClient) CasSentinels(items []*Item) []MutateResponse {
+	return c.CasMulti(items)
+}
+
 func (c *MockClient) addHelper(item *Item) MutateResponse {
 	c.version++
-
+	if c.forceFailEverything {
+		return NewMutateResponse(
+			item.Key,
+			StatusInternalError,
+			0)
+	}
 	newItem := &Item{
 		Key:           item.Key,
 		Value:         item.Value,
@@ -131,14 +192,12 @@ func (c *MockClient) addHelper(item *Item) MutateResponse {
 		return NewMutateResponse(
 			newItem.Key,
 			StatusNoError,
-			newItem.DataVersionId,
-			false)
+			newItem.DataVersionId)
 	} else {
 		return NewMutateResponse(
 			newItem.Key,
-			StatusKeyExists,
-			0,
-			false)
+			StatusItemNotStored,
+			0)
 	}
 }
 
@@ -177,13 +236,19 @@ func (c *MockClient) Delete(key string) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	if c.forceFailEverything {
+		return NewMutateResponse(
+			key,
+			StatusInternalError,
+			0)
+	}
+
 	_, ok := c.data[key]
 	if !ok {
 		return NewMutateResponse(
 			key,
 			StatusKeyNotFound,
-			0,
-			false)
+			0)
 	}
 
 	delete(c.data, key)
@@ -191,8 +256,7 @@ func (c *MockClient) Delete(key string) MutateResponse {
 	return NewMutateResponse(
 		key,
 		StatusNoError,
-		0,
-		false)
+		0)
 }
 
 // Batch version of the Delete method.  Note that the response entries
@@ -217,6 +281,64 @@ func (c *MockClient) Prepend(key string, value []byte) MutateResponse {
 	return NewMutateErrorResponse(key, errors.Newf("Prepend not implemented"))
 }
 
+func (c *MockClient) incrementDecrementHelper(
+	key string,
+	delta uint64,
+	initValue uint64,
+	expiration uint32, operation Operation) CountResponse {
+
+	if c.forceFailEverything {
+		return NewCountResponse(key, StatusInternalError, 0)
+	}
+
+	if v, ok := c.data[key]; ok && !c.forceGetMisses {
+		// item already exists
+		valStr, flags, dataVersionId, expiration := v.Value, v.Flags, v.DataVersionId, v.Expiration
+		value, err := strconv.Atoi(string(valStr))
+		if err != nil {
+			return NewCountResponse(key, StatusIncrDecrOnNonNumericValue, 0)
+		}
+		var newValue uint64
+		if operation == Increment {
+			newValue = uint64(value) + delta
+		} else {
+			newValue = uint64(value) - delta
+			if newValue < 0 {
+				newValue = 0
+			}
+		}
+		c.setHelper(&Item{
+			Key:           key,
+			Value:         []byte(strconv.Itoa(int(newValue))),
+			Flags:         flags,
+			Expiration:    expiration,
+			DataVersionId: dataVersionId,
+		})
+		return NewCountResponse(key, StatusNoError, newValue)
+	}
+	if expiration == 0xffffffff {
+		return NewCountResponse(key, StatusKeyNotFound, 0)
+	} else {
+		var newValue uint64
+		if operation == Increment {
+			newValue = initValue + delta
+		} else {
+			newValue = initValue - delta
+			if newValue < 0 {
+				newValue = 0
+			}
+		}
+		c.addHelper(&Item{
+			Key:        key,
+			Value:      []byte(strconv.Itoa(int(newValue))),
+			Flags:      0,
+			Expiration: expiration,
+		})
+		return NewCountResponse(key, StatusNoError, newValue)
+	}
+
+}
+
 // This increments the key's counter by delta.  If the counter does not
 // exist, one of two things may happen:
 // 1. If the expiration value is all one-bits (0xffffffff), the operation
@@ -236,7 +358,10 @@ func (c *MockClient) Increment(
 	initValue uint64,
 	expiration uint32) CountResponse {
 
-	return NewCountErrorResponse(key, errors.Newf("Increment not implemented"))
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.incrementDecrementHelper(key, delta, initValue, expiration, Increment)
+
 }
 
 // This decrements the key's counter by delta.  If the counter does not
@@ -259,7 +384,10 @@ func (c *MockClient) Decrement(
 	initValue uint64,
 	expiration uint32) CountResponse {
 
-	return NewCountErrorResponse(key, errors.Newf("Decrement not implemented"))
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.incrementDecrementHelper(key, delta, initValue, expiration, Decrement)
+
 }
 
 // This invalidates all existing cache items after expiration number of

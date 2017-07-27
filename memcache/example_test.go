@@ -36,7 +36,7 @@ func ExampleShardedClient() {
 		},
 		options)
 
-	client := memcache.NewShardedClient(manager, false)
+	client := memcache.NewShardedClient(manager, memcache.NewRawBinaryClient)
 
 	clientExample(client)
 }
@@ -214,3 +214,9 @@ func clientExample(client memcache.Client) {
 	app("zzz", []byte{'9'})
 	get("zzz")
 }
+
+/*
+func main() {
+	ExampleRawAsciiClient()
+}
+*/

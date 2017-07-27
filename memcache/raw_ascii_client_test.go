@@ -189,7 +189,7 @@ func (s *RawAsciiClientSuite) TestSetBadKey(c *C) {
 func (s *RawAsciiClientSuite) TestSetBadValue(c *C) {
 	item := &Item{
 		Key:           "key",
-		Value:         make([]byte, maxValueLength+1),
+		Value:         make([]byte, defaultMaxValueLength+1),
 		Flags:         123,
 		DataVersionId: 0,
 		Expiration:    555,

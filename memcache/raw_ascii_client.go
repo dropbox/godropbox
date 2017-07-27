@@ -199,7 +199,7 @@ func (c *RawAsciiClient) GetMulti(keys []string) map[string]GetResponse {
 		// line is of the form: VALUE <key> <flag> <num bytes> <cas id>
 		if len(slice) != 5 || slice[0] != "VALUE" {
 			c.validState = false
-			populateErrorResponses(errors.New(line))
+			populateErrorResponses(errors.Newf("%s\nkeys: %v\n", line, keys))
 			return responses
 		}
 
@@ -268,9 +268,16 @@ func (c *RawAsciiClient) GetMulti(keys []string) map[string]GetResponse {
 	return responses
 }
 
+func (c *RawAsciiClient) GetSentinels(keys []string) map[string]GetResponse {
+	// For raw clients, there are no difference between GetMulti and
+	// GetSentinels.
+	return c.GetMulti(keys)
+}
+
 func (c *RawAsciiClient) storeRequests(
 	cmd string,
-	items []*Item) []MutateResponse {
+	items []*Item,
+	allowNonZeros bool) []MutateResponse {
 
 	var err error
 	responses := make([]MutateResponse, len(items), len(items))
@@ -281,7 +288,7 @@ func (c *RawAsciiClient) storeRequests(
 			continue
 		}
 
-		if item.DataVersionId != 0 && cmd != "set" {
+		if item.DataVersionId != 0 && !allowNonZeros {
 			responses[i] = NewMutateErrorResponse(
 				item.Key,
 				errors.Newf(
@@ -297,7 +304,7 @@ func (c *RawAsciiClient) storeRequests(
 			continue
 		}
 
-		err = validateValue(item.Value)
+		err = validateValue(item.Value, defaultMaxValueLength)
 		if err != nil {
 			responses[i] = NewMutateErrorResponse(item.Key, err)
 			continue
@@ -386,26 +393,22 @@ func (c *RawAsciiClient) storeRequests(
 			responses[i] = NewMutateResponse(
 				item.Key,
 				StatusNoError,
-				0,
-				true)
+				0)
 		} else if line == "NOT_FOUND" {
 			responses[i] = NewMutateResponse(
 				item.Key,
 				StatusKeyNotFound,
-				0,
-				true)
+				0)
 		} else if line == "NOT_STORED" {
 			responses[i] = NewMutateResponse(
 				item.Key,
 				StatusItemNotStored,
-				0,
-				true)
+				0)
 		} else if line == "EXISTS" {
 			responses[i] = NewMutateResponse(
 				item.Key,
 				StatusKeyExists,
-				0,
-				true)
+				0)
 		} else {
 			responses[i] = NewMutateErrorResponse(item.Key, errors.New(line))
 		}
@@ -421,7 +424,7 @@ func (c *RawAsciiClient) Set(item *Item) MutateResponse {
 }
 
 func (c *RawAsciiClient) SetMulti(items []*Item) []MutateResponse {
-	return c.storeRequests("set", items)
+	return c.storeRequests("set", items, true)
 }
 
 func (c *RawAsciiClient) SetSentinels(items []*Item) []MutateResponse {
@@ -430,16 +433,26 @@ func (c *RawAsciiClient) SetSentinels(items []*Item) []MutateResponse {
 	return c.SetMulti(items)
 }
 
+func (c *RawAsciiClient) CasMulti(items []*Item) []MutateResponse {
+	return c.storeRequests("add", items, true)
+}
+
+func (c *RawAsciiClient) CasSentinels(items []*Item) []MutateResponse {
+	// For raw clients, there are no difference between CasMulti and
+	// CasSentinels.
+	return c.CasMulti(items)
+}
+
 func (c *RawAsciiClient) Add(item *Item) MutateResponse {
 	return c.AddMulti([]*Item{item})[0]
 }
 
 func (c *RawAsciiClient) AddMulti(items []*Item) []MutateResponse {
-	return c.storeRequests("add", items)
+	return c.storeRequests("add", items, false)
 }
 
 func (c *RawAsciiClient) Replace(item *Item) MutateResponse {
-	return c.storeRequests("replace", []*Item{item})[0]
+	return c.storeRequests("replace", []*Item{item}, false)[0]
 }
 
 func (c *RawAsciiClient) Append(key string, value []byte) MutateResponse {
@@ -449,7 +462,7 @@ func (c *RawAsciiClient) Append(key string, value []byte) MutateResponse {
 			Value: value,
 		},
 	}
-	return c.storeRequests("append", items)[0]
+	return c.storeRequests("append", items, false)[0]
 }
 
 func (c *RawAsciiClient) Prepend(key string, value []byte) MutateResponse {
@@ -459,7 +472,7 @@ func (c *RawAsciiClient) Prepend(key string, value []byte) MutateResponse {
 			Value: value,
 		},
 	}
-	return c.storeRequests("prepend", items)[0]
+	return c.storeRequests("prepend", items, false)[0]
 }
 
 func (c *RawAsciiClient) Delete(key string) MutateResponse {
@@ -510,9 +523,9 @@ func (c *RawAsciiClient) DeleteMulti(keys []string) []MutateResponse {
 		}
 
 		if line == "DELETED" {
-			responses[i] = NewMutateResponse(key, StatusNoError, 0, true)
+			responses[i] = NewMutateResponse(key, StatusNoError, 0)
 		} else if line == "NOT_FOUND" {
-			responses[i] = NewMutateResponse(key, StatusKeyNotFound, 0, true)
+			responses[i] = NewMutateResponse(key, StatusKeyNotFound, 0)
 		} else { // Unexpected error msg
 			responses[i] = NewMutateErrorResponse(key, errors.New(line))
 		}

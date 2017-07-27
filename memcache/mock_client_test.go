@@ -38,7 +38,7 @@ func (s *MockClientSuite) TestAddExists(c *C) {
 	resp := s.client.Add(item)
 	resp = s.client.Add(item)
 	c.Assert(resp.Error(), Not(IsNil))
-	c.Assert(resp.Status(), Equals, StatusKeyExists)
+	c.Assert(resp.Status(), Equals, StatusItemNotStored)
 }
 
 func (s *MockClientSuite) TestAddMultiSimple(c *C) {
