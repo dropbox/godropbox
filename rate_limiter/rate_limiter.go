@@ -136,7 +136,7 @@ func (l *rateLimiterImpl) fillBucket() {
 
 	// Do not use Broadcast here because fill happens frequently
 	// and we do not want to wake all go-routines that often.
-	// This intoduces a chance of Lost Wakeups, but (a) we
+	// This introduces a chance of Lost Wakeups, but (a) we
 	// mitigate that as much as possible in Throttle(request)
 	// function by signaling again; and (b) sleeping routine gets
 	// a chance to wake up again during the next fill.
