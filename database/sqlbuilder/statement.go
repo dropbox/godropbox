@@ -955,7 +955,7 @@ func (s *unlockStatementImpl) String(database string) (sql string, err error) {
 	return "UNLOCK TABLES", nil
 }
 
-// Set GTID_NEXT statment returns a SQL statment that can be used to explicitly set the next GTID.
+// Set GTID_NEXT statement returns a SQL statement that can be used to explicitly set the next GTID.
 func NewGtidNextStatement(sid []byte, gno uint64) GtidNextStatement {
 	return &gtidNextStatementImpl{
 		sid: sid,
