@@ -201,12 +201,12 @@ type datetime2FieldDescriptor struct {
 // in sql-common/my_time.c) for encoding detail.
 func NewDateTime2FieldDescriptor(nullable NullableColumn, metadata []byte) (
 	fd FieldDescriptor,
-	reamining []byte,
+	remaining []byte,
 	err error) {
 
 	d := &datetime2FieldDescriptor{}
 
-	remaining, err := d.init(
+	remaining, err = d.init(
 		mysql_proto.FieldType_DATETIME2,
 		nullable,
 		5,
