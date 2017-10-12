@@ -112,9 +112,9 @@ func NewSimplePool(addr string, params ConnectionParams) *SimplePool {
 	if params.UseSSL {
 		transport.TLSClientConfig = params.TLSClientConfig
 
-			// Silenty ignore error for now, but probably need to change api
-			// to return error.
-			_ = http2.ConfigureTransport(transport)
+		// Silenty ignore error for now, but probably need to change api
+		// to return error.
+		_ = http2.ConfigureTransport(transport)
 	}
 
 	pool.transport = transport

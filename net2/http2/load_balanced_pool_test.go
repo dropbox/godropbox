@@ -169,11 +169,11 @@ func (s *LoadBalancedPoolSuite) TestRetries(c *C) {
 	params.ConnParams.ResponseTimeout = 100 * time.Millisecond
 	pool := NewLoadBalancedPool(params)
 	infos := []LBPoolInstanceInfo{
-		LBPoolInstanceInfo{
+		{
 			Addr:       addr,
 			InstanceId: 0,
 		},
-		LBPoolInstanceInfo{
+		{
 			Addr:       "127.0.0.1:1111",
 			InstanceId: 1,
 		},
@@ -199,7 +199,7 @@ func (s *LoadBalancedPoolSuite) TestConnectTimeout(c *C) {
 	params.ConnParams.ResponseTimeout = 100 * time.Millisecond
 	pool := NewLoadBalancedPool(params)
 	infos := []LBPoolInstanceInfo{
-		LBPoolInstanceInfo{
+		{
 			Addr:       "128.0.0.1:1111", // Unreachable IP.
 			InstanceId: 1,
 		},
