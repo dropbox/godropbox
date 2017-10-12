@@ -123,7 +123,7 @@ func (p *FormatDescriptionEventParser) Parse(raw *RawV4Event) (Event, error) {
 
 	data, err := readLittleEndian(data, &fde.binlogVersion)
 	if err != nil {
-		return raw, errors.Wrap(err, "Failed to read binlog verison")
+		return raw, errors.Wrap(err, "Failed to read binlog version")
 	}
 
 	serverVersion, data, err := readSlice(data, 50)
