@@ -17,20 +17,20 @@ type PreviousGtidsLogEventSuite struct {
 var _ = Suite(&PreviousGtidsLogEventSuite{})
 
 var testCases = []GtidSet{
-	GtidSet{},
-	GtidSet{
+	{},
+	{
 		strings.Repeat("a", 16): []GtidRange{
-			GtidRange{0, 1},
+			{0, 1},
 		},
 	},
-	GtidSet{
+	{
 		strings.Repeat("a", 16): []GtidRange{
-			GtidRange{5, 10},
-			GtidRange{10, 20},
+			{5, 10},
+			{10, 20},
 		},
 		strings.Repeat("b", 16): []GtidRange{
-			GtidRange{5, 10},
-			GtidRange{10, 20},
+			{5, 10},
+			{10, 20},
 		},
 	},
 }

@@ -566,10 +566,10 @@ func (s *WorkPoolExecutorSuite) TestMaybeTruncate(c *C) {
 		cancelled,
 		DeepEquals,
 		map[int]struct{}{
-			2: struct{}{},
-			3: struct{}{},
-			4: struct{}{},
-			5: struct{}{},
-			6: struct{}{},
+			2: {},
+			3: {},
+			4: {},
+			5: {},
+			6: {},
 		})
 }

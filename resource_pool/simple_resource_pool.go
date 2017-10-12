@@ -315,7 +315,7 @@ func (p *simpleResourcePool) queueIdleHandles(handle interface{}) {
 
 	if p.isLameDuck {
 		toClose = []*idleHandle{
-			&idleHandle{handle: handle},
+			{handle: handle},
 		}
 		return
 	}

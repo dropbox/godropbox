@@ -457,7 +457,7 @@ func (c *RawAsciiClient) Replace(item *Item) MutateResponse {
 
 func (c *RawAsciiClient) Append(key string, value []byte) MutateResponse {
 	items := []*Item{
-		&Item{
+		{
 			Key:   key,
 			Value: value,
 		},
@@ -467,7 +467,7 @@ func (c *RawAsciiClient) Append(key string, value []byte) MutateResponse {
 
 func (c *RawAsciiClient) Prepend(key string, value []byte) MutateResponse {
 	items := []*Item{
-		&Item{
+		{
 			Key:   key,
 			Value: value,
 		},
@@ -725,7 +725,7 @@ func (c *RawAsciiClient) Version() VersionResponse {
 		return NewVersionErrorResponse(errors.New(line), versions)
 	}
 
-	versions[c.ShardId()] = line[len("VERSION "):len(line)]
+	versions[c.ShardId()] = line[len("VERSION "):]
 
 	return NewVersionResponse(StatusNoError, versions)
 }

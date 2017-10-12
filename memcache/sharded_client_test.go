@@ -50,7 +50,7 @@ func (s *ShardedClientSuite) SetUpTest(c *C) {
 func (s *ShardedClientSuite) TestSetSentinels(c *C) {
 	keys := []string{"key"}
 	items := []*Item{
-		&Item{
+		{
 			Key:   "key",
 			Value: []byte("value"),
 		},
@@ -58,7 +58,7 @@ func (s *ShardedClientSuite) TestSetSentinels(c *C) {
 
 	// In DOWN state, SetSentinels should always succeed.
 	s.sm.shardMap = map[int]*ShardMapping{
-		0: &ShardMapping{
+		0: {
 			ConnErr:    nil,
 			Connection: nil,
 			Keys:       keys,
@@ -74,7 +74,7 @@ func (s *ShardedClientSuite) TestSetSentinels(c *C) {
 
 	// In WARM_UP state, SetSentinels should succeed with bad connection.
 	s.sm.shardMap = map[int]*ShardMapping{
-		0: &ShardMapping{
+		0: {
 			ConnErr:    nil,
 			Connection: BadMemcacheConn{},
 			Keys:       keys,
@@ -90,7 +90,7 @@ func (s *ShardedClientSuite) TestSetSentinels(c *C) {
 
 	// In WRITE_ONLY & ACTIVE state, SetSentinels should fail with bad connection.
 	s.sm.shardMap = map[int]*ShardMapping{
-		0: &ShardMapping{
+		0: {
 			ConnErr:    nil,
 			Connection: BadMemcacheConn{},
 			Items:      items,
