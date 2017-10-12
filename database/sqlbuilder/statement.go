@@ -956,7 +956,7 @@ func (s *unlockStatementImpl) String(database string) (sql string, err error) {
 }
 
 // Set GTID_NEXT statment returns a SQL statment that can be used to explicitly set the next GTID.
-func NewGtidNextStatment(sid []byte, gno uint64) GtidNextStatement {
+func NewGtidNextStatement(sid []byte, gno uint64) GtidNextStatement {
 	return &gtidNextStatementImpl{
 		sid: sid,
 		gno: gno,
