@@ -1,5 +1,5 @@
-// A variable sized compact vector of bits which supports lookups, sets,
-// appends, insertions, and deletions.
+// Package bitvector provides the implementation of a variable sized compact vector of bits
+// which supports lookups, sets, appends, insertions, and deletions.
 package bitvector
 
 // A BitVector is a variable sized vector of bits. It supports
@@ -43,7 +43,7 @@ func shiftLower(bit byte, b []byte) byte {
 		bit = (b[i] & 1) << 7
 		b[i] = newByte
 	}
-	return (bit >> 7)
+	return bit >> 7
 }
 
 // This function shifts a byte slice one bit higher (more significant).
@@ -88,7 +88,7 @@ func (vector *BitVector) Append(bit byte) {
 	oldByte := vector.data[byteIndex]
 	var newByte byte
 	if bit == 1 {
-		newByte = byte(oldByte | 1<<byteOffset)
+		newByte = oldByte | 1<<byteOffset
 	} else {
 		// Set all bits except the byteOffset
 		mask := byte(^(1 << byteOffset))
@@ -151,13 +151,13 @@ func (vector *BitVector) Insert(bit byte, index int) {
 
 	oldByte := vector.data[byteIndex]
 	// This bit will need to be shifted into the next byte
-	leftoverBit := byte((oldByte & 0x80) >> 7)
+	leftoverBit := (oldByte & 0x80) >> 7
 	// Make masks to pull off the bits below and above byteOffset
 	// This mask has the byteOffset lowest bits set.
 	bottomMask := byte((1 << byteOffset) - 1)
 	// This mask has the 8 - byteOffset top bits set.
 	topMask := ^bottomMask
-	top := byte((oldByte & topMask) << 1)
+	top := (oldByte & topMask) << 1
 	newByte := bitToInsert | (oldByte & bottomMask) | top
 
 	vector.data[byteIndex] = newByte
@@ -191,7 +191,7 @@ func (vector *BitVector) Delete(index int) {
 	topMask := byte(^((1 << (byteOffset + 1)) - 1))
 	// newTop is the top bits, shifted down one, combined with the leftover bit from shifting
 	// the other bytes.
-	newTop := byte((oldByte&topMask)>>1) | (bit << 7)
+	newTop := (oldByte&topMask)>>1 | (bit << 7)
 	// newByte takes the bottom bits and combines with the new top.
 	newByte := (bottomMask & oldByte) | newTop
 	vector.data[byteIndex] = newByte
