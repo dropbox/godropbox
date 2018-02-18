@@ -1,4 +1,4 @@
-// Extensions to the go-check unittest framework.
+// Package gocheck2 contains extensions to the go-check unittest framework.
 //
 // NOTE: see https://github.com/go-check/check/pull/6 for reasons why these
 // checkers live here.
@@ -257,7 +257,7 @@ func (h multilineErrorMatches) Info() *CheckerInfo {
 	}
 }
 
-var MultilineErrorMatches multilineErrorMatches = multilineErrorMatches{}
+var MultilineErrorMatches = multilineErrorMatches{}
 
 type greaterThan struct{}
 

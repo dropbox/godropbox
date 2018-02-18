@@ -31,7 +31,7 @@ func simpleMurmur32(val uint32) uint32 {
 	return h
 }
 
-// A space efficient permutation-based consistent hashing function.  This
+// ConsistentHash is a space efficient permutation-based consistent hashing function.  This
 // implementation supports up to a maximum of (1 << 16 - 1), 65535, number
 // of shards.
 //
@@ -75,7 +75,7 @@ func ConsistentHash(key uint64, numShards uint16) uint16 {
 	var minPosition uint16 = maxNumShards
 
 	selectLowestPositionShard := func(shard, pos uint16) {
-		pos %= (maxNumShards - shard)
+		pos %= maxNumShards - shard
 		if pos < minPosition {
 			lowestPositionShard = shard
 			minPosition = pos
