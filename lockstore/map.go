@@ -67,6 +67,7 @@ type LockingMap interface {
 	Delete(string)
 }
 
+// NewLockingMap returns a new instance of LockingMap
 func NewLockingMap(options LockingMapOptions) LockingMap {
 	return &lockingMap{
 		lock:      &sync.RWMutex{},

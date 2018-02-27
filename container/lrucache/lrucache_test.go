@@ -56,6 +56,10 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 	c.Assert(ok, IsTrue)
 	c.Assert(v, Equals, 2)
 
+	// Setting an existing item moves it to the front of the queue. The cache size does not change
+	cache.Set("2", 2)
+	c.Assert(cache.Len(), Equals, 2)
+
 	v, ok = cache.Get("4")
 	c.Assert(ok, IsTrue)
 	c.Assert(v, Equals, 4)
@@ -73,4 +77,15 @@ func (s *LRUCacheSuite) TestBasic(c *C) {
 
 	// deletion doesn't affect the max-size
 	c.Assert(cache.MaxSize(), Equals, 2)
+}
+
+func (s *LRUCacheSuite) TestInvalidCacheSize(c *C) {
+	//Specifying nonsensical sizes result in panic
+	defer func() {
+		if r := recover(); r == nil {
+			c.Errorf("lrucache.New should have panicked")
+		}
+	}()
+
+	_ = New(-2)
 }
