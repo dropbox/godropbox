@@ -164,7 +164,7 @@ func (s *SimpleResourcePoolSuite) TestRecycleHandles(c *C) {
 	c.Assert(err, IsNil)
 	CheckSameConnection(c, n3, c3)
 
-	n4, err := pool.Get("bar")
+	n4, _ := pool.Get("bar")
 	c.Assert(dialer.MaxId(), Equals, 5)
 	CheckId(c, n4, 5)
 }

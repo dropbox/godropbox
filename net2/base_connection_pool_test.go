@@ -167,7 +167,7 @@ func (s *BaseConnectionPoolSuite) TestRecycleConnections(c *C) {
 	c.Assert(SameConnection(n3, c1), IsFalse)
 	c.Assert(SameConnection(n3, c3), IsTrue)
 
-	n4, err := pool.Get("foo", "bar")
+	n4, _ := pool.Get("foo", "bar")
 	c.Assert(dialer.MaxId(), Equals, 5)
 	c.Assert(n4.RawConn().(*mockConn).Id(), Equals, 5)
 }
