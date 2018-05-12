@@ -171,7 +171,6 @@ func (rw *BoundedRWLock) processQueue() {
 			}
 		}
 	}
-	return
 }
 
 // A waiting entity, writer or reader.
