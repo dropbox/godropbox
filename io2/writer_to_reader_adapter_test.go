@@ -315,7 +315,7 @@ func (wrself *WriterToReaderAdapterSuite) TestZlibEarlyError(c *C) {
 	_, _ = w.Write([]byte(wrself.testData))
 	_ = w.Close()
 	var finalOutput bytes.Buffer
-	btf := fmt.Errorf("Born to fail")
+	btf := fmt.Errorf("born to fail")
 	finalDecompressor := NewWriterToReaderAdapter(
 		func(a io.Reader) (io.Reader, error) { return nil, btf },
 		&finalOutput, true)
@@ -369,7 +369,7 @@ func (wrself *WriterToReaderAdapterSuite) TestZlibWriteTruncation(c *C) {
 	c.Assert(string(finalOutput.Bytes()) != (wrself.testData+wrself.testData), Equals, true)
 }
 
-var lateFailing error = fmt.Errorf("LateFailing")
+var lateFailing error = fmt.Errorf("lateFailing")
 
 type LateFailingZlibReader struct {
 	rdr    io.ReadCloser
