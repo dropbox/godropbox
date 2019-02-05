@@ -104,7 +104,7 @@ func (p *simpleResourcePool) Register(resourceLocation string) error {
 
 	if p.isLameDuck {
 		return fmt.Errorf(
-			"Cannot register %s to lame duck resource pool",
+			"cannot register %s to lame duck resource pool",
 			resourceLocation)
 	}
 
@@ -137,12 +137,12 @@ func (p *simpleResourcePool) getLocation() (string, error) {
 
 	if p.location == "" {
 		return "", fmt.Errorf(
-			"Resource location is not set for SimpleResourcePool")
+			"resource location is not set for SimpleResourcePool")
 	}
 
 	if p.isLameDuck {
 		return "", fmt.Errorf(
-			"Lame duck resource pool cannot return handles to %s",
+			"lame duck resource pool cannot return handles to %s",
 			p.location)
 	}
 
@@ -239,7 +239,7 @@ func (p *simpleResourcePool) Discard(handle ManagedHandle) error {
 	if h != nil {
 		atomic.AddInt32(p.numActive, -1)
 		if err := p.options.Close(h); err != nil {
-			return fmt.Errorf("Failed to close resource handle: %v", err)
+			return fmt.Errorf("failed to close resource handle: %v", err)
 		}
 	}
 	return nil

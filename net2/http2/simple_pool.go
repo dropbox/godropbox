@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	errFollowRedirectDisabled = fmt.Errorf("Following redirect disabled")
+	errFollowRedirectDisabled = fmt.Errorf("following redirect disabled")
 )
 
 // Pool of persistent HTTP connections. The only limit is on the max # of idle connections we
