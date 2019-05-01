@@ -190,6 +190,7 @@ func (p *simpleResourcePool) Get(unused string) (ManagedHandle, error) {
 		} else {
 			// We could not immediately acquire a token.
 			// Instead of waiting
+			atomic.AddInt32(p.numActive, -1)
 			return nil, OpenHandleError{
 				p.location, errors.New("Open Error: reached OpenMaxConcurrency")}
 		}
