@@ -25,7 +25,8 @@ func (s *CheckersSuite) SetUpTest(c *C) {
 func test(c *C, ch Checker,
 	expectedResult bool, expectedErr string, params ...interface{}) {
 
-	actualResult, actualErr := ch.Check(params, nil)
+	names := []string{""}
+	actualResult, actualErr := ch.Check(params, names)
 	if actualResult != expectedResult || actualErr != expectedErr {
 		c.Fatalf(
 			"Check returned (%#v, %#v) rather than (%#v, %#v)",
@@ -38,18 +39,10 @@ func (s *CheckersSuite) TestHasKey(c *C) {
 	test(c, HasKey, false, "", map[string]int{"foo": 1}, "bar")
 	test(c, HasKey, true, "", map[int][]byte{10: nil}, 10)
 
-	// If lesser than 2 params Check returns false
-	test(c, HasKey, false, "HasKey takes 2 arguments: a map and a key",
-		map[string]int{"foo": 1})
-
 	test(c, HasKey, false, "First argument to HasKey must be a map", nil, "bar")
 	test(c, HasKey,
 		false, "Second argument must be assignable to the map key type",
 		map[string]int{"foo": 1}, 10)
-}
-
-func (s *CheckersSuite) TestAssertHasKey(c *C) {
-	c.Assert(map[string]int{"foo": 1}, HasKey, "foo")
 }
 
 func (s *CheckersSuite) TestNoErr(c *C) {
@@ -67,75 +60,77 @@ func (s *CheckersSuite) TestNoErr(c *C) {
 	c.Assert(fmt.Sprintf("%#v", params[0]), Equals, "\n"+text)
 }
 
-func (s *CheckersSuite) TestAssertNoErr(c *C) {
-	c.Assert(error(nil), NoErr)
+func (s *CheckersSuite) TestMultilineErrorMatches(c *C) {
+	test_err := errors.Newf("\nOh damn\n, this stinks")
+
+	test(c, ErrorMatches, false, "", test_err, "stinks")
+	test(c, MultilineErrorMatches, true, "", test_err, "stinks")
+	test(c, MultilineErrorMatches, true, "", test_err, ".*stinks")
+	test(c, MultilineErrorMatches, true, "", test_err, ".*stinks.*")
+
+	test(c, MultilineErrorMatches, false, "", test_err, "skinks")
 }
 
-func (s *CheckersSuite) TestErrorMatches(c *C) {
-	test(c, MultilineErrorMatches, true, "",
-		errors.Newf("Oh damn, this stinks"), "stinks")
-	test(c, MultilineErrorMatches, false, "",
-		errors.Newf("Oh damn, this stinks"), "skinks")
-	test(c, MultilineErrorMatches, false, "MultilineErrorMatches take 2 arguments: an error, "+
-		"and a regular expression")
-	test(c, MultilineErrorMatches, false, "the first parameter value must be an error!",
-		"foo", "bar")
-	test(c, MultilineErrorMatches, false, "the second parameter value must be a string containing a regular expression",
-		errors.Newf("Oh damn, this stinks"), nil)
-	test(c, MultilineErrorMatches, false, "Error in regular expression: error parsing regexp: invalid nested repetition operator: `++`",
-		errors.Newf("Foo Error"), "[a-z]++")
+func (s *CheckersSuite) TestMultilineMatches(c *C) {
+	test_string := "\nOh damn\n, this stinks"
+
+	test(c, Matches, false, "", test_string, "stinks")
+	test(c, MultilineMatches, true, "", test_string, "stinks")
+	test(c, MultilineMatches, true, "", test_string, ".*stinks")
+	test(c, MultilineMatches, true, "", test_string, ".*stinks.*")
+
+	test(c, MultilineMatches, false, "", test_string, "skinks")
 }
 
-func (s *CheckersSuite) TestAssertMultilineErrorMatch(c *C) {
-	c.Assert(errors.Newf("Error received : foo"), MultilineErrorMatches, "foo")
-}
 func (s *CheckersSuite) TestAlmostEqual(c *C) {
 	// Test margins.
 	test(c, AlmostEqual, true, "", 5.0, 5.0, 0.0)
 	test(c, AlmostEqual, true, "", 5.0, 5.0, 0.1)
 	test(c, AlmostEqual, true, "", 5.0, 4.995, 0.01)
+	test(c, AlmostEqual, true, "", float32(5.0), float32(4.995), float32(0.01))
+	test(c, AlmostEqual, true, "", 5.0, float32(4.995), 0.01)
 	test(c, AlmostEqual, false, "Obtained 5.000000 different from expected 4.995000 by more than 0.001000 margin", 5.0, 4.995, 0.001)
 
 	// Test invalid args.
 	test(c, AlmostEqual, false, "AlmostEqual takes exactly 3 arguments", 5.0, 4.99)
-	test(c, AlmostEqual, false, "All arguments to AlmostEqual must be float64", "5.0", 5.0, 0.1)
+	test(c, AlmostEqual, false, "All arguments to AlmostEqual must be float64 or float32", "5.0", 5.0, 0.1)
 	test(c, AlmostEqual, false, "Margin must be non-negative", 5.0, 5.0, -0.1)
 }
 
-func (s *CheckersSuite) TestAssertAlmostEqual(c *C) {
-	c.Assert(4.9975, AlmostEqual, 5.0, 0.01)
-}
+func (s *CheckersSuite) TestDeepEqualsPretty(c *C) {
+	type B struct {
+		b int
+		c string
+	}
+	type A struct {
+		b B
+		e *A
+	}
+	a1 := A{b: B{b: 2, c: "asdf"}, e: nil}
+	a1Pointer := &a1
+	a1Pointer2 := &a1
+	a2 := A{b: B{b: 3, c: "defg"}, e: a1Pointer}
+	a3 := A{b: B{b: 3, c: "defg"}, e: a1Pointer2}
 
-func (s *CheckersSuite) TestGreaterThan(c *C) {
-	test(c, GreaterThan, true, "", 6, 5)
-	test(c, GreaterThan, false, "obtained is not int", 6.0, 5)
-	test(c, GreaterThan, false, "expected is not int", 6, 5.0)
-	test(c, GreaterThan, false, "5 is less than or equal to 6", 5, 6)
-}
+	expectedErr := "@@ -1,8 +1,14 @@\n" +
+		" (gocheck2.A) {\n" +
+		"   b: (gocheck2.B) {\n" +
+		"-    b: (int) 2,\n" +
+		"-    c: (string) (len=4) \"asdf\"\n" +
+		"+    b: (int) 3,\n" +
+		"+    c: (string) (len=4) \"defg\"\n" +
+		"   },\n" +
+		"-  e: (*gocheck2.A)(<nil>)\n" +
+		"+  e: (*gocheck2.A)({\n" +
+		"+    b: (gocheck2.B) {\n" +
+		"+      b: (int) 2,\n" +
+		"+      c: (string) (len=4) \"asdf\"\n" +
+		"+    },\n" +
+		"+    e: (*gocheck2.A)(<nil>)\n" +
+		"+  })\n" +
+		" }\n" +
+		" \n"
 
-func (s *CheckersSuite) TestAssertGreaterThan(c *C) {
-	c.Assert(6, GreaterThan, 5)
-}
-
-func (s *CheckersSuite) TestIsBoolValueChecker(c *C) {
-	test(c, IsTrue, true, "", true)
-	test(c, IsFalse, true, "", false)
-
-	test(c, IsTrue, false, "Argument to IsTrue must be bool", "true")
-
-}
-
-func (s *CheckersSuite) TestBytesEquals(c *C) {
-	b1 := []byte("foo")
-	b2 := []byte("foo")
-	test(c, BytesEquals, true, "", b1, b2)
-
-	test(c, BytesEquals, false, "Arguments to BytesEqual must both be bytestrings", "foo", b2)
-	test(c, BytesEquals, false, "BytesEqual takes 2 bytestring arguments", b1)
-	test(c, BytesEquals, false, "Byte arrays were different", b1, []byte("foo2"))
-
-}
-
-func (s *CheckersSuite) TestAssertBytesEquals(c *C) {
-	c.Assert([]byte("baz"), BytesEquals, []byte("baz"))
+	test(c, DeepEqualsPretty, false, expectedErr, a1, a2)
+	test(c, DeepEqualsPretty, true, "", a2, a3)
 }
