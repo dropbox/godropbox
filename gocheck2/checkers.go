@@ -7,9 +7,12 @@ package gocheck2
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/pmezard/go-difflib/difflib"
 	. "gopkg.in/check.v1"
 )
 
@@ -101,7 +104,7 @@ var BytesEquals = &bytesEquals{}
 
 // -----------------------------------------------------------------------
 // AlmostEqual checker.
-// Meant to compare floats with some margin of error which might arrise
+// Meant to compare floats with some margin of error which might arise
 // from rounding errors.
 
 type almostEqualChecker struct{}
@@ -113,16 +116,28 @@ func (ae *almostEqualChecker) Info() *CheckerInfo {
 	}
 }
 
+func (ae *almostEqualChecker) convertToFloat64(d interface{}) (float64, bool) {
+	f64, ok := d.(float64)
+	if ok {
+		return f64, ok
+	}
+	f32, ok := d.(float32)
+	if ok {
+		return float64(f32), ok
+	}
+	return 0.0, false
+}
+
 func (ae *almostEqualChecker) Check(params []interface{}, names []string) (bool, string) {
 	if len(params) != 3 {
 		return false, "AlmostEqual takes exactly 3 arguments"
 	}
-	obtained, ok1 := params[0].(float64)
-	expected, ok2 := params[1].(float64)
-	margin, ok3 := params[2].(float64)
+	obtained, ok1 := ae.convertToFloat64(params[0])
+	expected, ok2 := ae.convertToFloat64(params[1])
+	margin, ok3 := ae.convertToFloat64(params[2])
 
 	if !(ok1 && ok2 && ok3) {
-		return false, "All arguments to AlmostEqual must be float64"
+		return false, "All arguments to AlmostEqual must be float64 or float32"
 	}
 
 	if margin < 0 {
@@ -257,30 +272,132 @@ func (h multilineErrorMatches) Info() *CheckerInfo {
 	}
 }
 
-var MultilineErrorMatches = multilineErrorMatches{}
+var MultilineErrorMatches multilineErrorMatches = multilineErrorMatches{}
 
-type greaterThan struct{}
+// -----------------------------------------------------------------------
+// MultilineMatches: Multiline Matches
+// The standard gocheck Matches brackets the regular expression that
+// the string must match in ^ and $, so that it can only match single-line
+// messages.
+//
+// This is a variant of the normal Matches which avoids that problem.
+// It takes two parameters:
+// 1: A string, and
+// 2: a string containing a regular expression.
+// The check succeeds if the first string contains a match for the regular expression
+// at any position.
+type multilineMatches struct{}
 
-func (c greaterThan) Check(params []interface{}, names []string) (bool, string) {
-	obtained, ok := params[0].(int)
-	if !ok {
-		return false, "obtained is not int"
+func (e multilineMatches) Check(params []interface{}, names []string) (bool, string) {
+	if len(params) != 2 {
+		return false, "MultilineMatches take 2 arguments: a string, and a regular expression"
 	}
-	expected, ok := params[1].(int)
+	strValue, errIsString := params[0].(string)
+	if !errIsString {
+		return false, "the first parameter value must be a string"
+	}
+	regexpStr, reIsStr := params[1].(string)
+	if !reIsStr {
+		return false, "the second parameter value must be a string containing a regular expression"
+	}
+	matches, err := regexp.MatchString(regexpStr, strValue)
+	if err != nil {
+		return false, fmt.Sprintf("Error in regular expression: %v", err.Error())
+	}
+	return matches, ""
+}
+
+func (h multilineMatches) Info() *CheckerInfo {
+	return &CheckerInfo{
+		Name:   "MultilineMatches",
+		Params: []string{"string", "pattern"},
+	}
+}
+
+var MultilineMatches multilineMatches = multilineMatches{}
+
+type intCmp struct {
+	name string
+	op   string
+	cmp  func(a, b int64) bool
+}
+
+func (c intCmp) Check(params []interface{}, names []string) (bool, string) {
+	asInt64 := func(a interface{}) (int64, bool) {
+		// :|
+		v := reflect.ValueOf(a)
+		int64Type := reflect.TypeOf(int64(0))
+		if v.Type().ConvertibleTo(int64Type) {
+			return v.Convert(int64Type).Int(), true
+		}
+		return 0, false
+	}
+	obtained, ok := asInt64(params[0])
 	if !ok {
-		return false, "expected is not int"
+		return false, "obtained wasn't an integer type"
+	}
+	expected, ok := asInt64(params[1])
+	if !ok {
+		return false, "expected wasn't an integer type"
 	}
 
-	if obtained > expected {
+	if c.cmp(obtained, expected) {
 		return true, ""
 	}
-	return false, fmt.Sprintf("%d is less than or equal to %d", obtained, expected)
+	return false, fmt.Sprintf("%d%s%d isn't true", obtained, c.op, expected)
 }
-func (c greaterThan) Info() *CheckerInfo {
+func (c intCmp) Info() *CheckerInfo {
 	return &CheckerInfo{
-		Name:   "GreaterThan",
+		Name:   c.name,
 		Params: []string{"obtained", "expected"},
 	}
 }
 
-var GreaterThan = &greaterThan{}
+var LessThan = &intCmp{"LessThan", "<", func(a, b int64) bool { return a < b }}
+var LessOrEquals = &intCmp{"LessOrEquals", "<=", func(a, b int64) bool { return a <= b }}
+var GreaterThan = &intCmp{"GreaterThan", ">", func(a, b int64) bool { return a > b }}
+var GreaterOrEquals = &intCmp{"GreaterOrEquals", ">=", func(a, b int64) bool { return a >= b }}
+
+type deepEqualsPretty struct{}
+
+func (c deepEqualsPretty) Check(params []interface{}, names []string) (bool, string) {
+	result := reflect.DeepEqual(params[0], params[1])
+	if result {
+		return true, ""
+	}
+
+	spewCfg := spew.NewDefaultConfig()
+	spewCfg.ContinueOnMethod = true
+	spewCfg.Indent = "  "
+	spewCfg.DisablePointerAddresses = true
+	spewCfg.SortKeys = true
+	spewCfg.SpewKeys = true
+	spewCfg.DisableCapacities = true
+	diffStr, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A: difflib.SplitLines(spewCfg.Sdump(params[0])),
+		B: difflib.SplitLines(spewCfg.Sdump(params[1])),
+		// We want to just render the entire thing until somebody uses this with
+		// an untenably large structure.
+		Context: math.MaxInt32,
+	})
+	if err != nil {
+		return false, err.Error()
+	}
+
+	return false, diffStr
+}
+func (c deepEqualsPretty) Info() *CheckerInfo {
+	return &CheckerInfo{
+		Name:   "DeepEqualsPretty",
+		Params: []string{"obtained", "expected"},
+	}
+}
+
+// Standard gocheck DeepEquals just prints the values using %#v when it fails,
+// which does traverse pointers during comparison but doesn't for printing, so
+// if the difference is through a pointer the debug message is completely
+// useless. Plus they're printed all on one line and very hard to read.
+//
+// DeepEqualsPretty prints the entire structure of both args, with newlines and
+// indendation, and diffs them, so it's easy to pick out what's different.
+var DeepEqualsPretty = &deepEqualsPretty{}
