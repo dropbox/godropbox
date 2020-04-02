@@ -1,0 +1,3 @@
+proto/mysql/binlog.pb.go
+proto/mysql/error_code.pb.go
+vendor/
