@@ -11,7 +11,7 @@ Common libraries for writing go services/applications on Linux servers.
 
 ### Documentation
 
-See https://godoc.org/github.com/dropbox/godropbox for modules documentation.
+See https://pkg.go.dev/github.com/dropbox/godropbox for modules documentation.
 
 #### Contributors
 - Adam Faulkner
