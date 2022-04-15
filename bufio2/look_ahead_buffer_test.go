@@ -60,11 +60,6 @@ func (s *LookAheadBufferSuite) TestPeek(c *C) {
 	c.Check(s.reader.Len(), Equals, len(testBytes)-bufSize)
 }
 
-func (s *LookAheadBufferSuite) TestPeekInvalidInput(c *C) {
-	_, err := s.buffer.Peek(-2)
-	c.Check(err, NotNil)
-}
-
 func (s *LookAheadBufferSuite) TestLookAheadBufferFull(c *C) {
 	bytes, err := s.buffer.Peek(bufSize + 1)
 	c.Check(bytes, IsNil)
@@ -144,11 +139,6 @@ func (s *LookAheadBufferSuite) TestConsumeThenEOF(c *C) {
 	c.Check(buffer.BytesBuffered(), Equals, 4)
 	c.Check(buffer.Buffer(), DeepEquals, []byte("defg"))
 	c.Check(buffer.RawBuffer(), DeepEquals, []byte("defge"))
-}
-
-func (s *LookAheadBufferSuite) TestConsumeInvalidInput(c *C) {
-	err := s.buffer.Consume(-2)
-	c.Check(err, NotNil)
 }
 
 func (s *LookAheadBufferSuite) TestConsumeShortBuffer(c *C) {
