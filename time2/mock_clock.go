@@ -2,14 +2,16 @@ package time2
 
 import (
 	"container/heap"
+	insecure_rand "math/rand"
 	"runtime"
 	"sync"
 	"time"
 )
 
 type wakeup struct {
-	t time.Time
-	c chan time.Time
+	t        time.Time
+	c        chan time.Time
+	interval time.Duration
 }
 
 type tHeap []*wakeup
@@ -103,17 +105,36 @@ func (c *MockClock) Since(t time.Time) time.Duration {
 	return c.Now().Sub(t)
 }
 
-func (c *MockClock) After(d time.Duration) <-chan time.Time {
+// Returns the time elapsed until the fake current time.
+func (c *MockClock) Until(t time.Time) time.Duration {
+	return -c.Now().Sub(t)
+}
+
+func (c *MockClock) tick(d time.Duration, recurring bool) <-chan time.Time {
+	interval := time.Duration(0)
+	if recurring {
+		interval = d
+	}
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	w := &wakeup{
-		t: c.now.Add(d),
-		c: make(chan time.Time),
+		t:        c.now.Add(d),
+		c:        make(chan time.Time, 1),
+		interval: interval,
 	}
 	c.logf("MockClock: registering wakeup in %s at %s.", d.String(), tsStr(w.t))
 	heap.Push(&c.wakeups, w)
 	return w.c
+}
+
+func (c *MockClock) After(d time.Duration) <-chan time.Time {
+	return c.tick(d, false)
+}
+
+func (c *MockClock) Tick(d time.Duration) <-chan time.Time {
+	return c.tick(d, true)
 }
 
 func (c *MockClock) Sleep(d time.Duration) {
@@ -158,6 +179,14 @@ func (c *MockClock) advanceToNextWakeup() {
 	// give things a chance to run
 	runtime.Gosched()
 	c.logf("MockClock: Advanced time, now=%s.", tsStr(c.now))
+
+	if w.interval > 0 {
+		w.t = w.t.Add(w.interval)
+		c.logf("MockClock: registering wakeup in %v at %s.",
+			w.interval,
+			tsStr(w.t))
+		heap.Push(&c.wakeups, w)
+	}
 }
 
 // This assumes c.mutex is locked
@@ -189,4 +218,17 @@ func tsStr(ts time.Time) string {
 		return "empty"
 	}
 	return ts.Format(tsFmt)
+}
+
+// Generate an arbitrary time.Time value for cases in tests where a realistic
+// time.Time is needed but the specific value isn't important.
+// The seed value should be any arbitary int; different seeds will usually
+// produce a different value.
+// For a given seed and version of code, the returned value should be identical.
+func Arbitrary(seed int) time.Time {
+	r := insecure_rand.New(insecure_rand.NewSource(int64(seed)))
+	const window = 200 * 24 * time.Hour
+	offset := time.Duration(r.Int63n(int64(window)) - int64(window))
+	someDate := time.Date(2020, 1, 20, 0, 0, 0, 0, time.UTC)
+	return someDate.Add(offset)
 }
