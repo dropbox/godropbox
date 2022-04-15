@@ -1,0 +1,30 @@
+(O)rder-(I)ndependent Hash
+
+A definitely-not-cryptographically-secure hash algorithm designed to
+allow you to answer the following question:
+
+Do these two enormous lists of []bytes have the same elements in the
+same numbers? i.e. if you have a pair of multisets represented as
+lists, are they the same?
+
+It's assumed that it's infeasible to sort the two input lists, which
+means that we want a hash function into which you can mix the elements
+in any order, and the result will be the same regardless of mixing
+order. One helpful construction for this is to select two functions
+with the following signatures:
+
+Hash: MultiSet<[]byte> -> HashType
+Combine: HashType x HashType -> HashType
+
+that satisfy the following property:
+
+Combine(Hash(A), Hash(B)) == Hash(Union(A, B))
+
+
+Then you can compute incrementally as follows:
+
+var combinedHash HashType
+for _, x := range items {
+  itemHash := Hash({x})
+  combinedHash = Combine(combinedHash, itemHash)
+}
