@@ -1,10 +1,11 @@
 package memcache
 
 import (
+	"context"
 	"strconv"
 	"sync"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 type MockClient struct {
@@ -14,6 +15,8 @@ type MockClient struct {
 	forceGetMisses         bool // return StatusKeyNotFound for all gets
 	forceSetInternalErrors bool // return StatusInternalError for all sets
 	forceFailEverything    bool // return StatusInternalError for all functions
+	forceIncrDecrError     bool // return StatusIncrDecrOnNonNumericValue for all incrs/decrs
+	forceGetInvalidState   bool // return an error for all gets to simulate a previous failure
 }
 type Operation int
 
@@ -38,7 +41,18 @@ func NewMockClientFailEverything() Client {
 	return &MockClient{data: make(map[string]*Item), forceFailEverything: true}
 }
 
+func NewMockClientErrorAllIncrementDecrement() Client {
+	return &MockClient{data: make(map[string]*Item), forceIncrDecrError: true}
+}
+
+func NewMockClientInvalidState() Client {
+	return &MockClient{data: make(map[string]*Item), forceGetInvalidState: true}
+}
+
 func (c *MockClient) getHelper(key string) GetResponse {
+	if c.forceGetInvalidState {
+		return NewGetErrorResponse(key, NewInvalidStateError())
+	}
 	if c.forceFailEverything {
 		return NewGetResponse(
 			key, StatusInternalError, 0, nil, 0)
@@ -55,7 +69,7 @@ func (c *MockClient) getHelper(key string) GetResponse {
 }
 
 // This retrieves a single entry from memcache.
-func (c *MockClient) Get(key string) GetResponse {
+func (c *MockClient) Get(ctx context.Context, key string) GetResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -63,7 +77,7 @@ func (c *MockClient) Get(key string) GetResponse {
 }
 
 // Batch version of the Get method.
-func (c *MockClient) GetMulti(keys []string) map[string]GetResponse {
+func (c *MockClient) GetMulti(ctx context.Context, keys []string) map[string]GetResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -72,10 +86,6 @@ func (c *MockClient) GetMulti(keys []string) map[string]GetResponse {
 		res[key] = c.getHelper(key)
 	}
 	return res
-}
-
-func (c *MockClient) GetSentinels(keys []string) map[string]GetResponse {
-	return c.GetMulti(keys)
 }
 
 func (c *MockClient) setHelper(item *Item) MutateResponse {
@@ -131,7 +141,7 @@ func (c *MockClient) casHelper(item *Item) MutateResponse {
 // This sets a single entry into memcache.  If the item's data version id
 // (aka CAS) is nonzero, the set operation can only succeed if the item
 // exists in memcache and has a same data version id.
-func (c *MockClient) Set(item *Item) MutateResponse {
+func (c *MockClient) Set(ctx context.Context, item *Item) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -140,7 +150,7 @@ func (c *MockClient) Set(item *Item) MutateResponse {
 
 // Batch version of the Set method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering).
-func (c *MockClient) SetMulti(items []*Item) []MutateResponse {
+func (c *MockClient) SetMulti(ctx context.Context, items []*Item) []MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -151,12 +161,7 @@ func (c *MockClient) SetMulti(items []*Item) []MutateResponse {
 	return res
 }
 
-func (c *MockClient) SetSentinels(items []*Item) []MutateResponse {
-	// TODO(patrick): Support state mocking
-	return c.SetMulti(items)
-}
-
-func (c *MockClient) CasMulti(items []*Item) []MutateResponse {
+func (c *MockClient) CasMulti(ctx context.Context, items []*Item) []MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -165,10 +170,6 @@ func (c *MockClient) CasMulti(items []*Item) []MutateResponse {
 		res[i] = c.casHelper(item)
 	}
 	return res
-}
-
-func (c *MockClient) CasSentinels(items []*Item) []MutateResponse {
-	return c.CasMulti(items)
 }
 
 func (c *MockClient) addHelper(item *Item) MutateResponse {
@@ -203,7 +204,7 @@ func (c *MockClient) addHelper(item *Item) MutateResponse {
 
 // This adds a single entry into memcache.  Note: Add will fail if the
 // item already exist in memcache.
-func (c *MockClient) Add(item *Item) MutateResponse {
+func (c *MockClient) Add(ctx context.Context, item *Item) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -212,7 +213,7 @@ func (c *MockClient) Add(item *Item) MutateResponse {
 
 // Batch version of the Add method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering).
-func (c *MockClient) AddMulti(items []*Item) []MutateResponse {
+func (c *MockClient) AddMulti(ctx context.Context, items []*Item) []MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -225,14 +226,14 @@ func (c *MockClient) AddMulti(items []*Item) []MutateResponse {
 
 // This replaces a single entry in memcache.  Note: Replace will fail if
 // the does not exist in memcache.
-func (c *MockClient) Replace(item *Item) MutateResponse {
+func (c *MockClient) Replace(ctx context.Context, item *Item) MutateResponse {
 	return NewMutateErrorResponse(
 		item.Key,
 		errors.Newf("Replace not implemented"))
 }
 
 // This deletes a single entry from memcache.
-func (c *MockClient) Delete(key string) MutateResponse {
+func (c *MockClient) Delete(ctx context.Context, key string) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -261,23 +262,23 @@ func (c *MockClient) Delete(key string) MutateResponse {
 
 // Batch version of the Delete method.  Note that the response entries
 // ordering is undefined (i.e., may not match the input ordering)
-func (c *MockClient) DeleteMulti(keys []string) []MutateResponse {
+func (c *MockClient) DeleteMulti(ctx context.Context, keys []string) []MutateResponse {
 	res := make([]MutateResponse, len(keys))
 	for i, key := range keys {
-		res[i] = c.Delete(key)
+		res[i] = c.Delete(ctx, key)
 	}
 	return res
 }
 
 // This appends the value bytes to the end of an existing entry.  Note that
 // this does not allow you to extend past the item limit.
-func (c *MockClient) Append(key string, value []byte) MutateResponse {
+func (c *MockClient) Append(ctx context.Context, key string, value []byte) MutateResponse {
 	return NewMutateErrorResponse(key, errors.Newf("Append not implemented"))
 }
 
 // This prepends the value bytes to the end of an existing entry.  Note that
 // this does not allow you to extend past the item limit.
-func (c *MockClient) Prepend(key string, value []byte) MutateResponse {
+func (c *MockClient) Prepend(ctx context.Context, key string, value []byte) MutateResponse {
 	return NewMutateErrorResponse(key, errors.Newf("Prepend not implemented"))
 }
 
@@ -289,6 +290,8 @@ func (c *MockClient) incrementDecrementHelper(
 
 	if c.forceFailEverything {
 		return NewCountResponse(key, StatusInternalError, 0)
+	} else if c.forceIncrDecrError {
+		return NewCountResponse(key, StatusIncrDecrOnNonNumericValue, 0)
 	}
 
 	if v, ok := c.data[key]; ok && !c.forceGetMisses {
@@ -319,22 +322,14 @@ func (c *MockClient) incrementDecrementHelper(
 	if expiration == 0xffffffff {
 		return NewCountResponse(key, StatusKeyNotFound, 0)
 	} else {
-		var newValue uint64
-		if operation == Increment {
-			newValue = initValue + delta
-		} else {
-			newValue = initValue - delta
-			if newValue < 0 {
-				newValue = 0
-			}
-		}
+		// new, non existing item
 		c.addHelper(&Item{
 			Key:        key,
-			Value:      []byte(strconv.Itoa(int(newValue))),
+			Value:      []byte(strconv.Itoa(int(initValue))),
 			Flags:      0,
 			Expiration: expiration,
 		})
-		return NewCountResponse(key, StatusNoError, newValue)
+		return NewCountResponse(key, StatusNoError, initValue)
 	}
 
 }
@@ -353,6 +348,7 @@ func (c *MockClient) incrementDecrementHelper(
 // not the byte values of a 64 bit integer.
 // 2. Incrementing the counter may cause the counter to wrap.
 func (c *MockClient) Increment(
+	ctx context.Context,
 	key string,
 	delta uint64,
 	initValue uint64,
@@ -379,6 +375,7 @@ func (c *MockClient) Increment(
 // 2. Decrementing a counter will never result in a "negative value" (or
 // cause the counter to "wrap"). instead the counter is set to 0.
 func (c *MockClient) Decrement(
+	ctx context.Context,
 	key string,
 	delta uint64,
 	initValue uint64,
@@ -392,7 +389,7 @@ func (c *MockClient) Decrement(
 
 // This invalidates all existing cache items after expiration number of
 // seconds.
-func (c *MockClient) Flush(expiration uint32) Response {
+func (c *MockClient) Flush(ctx context.Context, expiration uint32) Response {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -403,16 +400,16 @@ func (c *MockClient) Flush(expiration uint32) Response {
 
 // This requests the server statistics. When the key is an empty string,
 // the server will respond with a "default" set of statistics information.
-func (c *MockClient) Stat(statsKey string) StatResponse {
+func (c *MockClient) Stat(ctx context.Context, statsKey string) StatResponse {
 	return NewStatErrorResponse(errors.Newf("Stat not implemented"), nil)
 }
 
 // This returns the server's version string.
-func (c *MockClient) Version() VersionResponse {
-	return NewVersionResponse(StatusNoError, map[int]string{0: "MockSever"})
+func (c *MockClient) Version(ctx context.Context) VersionResponse {
+	return NewVersionResponse(StatusNoError, map[string]string{"0": "MockSever"})
 }
 
 // This set the verbosity level of the server.
-func (c *MockClient) Verbosity(verbosity uint32) Response {
+func (c *MockClient) Verbosity(ctx context.Context, verbosity uint32) Response {
 	return NewResponse(StatusNoError)
 }

@@ -6,7 +6,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
 )
 
 // Hook up gocheck into the go test runner

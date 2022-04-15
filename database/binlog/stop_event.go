@@ -1,7 +1,7 @@
 package binlog
 
 import (
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
 )
 
 // A representation of an event generated when mysqld stops.

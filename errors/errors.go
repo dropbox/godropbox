@@ -7,14 +7,16 @@ package errors
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"reflect"
 	"runtime"
 	"sync"
 )
 
 // This interface exposes additional information about the error.
 type DropboxError interface {
+	error
+
 	// This returns the error message without the stack trace.
 	GetMessage() string
 
@@ -22,9 +24,6 @@ type DropboxError interface {
 	// Go 2 error introspection proposal:
 	// https://go.googlesource.com/proposal/+/master/design/29934-error-values.md
 	Unwrap() error
-
-	// Implements the built-in error interface.
-	Error() string
 
 	// Returns stack addresses as a string that can be supplied to
 	// a helper tool to get the actual stack trace. This function doesn't result
@@ -197,32 +196,13 @@ func extractFullErrorMessage(e DropboxError, includeStack bool) string {
 	return errMsg.String()
 }
 
-// Return a wrapped error or nil if there is none.
-func unwrapError(ierr error) (nerr error) {
-	// Internal errors have a well defined bit of context.
-	if dbxErr, ok := ierr.(DropboxError); ok {
-		return dbxErr.Unwrap()
-	}
-
-	// At this point, if anything goes wrong, just return nil.
-	defer func() {
-		if x := recover(); x != nil {
-			nerr = nil
-		}
-	}()
-
-	// Go system errors have a convention but paradoxically no
-	// interface.  All of these panic on error.
-	errV := reflect.ValueOf(ierr).Elem()
-	errV = errV.FieldByName("Err")
-	return errV.Interface().(error)
-}
-
 // Keep peeling away layers or context until a primitive error is revealed.
+//
+// Prefer standard errors.Is or errors.As over this.
 func RootError(ierr error) (nerr error) {
 	nerr = ierr
 	for i := 0; i < 20; i++ {
-		terr := unwrapError(nerr)
+		terr := errors.Unwrap(nerr)
 		if terr == nil {
 			return nerr
 		}
@@ -249,26 +229,6 @@ func RootDropboxError(dbxErr DropboxError) DropboxError {
 	return dbxErr
 }
 
-// Perform a deep check, unwrapping errors as much as possilbe and
-// comparing the string version of the error.
-func IsError(err, errConst error) bool {
-	if err == errConst {
-		return true
-	}
-	// Must rely on string equivalence, otherwise a value is not equal
-	// to its pointer value.
-	rootErrStr := ""
-	rootErr := RootError(err)
-	if rootErr != nil {
-		rootErrStr = rootErr.Error()
-	}
-	errConstStr := ""
-	if errConst != nil {
-		errConstStr = errConst.Error()
-	}
-	return rootErrStr == errConstStr
-}
-
 // Performs a deep check of wrapped errors to find one which is selected by the given
 // classifier func.  The classifer is called on all non-nil errors found, starting with topErr,
 // then on each inner wrapped error in turn until it returns non-nil which ends the scan.
@@ -279,19 +239,9 @@ func FindWrappedError(
 	topErr error,
 	classifier func(curErr, topErr error) error,
 ) (error, bool) {
-	for curErr := topErr; curErr != nil; {
-		classifiedErr := classifier(curErr, topErr)
-		if classifiedErr != nil {
+	for curErr := topErr; curErr != nil; curErr = errors.Unwrap(curErr) {
+		if classifiedErr := classifier(curErr, topErr); classifiedErr != nil {
 			return classifiedErr, true
-		}
-
-		dbxErr, ok := curErr.(DropboxError)
-		if !ok || dbxErr == nil {
-			break
-		}
-		curErr = dbxErr.Unwrap()
-		if curErr == nil {
-			break
 		}
 	}
 	return topErr, false

@@ -1,9 +1,7 @@
 // Package lrucache is a standard LRU cache.
 package lrucache
 
-import (
-	"container/list"
-)
+import "godropbox/container/linked_hashmap"
 
 type keyValue struct {
 	key   string
@@ -11,9 +9,8 @@ type keyValue struct {
 }
 
 type LRUCache struct {
-	itemsList *list.List
-	itemsMap  map[string]*list.Element
-	maxSize   int
+	lhm     *linked_hashmap.LinkedHashmap
+	maxSize int
 }
 
 func New(maxSize int) *LRUCache {
@@ -22,57 +19,47 @@ func New(maxSize int) *LRUCache {
 	}
 
 	return &LRUCache{
-		itemsList: list.New(),
-		itemsMap:  make(map[string]*list.Element),
-		maxSize:   maxSize,
+		lhm:     linked_hashmap.NewLinkedHashmap(100), // Arbitrary size estimate.
+		maxSize: maxSize,
 	}
 }
 
 func (cache *LRUCache) Set(key string, val interface{}) {
-	elem, ok := cache.itemsMap[key]
+	_, ok := cache.lhm.Get(key)
 	if ok {
 		// item already exists, so move it to the front of the list and update the data
-		cache.itemsList.MoveToFront(elem)
-		kv := elem.Value.(*keyValue)
-		kv.value = val
+		cache.lhm.Remove(key)
+		cache.lhm.PushFront(key, val)
 	} else {
 		// item doesn't exist, so add it to front of list
-		elem = cache.itemsList.PushFront(&keyValue{key, val})
-		cache.itemsMap[key] = elem
+		cache.lhm.PushFront(key, val)
 
 		// evict LRU entry if the cache is full
-		if cache.itemsList.Len() > cache.maxSize {
-			removedElem := cache.itemsList.Back()
-			removedkv := removedElem.Value.(*keyValue)
-			cache.itemsList.Remove(removedElem)
-			delete(cache.itemsMap, removedkv.key)
+		if cache.lhm.Len() > cache.maxSize {
+			cache.lhm.PopBack()
 		}
 	}
 }
 
 func (cache *LRUCache) Get(key string) (val interface{}, ok bool) {
-	elem, ok := cache.itemsMap[key]
+	val, ok = cache.lhm.Get(key)
 	if !ok {
 		return nil, false
 	}
 
 	// item exists, so move it to front of list and return it
-	cache.itemsList.MoveToFront(elem)
-	kv := elem.Value.(*keyValue)
-	return kv.value, true
+	cache.lhm.MoveToFront(key)
+	return val, ok
 }
 
 func (cache *LRUCache) Len() int {
-	return cache.itemsList.Len()
+	return cache.lhm.Len()
 }
 
 func (cache *LRUCache) Delete(key string) (val interface{}, existed bool) {
-	elem, existed := cache.itemsMap[key]
-
+	val, existed = cache.lhm.Get(key)
 	if existed {
-		val = elem.Value.(*keyValue).value
-		cache.itemsList.Remove(elem)
-		delete(cache.itemsMap, key)
+		cache.lhm.Remove(key)
 	}
 	return val, existed
 }

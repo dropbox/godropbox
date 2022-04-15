@@ -4,7 +4,7 @@ import (
 	"io"
 	"log"
 
-	"github.com/dropbox/godropbox/cinterop"
+	"godropbox/cinterop"
 )
 
 func processData(socketRead io.ReadCloser, socketWrite io.Writer) {

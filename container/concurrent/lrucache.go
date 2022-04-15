@@ -1,7 +1,7 @@
 package concurrent
 
 import (
-	"github.com/dropbox/godropbox/container/lrucache"
+	"godropbox/container/lrucache"
 	"sync"
 )
 
@@ -19,6 +19,8 @@ type LRUCache interface {
 	Delete(keys ...string)
 	// Clears the cache
 	Clear()
+	// Retrieves the number of elements cached
+	Len() int
 	// Retrieves the maximum size of the cache
 	MaxSize() int
 }
@@ -98,6 +100,13 @@ func (p *concurrentLruCacheImp) Clear() {
 
 	// there is no way to clear the cache. So, just create a new one
 	p.cache = lrucache.New(p.cache.MaxSize())
+}
+
+func (p *concurrentLruCacheImp) Len() int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.cache.Len()
 }
 
 func (p *concurrentLruCacheImp) MaxSize() int {

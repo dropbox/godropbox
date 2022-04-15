@@ -1,8 +1,8 @@
 package binlog
 
 import (
-	"github.com/dropbox/godropbox/errors"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
 )
 
 // Event is the common interface for all mysql v4 binlog format events.

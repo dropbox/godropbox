@@ -2,7 +2,6 @@ package errors
 
 import (
 	"fmt"
-	"reflect"
 	"regexp"
 	"strings"
 	"syscall"
@@ -20,7 +19,7 @@ func TestStackTrace(t *testing.T) {
 		t.Errorf("error message %s != expected %s", er.GetMessage(), testMsg)
 	}
 
-	if strings.Index(er.GetStack(), "github.com/dropbox/godropbox/errors/errors.go") != -1 {
+	if strings.Index(er.GetStack(), "godropbox/errors/errors.go") != -1 {
 		t.Error("stack trace generation code should not be in the error stack trace")
 	}
 
@@ -285,10 +284,12 @@ type customErr struct {
 func (ce *customErr) Error() string { return "testing error" }
 
 type customNestedErr struct {
-	Err interface{}
+	Err error
 }
 
 func (cne *customNestedErr) Error() string { return "nested testing error" }
+
+func (cne *customNestedErr) Unwrap() error { return cne.Err }
 
 func TestRootError(t *testing.T) {
 	err := RootError(nil)
@@ -310,12 +311,6 @@ func TestRootError(t *testing.T) {
 	err = RootError(cne)
 	if err != cne {
 		t.Fatalf("expected err on empty custom error: %T %v", err, err)
-	}
-
-	cne = &customNestedErr{reflect.ValueOf(ce).Pointer()}
-	err = RootError(cne)
-	if err != cne {
-		t.Fatalf("expected err on invalid nested uniptr: %T %v", err, err)
 	}
 
 	cne = &customNestedErr{ce}

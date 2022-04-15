@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"strings"
 
-	. "github.com/dropbox/godropbox/gocheck2"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	. "godropbox/gocheck2"
 
 	. "gopkg.in/check.v1"
 )
@@ -20,7 +20,7 @@ var testCases = []GtidSet{
 	{},
 	{
 		strings.Repeat("a", 16): []GtidRange{
-			{0, 1},
+			{1, 2},
 		},
 	},
 	{
@@ -33,10 +33,28 @@ var testCases = []GtidSet{
 			{10, 20},
 		},
 	},
+	{
+		strings.Repeat("a", 16): []GtidRange{
+			{5, 10},
+			{13, 14},
+			{15, 19},
+		},
+	},
+}
+
+// NOTE: The end will get trimmed by 1 since in-memory GTIDSet
+// representation would be [inclusive,exclusive]. But when it
+// get printed out, it should be [inclusive, inclusive]
+var testCasesStrs = []string{
+	"",
+	"61616161-6161-6161-6161-616161616161:1",
+	"61616161-6161-6161-6161-616161616161:5-9:10-19," +
+		"62626262-6262-6262-6262-626262626262:5-9:10-19",
+	"61616161-6161-6161-6161-616161616161:5-9:13:15-18",
 }
 
 func (s *PreviousGtidsLogEventSuite) TestSuccess(c *C) {
-	for _, test := range testCases {
+	for i, test := range testCases {
 		s.WriteEvent(mysql_proto.LogEventType_PREVIOUS_GTIDS_LOG_EVENT, 0, serializeGtidSet(test))
 		event, err := s.NextEvent()
 		c.Assert(err, IsNil)
@@ -50,6 +68,7 @@ func (s *PreviousGtidsLogEventSuite) TestSuccess(c *C) {
 			}
 		}
 		c.Assert(reflect.DeepEqual(test, pgle.GtidSet()), IsTrue)
+		c.Assert(pgle.GtidSet().String(), Equals, testCasesStrs[i])
 	}
 }
 

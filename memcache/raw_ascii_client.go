@@ -2,12 +2,13 @@ package memcache
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 // An unsharded memcache client implementation which operates on a pre-existing
@@ -17,7 +18,7 @@ import (
 // operations are serialized (Use multiple channels / clients if parallelism
 // is needed).
 type RawAsciiClient struct {
-	shard   int
+	shard   string
 	channel io.ReadWriter
 
 	mutex      sync.Mutex
@@ -27,7 +28,7 @@ type RawAsciiClient struct {
 }
 
 // This creates a new memcache RawAsciiClient.
-func NewRawAsciiClient(shard int, channel io.ReadWriter) ClientShard {
+func NewRawAsciiClient(shard string, channel io.ReadWriter) ClientShard {
 	return &RawAsciiClient{
 		shard:      shard,
 		channel:    channel,
@@ -39,7 +40,7 @@ func NewRawAsciiClient(shard int, channel io.ReadWriter) ClientShard {
 
 func (c *RawAsciiClient) writeStrings(strs ...string) error {
 	if !c.validState {
-		return errors.New("Skipping due to previous error")
+		return NewInvalidStateError()
 	}
 
 	for _, str := range strs {
@@ -55,7 +56,7 @@ func (c *RawAsciiClient) writeStrings(strs ...string) error {
 
 func (c *RawAsciiClient) flushWriter() error {
 	if !c.validState {
-		return errors.New("Skipping due to previous error")
+		return NewInvalidStateError()
 	}
 
 	err := c.writer.Flush()
@@ -106,7 +107,7 @@ func (c *RawAsciiClient) checkEmptyBuffers() error {
 	return nil
 }
 
-func (c *RawAsciiClient) ShardId() int {
+func (c *RawAsciiClient) Shard() string {
 	return c.shard
 }
 
@@ -117,11 +118,11 @@ func (c *RawAsciiClient) IsValidState() bool {
 	return c.validState
 }
 
-func (c *RawAsciiClient) Get(key string) GetResponse {
-	return c.GetMulti([]string{key})[key]
+func (c *RawAsciiClient) Get(ctx context.Context, key string) GetResponse {
+	return c.GetMulti(ctx, []string{key})[key]
 }
 
-func (c *RawAsciiClient) GetMulti(keys []string) map[string]GetResponse {
+func (c *RawAsciiClient) GetMulti(ctx context.Context, keys []string) map[string]GetResponse {
 	responses := make(map[string]GetResponse, len(keys))
 	neededKeys := []string{}
 	for _, key := range keys {
@@ -266,12 +267,6 @@ func (c *RawAsciiClient) GetMulti(keys []string) map[string]GetResponse {
 	}
 
 	return responses
-}
-
-func (c *RawAsciiClient) GetSentinels(keys []string) map[string]GetResponse {
-	// For raw clients, there are no difference between GetMulti and
-	// GetSentinels.
-	return c.GetMulti(keys)
 }
 
 func (c *RawAsciiClient) storeRequests(
@@ -419,43 +414,31 @@ func (c *RawAsciiClient) storeRequests(
 	return responses
 }
 
-func (c *RawAsciiClient) Set(item *Item) MutateResponse {
-	return c.SetMulti([]*Item{item})[0]
+func (c *RawAsciiClient) Set(ctx context.Context, item *Item) MutateResponse {
+	return c.SetMulti(ctx, []*Item{item})[0]
 }
 
-func (c *RawAsciiClient) SetMulti(items []*Item) []MutateResponse {
+func (c *RawAsciiClient) SetMulti(ctx context.Context, items []*Item) []MutateResponse {
 	return c.storeRequests("set", items, true)
 }
 
-func (c *RawAsciiClient) SetSentinels(items []*Item) []MutateResponse {
-	// There are no difference between SetMutli and SetSentinels since
-	// SetMulti issues set / cas commands depending on the items' version ids.
-	return c.SetMulti(items)
-}
-
-func (c *RawAsciiClient) CasMulti(items []*Item) []MutateResponse {
+func (c *RawAsciiClient) CasMulti(ctx context.Context, items []*Item) []MutateResponse {
 	return c.storeRequests("add", items, true)
 }
 
-func (c *RawAsciiClient) CasSentinels(items []*Item) []MutateResponse {
-	// For raw clients, there are no difference between CasMulti and
-	// CasSentinels.
-	return c.CasMulti(items)
+func (c *RawAsciiClient) Add(ctx context.Context, item *Item) MutateResponse {
+	return c.AddMulti(ctx, []*Item{item})[0]
 }
 
-func (c *RawAsciiClient) Add(item *Item) MutateResponse {
-	return c.AddMulti([]*Item{item})[0]
-}
-
-func (c *RawAsciiClient) AddMulti(items []*Item) []MutateResponse {
+func (c *RawAsciiClient) AddMulti(ctx context.Context, items []*Item) []MutateResponse {
 	return c.storeRequests("add", items, false)
 }
 
-func (c *RawAsciiClient) Replace(item *Item) MutateResponse {
+func (c *RawAsciiClient) Replace(ctx context.Context, item *Item) MutateResponse {
 	return c.storeRequests("replace", []*Item{item}, false)[0]
 }
 
-func (c *RawAsciiClient) Append(key string, value []byte) MutateResponse {
+func (c *RawAsciiClient) Append(ctx context.Context, key string, value []byte) MutateResponse {
 	items := []*Item{
 		{
 			Key:   key,
@@ -465,7 +448,7 @@ func (c *RawAsciiClient) Append(key string, value []byte) MutateResponse {
 	return c.storeRequests("append", items, false)[0]
 }
 
-func (c *RawAsciiClient) Prepend(key string, value []byte) MutateResponse {
+func (c *RawAsciiClient) Prepend(ctx context.Context, key string, value []byte) MutateResponse {
 	items := []*Item{
 		{
 			Key:   key,
@@ -475,11 +458,11 @@ func (c *RawAsciiClient) Prepend(key string, value []byte) MutateResponse {
 	return c.storeRequests("prepend", items, false)[0]
 }
 
-func (c *RawAsciiClient) Delete(key string) MutateResponse {
-	return c.DeleteMulti([]string{key})[0]
+func (c *RawAsciiClient) Delete(ctx context.Context, key string) MutateResponse {
+	return c.DeleteMulti(ctx, []string{key})[0]
 }
 
-func (c *RawAsciiClient) DeleteMulti(keys []string) []MutateResponse {
+func (c *RawAsciiClient) DeleteMulti(ctx context.Context, keys []string) []MutateResponse {
 	responses := make([]MutateResponse, len(keys), len(keys))
 
 	c.mutex.Lock()
@@ -582,6 +565,8 @@ func (c *RawAsciiClient) countRequest(
 
 	if line == "NOT_FOUND" {
 		return NewCountResponse(key, StatusKeyNotFound, 0)
+	} else if line == "CLIENT_ERROR cannot increment or decrement non-numeric value" {
+		return NewCountResponse(key, StatusIncrDecrOnNonNumericValue, 0)
 	}
 
 	val, err := strconv.ParseUint(line, 10, 64)
@@ -593,7 +578,8 @@ func (c *RawAsciiClient) countRequest(
 }
 
 func (c *RawAsciiClient) Increment(
-	key string,
+	ctx context.Context,
+key string,
 	delta uint64,
 	initValue uint64,
 	expiration uint32) CountResponse {
@@ -602,7 +588,8 @@ func (c *RawAsciiClient) Increment(
 }
 
 func (c *RawAsciiClient) Decrement(
-	key string,
+	ctx context.Context,
+key string,
 	delta uint64,
 	initValue uint64,
 	expiration uint32) CountResponse {
@@ -610,7 +597,7 @@ func (c *RawAsciiClient) Decrement(
 	return c.countRequest("decr", key, delta, initValue, expiration)
 }
 
-func (c *RawAsciiClient) Flush(expiration uint32) Response {
+func (c *RawAsciiClient) Flush(ctx context.Context, expiration uint32) Response {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -643,10 +630,10 @@ func (c *RawAsciiClient) Flush(expiration uint32) Response {
 	return NewResponse(StatusNoError)
 }
 
-func (c *RawAsciiClient) Stat(statsKey string) StatResponse {
-	shardEntries := make(map[int](map[string]string))
+func (c *RawAsciiClient) Stat(ctx context.Context, statsKey string) StatResponse {
+	shardEntries := make(map[string](map[string]string))
 	entries := make(map[string]string)
-	shardEntries[c.ShardId()] = entries
+	shardEntries[c.Shard()] = entries
 
 	if statsKey != "" {
 		return NewStatErrorResponse(
@@ -697,8 +684,8 @@ func (c *RawAsciiClient) Stat(statsKey string) StatResponse {
 	return NewStatResponse(StatusNoError, shardEntries)
 }
 
-func (c *RawAsciiClient) Version() VersionResponse {
-	versions := make(map[int]string, 1)
+func (c *RawAsciiClient) Version(ctx context.Context) VersionResponse {
+	versions := make(map[string]string, 1)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -725,12 +712,12 @@ func (c *RawAsciiClient) Version() VersionResponse {
 		return NewVersionErrorResponse(errors.New(line), versions)
 	}
 
-	versions[c.ShardId()] = line[len("VERSION "):]
+	versions[c.Shard()] = line[len("VERSION "):]
 
 	return NewVersionResponse(StatusNoError, versions)
 }
 
-func (c *RawAsciiClient) Verbosity(verbosity uint32) Response {
+func (c *RawAsciiClient) Verbosity(ctx context.Context, verbosity uint32) Response {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 

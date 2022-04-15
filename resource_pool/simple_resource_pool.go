@@ -1,13 +1,13 @@
 package resource_pool
 
 import (
-	"errors"
 	"fmt"
+	"godropbox/errors"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dropbox/godropbox/sync2"
+	"godropbox/sync2"
 )
 
 type idleHandle struct {
@@ -24,12 +24,12 @@ func (t TooManyHandles) Error() string {
 }
 
 type OpenHandleError struct {
+	err errors.DropboxError
 	location string
-	err      error
 }
 
 func (o OpenHandleError) Error() string {
-	return fmt.Sprintf("Failed to open resource handle: %s (%v)", o.location, o.err)
+	return fmt.Sprintf("Failed to open resource handle: %s (%v)", o.location, o.err.Error())
 }
 
 // A resource pool implementation where all handles are associated to the
@@ -192,14 +192,14 @@ func (p *simpleResourcePool) Get(unused string) (ManagedHandle, error) {
 			// Instead of waiting
 			atomic.AddInt32(p.numActive, -1)
 			return nil, OpenHandleError{
-				p.location, errors.New("Open Error: reached OpenMaxConcurrency")}
+				location: p.location, err: errors.New("Open Error: reached OpenMaxConcurrency")}
 		}
 	}
 
 	handle, err := p.options.Open(location)
 	if err != nil {
 		atomic.AddInt32(p.numActive, -1)
-		return nil, OpenHandleError{p.location, err}
+		return nil, OpenHandleError{location: p.location, err: errors.Wrap(err, "Open Error")}
 	}
 
 	return NewManagedHandle(p.location, handle, p, p.options), nil

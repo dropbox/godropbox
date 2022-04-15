@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 // Assumes that all files returned by successive calls to MockFileFetcher are the same,

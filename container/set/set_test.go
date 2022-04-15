@@ -1,11 +1,12 @@
 package set
 
 import (
+	"errors"
 	"testing"
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -294,23 +295,119 @@ func (suite *SetSuite) TestRemoveIf(c *C) {
 	testRemoveIfHelper(c, s)
 }
 
-func testIterHelper(c *C, s Set) {
-	elements := map[int]bool{1: true, 2: true, 3: true}
-	for key := range elements {
-		s.Add(key)
-	}
-
-	for key := range s.Iter() {
-		delete(elements, key.(int))
-	}
-
-	c.Assert(len(elements), Equals, 0)
+func (suite *SetSuite) TestDo(c *C) {
+	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+	results := NewSet()
+	s.Do(func(v interface{}) {
+		results.Add(v.(int))
+	})
+	c.Assert(results.IsEqual(s), IsTrue)
 }
 
-func (suite *SetSuite) TestIter(c *C) {
-	s := NewSet()
-	testIterHelper(c, s)
+func (suite *SetSuite) TestDoWhile(c *C) {
+	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+	found := false
+	loops := 0
+	s.DoWhile(func(v interface{}) bool {
+		c.Assert(found, IsFalse)
+		loops++
+		i := v.(int)
+		if i == 4 {
+			found = true
+		}
+		return !found
+	})
+	c.Assert(found, IsTrue)
+}
 
-	s = NewKeyedSet(identity)
-	testIterHelper(c, s)
+func (suite *SetSuite) TestDoErr(c *C) {
+	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+
+	// Test run to completion.
+	results := NewSet()
+	loops := 0
+	err := s.DoErr(func(v interface{}) error {
+		results.Add(v.(int))
+		loops++
+		return nil
+	})
+	c.Assert(err, NoErr)
+	c.Assert(loops, Equals, 9)
+	c.Assert(results.IsEqual(s), IsTrue)
+
+	// Test test stop with error.
+	results = NewSet()
+	loops = 0
+	err = s.DoErr(func(v interface{}) error {
+		results.Add(v.(int))
+		loops++
+		if loops > 4 {
+			return errors.New("test")
+		}
+		return nil
+	})
+	c.Assert(err, ErrorMatches, "test")
+	c.Assert(loops, Equals, 5)
+	c.Assert(results.IsSubset(s), IsTrue)
+}
+
+func (suite *SetSuite) TestDoWhileErr(c *C) {
+	s := NewSet(0, 1, 2, 3, 4, 5, 6, 7, 8)
+
+	// Test run to completion.
+	results := NewSet()
+	loops := 0
+	err := s.DoWhileErr(func(v interface{}) (bool, error) {
+		results.Add(v.(int))
+		loops++
+		return true, nil
+	})
+	c.Assert(err, NoErr)
+	c.Assert(loops, Equals, 9)
+	c.Assert(results.IsEqual(s), IsTrue)
+
+	// Test test stop with error.
+	results = NewSet()
+	loops = 0
+	err = s.DoWhileErr(func(v interface{}) (bool, error) {
+		results.Add(v.(int))
+		loops++
+		if loops > 4 {
+			return true, errors.New("test")
+		}
+		return true, nil
+	})
+	c.Assert(err, ErrorMatches, "test")
+	c.Assert(loops, Equals, 5)
+	c.Assert(results.IsSubset(s), IsTrue)
+
+	// Test test stop early without error
+	results = NewSet()
+	loops = 0
+	err = s.DoWhileErr(func(v interface{}) (bool, error) {
+		results.Add(v.(int))
+		loops++
+		if loops > 4 {
+			return false, nil
+		}
+		return true, nil
+	})
+	c.Assert(err, NoErr)
+	c.Assert(loops, Equals, 5)
+	c.Assert(results.IsSubset(s), IsTrue)
+
+	// Test that error and stop at the same iteration results in error return
+	results = NewSet()
+	loops = 0
+	err = s.DoWhileErr(func(v interface{}) (bool, error) {
+		results.Add(v.(int))
+		loops++
+		if loops > 4 {
+			return false, errors.New("test")
+		}
+		return true, nil
+	})
+	c.Assert(err, ErrorMatches, "test")
+	c.Assert(loops, Equals, 5)
+	c.Assert(results.IsSubset(s), IsTrue)
 }

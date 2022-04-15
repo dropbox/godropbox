@@ -1,7 +1,9 @@
 package memcache
 
 import (
-	"github.com/dropbox/godropbox/errors"
+	"fmt"
+
+	"godropbox/errors"
 )
 
 func NewStatusCodeError(status ResponseStatus) error {
@@ -20,12 +22,6 @@ func NewStatusCodeError(status ResponseStatus) error {
 		return errors.New("Item not stored")
 	case StatusIncrDecrOnNonNumericValue:
 		return errors.New("Incr/decr on non-numeric value")
-	case StatusVbucketBelongsToAnotherServer:
-		return errors.New("VBucket belongs to another server")
-	case StatusAuthenticationError:
-		return errors.New("Authentication error")
-	case StatusAuthenticationContinue:
-		return errors.New("Authentication continue")
 	case StatusUnknownCommand:
 		return errors.New("Unknown command")
 	case StatusOutOfMemory:
@@ -41,6 +37,22 @@ func NewStatusCodeError(status ResponseStatus) error {
 	default:
 		return errors.Newf("Invalid status: %d", int(status))
 	}
+}
+
+// NOTE(opaugam) - once the client trips into invalid state it will fail all
+// requests. This would lead to excessive exclog traces when using a large
+// key set in GetMulti() for instance. Define a dedicated error for that very
+// situation (e.g code-path aborted due to the state being invalid) so that
+// higher layers have the option to ignore. The first error that trips the
+// state is the only one worth reporting.
+type InvalidStateError struct{}
+
+func (e *InvalidStateError) Error() string {
+	return "Skipping due to previous error"
+}
+
+func NewInvalidStateError() error {
+	return &InvalidStateError{}
 }
 
 // The genericResponse is an union of all response types.  Response interfaces
@@ -61,10 +73,14 @@ type genericResponse struct {
 	count uint64
 
 	// versions is used by version response.
-	versions map[int]string
+	versions map[string]string
 
 	// statEntries is used by stat response.
-	statEntries map[int](map[string]string)
+	statEntries map[string](map[string]string)
+
+	// shard address which returned the response.
+	// todo(aleksei) remove after memcache vortex2 latency investigation is done
+	shardAddress string
 }
 
 func (r *genericResponse) Status() ResponseStatus {
@@ -104,12 +120,20 @@ func (r *genericResponse) Count() uint64 {
 	return r.count
 }
 
-func (r *genericResponse) Versions() map[int]string {
+func (r *genericResponse) Versions() map[string]string {
 	return r.versions
 }
 
-func (r *genericResponse) Entries() map[int](map[string]string) {
+func (r *genericResponse) Entries() map[string](map[string]string) {
 	return r.statEntries
+}
+
+func (r *genericResponse) ShardAddress() string {
+	return r.shardAddress
+}
+
+func (r *genericResponse) SetShardAddress(address string) {
+	r.shardAddress = address
 }
 
 // This creates a Response from an error.
@@ -214,7 +238,7 @@ func NewCountResponse(
 // This creates a VersionResponse from an error.
 func NewVersionErrorResponse(
 	err error,
-	versions map[int]string) VersionResponse {
+	versions map[string]string) VersionResponse {
 	return &genericResponse{
 		err:      err,
 		versions: versions,
@@ -224,7 +248,7 @@ func NewVersionErrorResponse(
 // This creates a normal VersionResponse.
 func NewVersionResponse(
 	status ResponseStatus,
-	versions map[int]string) VersionResponse {
+	versions map[string]string) VersionResponse {
 
 	resp := &genericResponse{
 		status:   status,
@@ -236,7 +260,7 @@ func NewVersionResponse(
 // This creates a StatResponse from an error.
 func NewStatErrorResponse(
 	err error,
-	entries map[int](map[string]string)) StatResponse {
+	entries map[string](map[string]string)) StatResponse {
 	return &genericResponse{
 		err:         err,
 		statEntries: entries,
@@ -246,11 +270,23 @@ func NewStatErrorResponse(
 // This creates a normal StatResponse.
 func NewStatResponse(
 	status ResponseStatus,
-	entries map[int](map[string]string)) StatResponse {
+	entries map[string](map[string]string)) StatResponse {
 
 	resp := &genericResponse{
 		status:      status,
 		statEntries: entries,
 	}
 	return resp
+}
+
+func noShardsError(key string) error {
+	return errors.Newf("No Memcache shards! Key: '%s'", key)
+}
+
+func connectionError(shard string, err error) error {
+	errString := fmt.Sprintf("Connection unavailable for memcache shard %s", shard)
+	if err == nil {
+		return errors.New(errString)
+	}
+	return errors.Wrapf(err, errString)
 }

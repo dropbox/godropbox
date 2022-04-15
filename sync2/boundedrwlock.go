@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 // A fair RWLock with timeouts and a capacity.
@@ -171,6 +171,7 @@ func (rw *BoundedRWLock) processQueue() {
 			}
 		}
 	}
+	return
 }
 
 // A waiting entity, writer or reader.

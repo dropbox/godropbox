@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	rp "github.com/dropbox/godropbox/resource_pool"
+	rp "godropbox/resource_pool"
 )
 
 const defaultDialTimeout = 1 * time.Second

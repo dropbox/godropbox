@@ -5,8 +5,9 @@ package sqlbuilder
 import (
 	"bytes"
 	"regexp"
+	"sync"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 // XXX: Maybe add UIntColumn
@@ -31,7 +32,16 @@ type NullableColumn bool
 const (
 	Nullable    NullableColumn = true
 	NotNullable NullableColumn = false
+	IsPrimaryKey = true
+	NotPrimaryKey = false
 )
+
+type ColumnWithIsPrimaryKey interface {
+	NonAliasColumn
+
+	// Return if the column is a primary key
+	IsPrimaryKey() bool
+}
 
 // A column that can be refer to outside of the projection list
 type NonAliasColumn interface {
@@ -61,6 +71,7 @@ type baseColumn struct {
 	isExpression
 	name     string
 	nullable NullableColumn
+	isPrimaryKey bool
 	table    string
 }
 
@@ -89,6 +100,10 @@ func (c *baseColumn) SerializeSql(out *bytes.Buffer) error {
 	return c.SerializeSqlForColumnList(out)
 }
 
+func (c *baseColumn) IsPrimaryKey() bool {
+	return c.isPrimaryKey
+}
+
 type bytesColumn struct {
 	baseColumn
 	isExpression
@@ -97,12 +112,17 @@ type bytesColumn struct {
 // Representation of VARBINARY/BLOB columns
 // This function will panic if name is not valid
 func BytesColumn(name string, nullable NullableColumn) NonAliasColumn {
+	return BytesColumnWithIsPrimaryKey(name, nullable, false)
+}
+
+func BytesColumnWithIsPrimaryKey(name string, nullable NullableColumn, isPrimaryKey bool) ColumnWithIsPrimaryKey {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in bytes column")
 	}
 	bc := &bytesColumn{}
 	bc.name = name
 	bc.nullable = nullable
+	bc.isPrimaryKey = isPrimaryKey
 	return bc
 }
 
@@ -119,7 +139,18 @@ func StrColumn(
 	name string,
 	charset Charset,
 	collation Collation,
-	nullable NullableColumn) NonAliasColumn {
+	nullable NullableColumn,
+) NonAliasColumn {
+	return StrColumnWithIsPrimaryKey(name, charset, collation, nullable, false)
+}
+
+func StrColumnWithIsPrimaryKey(
+	name string,
+	charset Charset,
+	collation Collation,
+	nullable NullableColumn,
+	isPrimaryKey bool,
+) ColumnWithIsPrimaryKey {
 
 	if !validIdentifierName(name) {
 		panic("Invalid column name in str column")
@@ -127,6 +158,7 @@ func StrColumn(
 	sc := &stringColumn{charset: charset, collation: collation}
 	sc.name = name
 	sc.nullable = nullable
+	sc.isPrimaryKey = isPrimaryKey
 	return sc
 }
 
@@ -135,15 +167,20 @@ type dateTimeColumn struct {
 	isExpression
 }
 
-// Representation of DateTime columns
+// Representation of DateTime-like columns, including DATETIME, DATE, and TIMESTAMP
 // This function will panic if name is not valid
 func DateTimeColumn(name string, nullable NullableColumn) NonAliasColumn {
+	return DateTimeColumnWithIsPrimaryKey(name, nullable, false)
+}
+
+func DateTimeColumnWithIsPrimaryKey(name string, nullable NullableColumn, isPrimaryKey bool) ColumnWithIsPrimaryKey {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in datetime column")
 	}
 	dc := &dateTimeColumn{}
 	dc.name = name
 	dc.nullable = nullable
+	dc.isPrimaryKey = isPrimaryKey
 	return dc
 }
 
@@ -155,13 +192,55 @@ type integerColumn struct {
 // Representation of any integer column
 // This function will panic if name is not valid
 func IntColumn(name string, nullable NullableColumn) NonAliasColumn {
+	return IntColumnWithIsPrimaryKey(name, nullable, false)
+}
+
+func IntColumnWithIsPrimaryKey(name string, nullable NullableColumn, isPrimaryKey bool) ColumnWithIsPrimaryKey {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in int column")
 	}
 	ic := &integerColumn{}
 	ic.name = name
 	ic.nullable = nullable
+	ic.isPrimaryKey = isPrimaryKey
 	return ic
+}
+
+type decimalColumn struct {
+	baseColumn
+	isExpression
+	precision int
+	scale     int
+}
+
+// Representation of DECIMAL/NUMERIC columns
+// This function will panic if name is not valid
+func DecimalColumn(
+	name string,
+	precision int,
+	scale int,
+	nullable NullableColumn,
+) NonAliasColumn {
+
+	return DecimalColumnWithIsPrimaryKey(name, precision, scale, nullable, false)
+}
+
+func DecimalColumnWithIsPrimaryKey(
+	name string,
+	precision int,
+	scale int,
+	nullable NullableColumn,
+	isPrimaryKey bool,
+) ColumnWithIsPrimaryKey {
+
+	if !validIdentifierName(name) {
+		panic("Invalid column name in decimal column")
+	}
+	dc := &decimalColumn{precision: precision, scale: scale}
+	dc.name = name
+	dc.nullable = nullable
+	dc.isPrimaryKey = isPrimaryKey
+	return dc
 }
 
 type doubleColumn struct {
@@ -172,12 +251,17 @@ type doubleColumn struct {
 // Representation of any double column
 // This function will panic if name is not valid
 func DoubleColumn(name string, nullable NullableColumn) NonAliasColumn {
+	return DoubleColumnWithIsPrimaryKey(name, nullable, false)
+}
+
+func DoubleColumnWithIsPrimaryKey(name string, nullable NullableColumn, isPrimaryKey bool) ColumnWithIsPrimaryKey {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in int column")
 	}
 	ic := &doubleColumn{}
 	ic.name = name
 	ic.nullable = nullable
+	ic.isPrimaryKey = isPrimaryKey
 	return ic
 }
 
@@ -192,12 +276,17 @@ type booleanColumn struct {
 // Representation of TINYINT used as a bool
 // This function will panic if name is not valid
 func BoolColumn(name string, nullable NullableColumn) NonAliasColumn {
+	return BoolColumnWithIsPrimaryKey(name, nullable, false)
+}
+
+func BoolColumnWithIsPrimaryKey(name string, nullable NullableColumn, isPrimaryKey bool) ColumnWithIsPrimaryKey {
 	if !validIdentifierName(name) {
 		panic("Invalid column name in bool column")
 	}
 	bc := &booleanColumn{}
 	bc.name = name
 	bc.nullable = nullable
+	bc.isPrimaryKey = isPrimaryKey
 	return bc
 }
 
@@ -256,9 +345,34 @@ func Alias(name string, c Expression) Column {
 // This is a strict subset of the actual allowed identifiers
 var validIdentifierRegexp = regexp.MustCompile("^[a-zA-Z_]\\w*$")
 
+// Holds strings as keys that have passed validation; value is nil. Used to
+// avoid re-running the regex validation which was taking ~1.5% of go storage
+// process cpu on panda storage leader. Expected to be low enough cardinality to
+// not need cache eviction.
+var identifierValidationCache sync.Map
+var useIdentifierValidationCache bool
+
+// EnableIdentifierValidationCache must be called at the start of program execution,
+// strictly prior to any other sqlbuilder functions. Use only if you know that the
+// cardinality of the identifiers is negligible.
+func EnableIdentifierValidationCache() {
+	useIdentifierValidationCache = true
+}
+
 // Returns true if the given string is suitable as an identifier.
 func validIdentifierName(name string) bool {
-	return validIdentifierRegexp.MatchString(name)
+	if !useIdentifierValidationCache {
+		return validIdentifierRegexp.MatchString(name)
+	}
+
+	if _, ok := identifierValidationCache.Load(name); ok {
+		return true
+	}
+	ok := validIdentifierRegexp.MatchString(name)
+	if ok {
+		identifierValidationCache.Store(name, nil)
+	}
+	return ok
 }
 
 // Pseudo Column type returned by table.C(name)

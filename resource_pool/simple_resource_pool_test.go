@@ -8,7 +8,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/time2"
+	"godropbox/time2"
 )
 
 // Hook up gocheck into go test runner
@@ -164,7 +164,7 @@ func (s *SimpleResourcePoolSuite) TestRecycleHandles(c *C) {
 	c.Assert(err, IsNil)
 	CheckSameConnection(c, n3, c3)
 
-	n4, _ := pool.Get("bar")
+	n4, err := pool.Get("bar")
 	c.Assert(dialer.MaxId(), Equals, 5)
 	CheckId(c, n4, 5)
 }

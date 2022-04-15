@@ -4,8 +4,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
-	"github.com/dropbox/godropbox/resource_pool"
+	"godropbox/errors"
+	"godropbox/resource_pool"
 )
 
 // Dial's arguments.

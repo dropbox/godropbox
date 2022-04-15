@@ -9,6 +9,7 @@ const (
 
 // murmur3 32bit hash function implementation,
 // github.com/spaolacci/murmur3 used as reference, but removed uses of unsafe.
+// input data should NOT be modified
 func Hash32(data []byte, seed uint32) uint32 {
 	h1 := seed
 

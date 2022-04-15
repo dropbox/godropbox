@@ -3,7 +3,7 @@ package resource_pool
 import (
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/time2"
+	"godropbox/time2"
 )
 
 type MultiResourcePoolSuite struct {

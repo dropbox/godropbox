@@ -1,7 +1,7 @@
 package binlog
 
 import (
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
 )
 
 type TableContext interface {
@@ -113,6 +113,7 @@ func NewV4EventParserMap() V4EventParserMap {
 	m.set(newDeleteRowsEventV1Parser())
 	m.set(newDeleteRowsEventV2Parser())
 	m.set(newStopEventParser())
+	m.set(newHeartbeatEventParser())
 
 	m.numSupportedEventTypes = len(mysql_proto.LogEventType_Type_name)
 	return m

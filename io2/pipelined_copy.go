@@ -3,10 +3,18 @@
 package io2
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
+)
+
+const (
+	// prefix string in errors related to source returned by PipelinedCopy() call.
+	ErrPrefixSrc = "Failed to read from source: "
+	// prefix in errors related to destination.
+	ErrPrefixDst = "Failed to write to destination: "
 )
 
 // This is similar to io.CopyBuffer, except this uses circular buffer and
@@ -17,27 +25,30 @@ import (
 // bytes in buffer before forwarding the buffer.
 // PipelinedCopy flushes dest after each write if it implements http.Flusher
 // interface.
+//
+// PipelinedCopy returns total number of copied bytes, number of allocated
+// buffers with bufferSize size each and error.
 func PipelinedCopy(
 	dest io.Writer,
 	src io.Reader,
 	numBuffers int,
 	bufferSize int,
-	minRead int) (written int64, err error) {
+	minRead int) (written int64, total_buffers int, err error) {
 
 	if numBuffers < 1 {
-		return 0, errors.Newf("Invalid number of buffers: %d", numBuffers)
+		return 0, 0, errors.Newf("Invalid number of buffers: %d", numBuffers)
 	}
 
 	if bufferSize < 1 {
-		return 0, errors.Newf("Invalid buffer size: %d", bufferSize)
+		return 0, 0, errors.Newf("Invalid buffer size: %d", bufferSize)
 	}
 
 	if minRead < 0 {
-		return 0, errors.Newf("Invalid min read size: %d", minRead)
+		return 0, 0, errors.Newf("Invalid min read size: %d", minRead)
 	}
 
 	if minRead > bufferSize {
-		return 0, errors.Newf(
+		return 0, 0, errors.Newf(
 			"min read size cannot be bigger than buffer size: %d > %d",
 			minRead,
 			bufferSize)
@@ -48,7 +59,8 @@ func PipelinedCopy(
 		// for streaming requests since it always attempt to fill the entire
 		// buffer before forwarding).
 		buf := make([]byte, bufferSize, bufferSize)
-		return io.CopyBuffer(dest, src, buf)
+		w, err := io.CopyBuffer(dest, src, buf)
+		return w, 1, err
 	}
 
 	copier := newCircularBufferCopier(
@@ -57,7 +69,8 @@ func PipelinedCopy(
 		numBuffers,
 		bufferSize,
 		minRead)
-	return copier.execute()
+	w, err := copier.execute()
+	return w, copier.numCreated, err
 }
 
 type buffer struct {
@@ -183,7 +196,7 @@ func (c *circularBufferCopier) readLoop() {
 				return
 			}
 
-			c.errChan <- errors.Wrap(err, "Failed to read from source: ")
+			c.errChan <- fmt.Errorf("%s%v", ErrPrefixSrc, err)
 			return
 		}
 
@@ -212,15 +225,12 @@ func (c *circularBufferCopier) writeLoop() {
 			c.numWritten += int64(written)
 
 			if err != nil {
-				c.errChan <- errors.Wrap(
-					err,
-					"Failed to write to destination: ")
+				c.errChan <- fmt.Errorf("%s%v", ErrPrefixDst, err)
 				return
 			}
 
 			if written != buf.size {
-				c.errChan <- errors.New(
-					"Failed to write to destination: short write")
+				c.errChan <- errors.New(ErrPrefixDst + "short write")
 				return
 			}
 

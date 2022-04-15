@@ -3,8 +3,8 @@ package binlog
 import (
 	"bytes"
 
-	"github.com/dropbox/godropbox/errors"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
 )
 
 // A representation of the format description event.
@@ -89,6 +89,7 @@ func (e *FormatDescriptionEvent) ChecksumAlgorithm() mysql_proto.ChecksumAlgorit
 const (
 	FDEFixedLengthDataSizeFor55 = 2 + 50 + 4 + 1 + 27
 	FDEFixedLengthDataSizeFor56 = 2 + 50 + 4 + 1 + 35
+	FDEFixedLengthDataSizeFor57 = 2 + 50 + 4 + 1 + 38
 )
 
 type FormatDescriptionEventParser struct {
@@ -147,19 +148,25 @@ func (p *FormatDescriptionEventParser) Parse(raw *RawV4Event) (Event, error) {
 	}
 	fde.extraHeadersSize = int(totalHeaderSize) - sizeOfBasicV4EventHeader
 
-	numEvents := len(mysql_proto.LogEventType_Type_value)
+	var numEvents int
 	hasChecksum := true
 
-	if len(data) == 27 { // mysql 5.5(.37)
+	switch len(data) {
+	case 27:
+		// mysql 5.5(.37) supports 27 events + unknown and doesn't have checksum support
 		numEvents = 28
 		hasChecksum = false
-	} else if len(data) == 40 { // mysql 5.6(.17)
-
+	case 40:
+		// mysql 5.6(.17) supports 35 events + unknown
+		numEvents = 36
 		// This is a relay log where the master is 5.5 and slave is 5.6
 		if data[int(mysql_proto.LogEventType_WRITE_ROWS_EVENT)-1] == 0 {
 			numEvents = 28
 		}
-	} else {
+	case 43:
+		// mysql 5.7(.21) supports 38 events + unknown
+		numEvents = 39
+	default:
 		return raw, errors.Newf(
 			"Unable to parse FDE for mysql variant: %s",
 			fde.serverVersion)

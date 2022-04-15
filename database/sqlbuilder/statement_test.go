@@ -5,7 +5,7 @@ import (
 
 	gc "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 type StmtSuite struct {
@@ -82,9 +82,38 @@ func (s *StmtSuite) TestSelectAndWhere(c *gc.C) {
 		"SELECT `table1`.`col1` FROM `db`.`table1` WHERE (`table1`.`col1`>123 AND `table1`.`col1`<321)")
 }
 
+func (s *StmtSuite) TestWhereWhere(c *gc.C) {
+	checkError := func(stmt Statement) {
+		_, err := stmt.String("db")
+		c.Assert(err, gc.NotNil)
+		c.Assert(
+			errors.GetMessage(err),
+			gc.Equals,
+			"stmt.Where can only be safely used once, see AndWhere",
+		)
+	}
+
+	selectQ := table1.Select(table1Col1)
+	selectQ = selectQ.Where(EqL(table1Col1, 1)).Where(EqL(table1Col1, 2))
+	checkError(selectQ)
+
+	unionQ := Union(table1.Select(table1Col1))
+	unionQ = unionQ.Where(EqL(table1Col1, 1)).Where(EqL(table1Col1, 2))
+	checkError(unionQ)
+
+	updateQ := table1.Update().Set(table1Col1, Literal(1))
+	updateQ = updateQ.Where(EqL(table1Col1, 1)).Where(EqL(table1Col1, 2))
+	checkError(updateQ)
+
+	deleteQ := table1.Delete()
+	deleteQ = deleteQ.Where(EqL(table1Col1, 1)).Where(EqL(table1Col1, 2))
+	checkError(deleteQ)
+}
+
 func (s *StmtSuite) TestSelectCopy(c *gc.C) {
-	q := table1.Select(table1Col1).Where(GtL(table1Col1, 123))
+	q := table1.Select(table1Col1)
 	qq := q.Copy().Where(GtL(table1Col1, 321)).OrderBy(table1Col1)
+	q = q.Where(GtL(table1Col1, 123))
 
 	// Initial query unchanged
 	sql, err := q.String("db")

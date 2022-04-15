@@ -9,7 +9,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/net2/http2/test_utils"
+	"godropbox/net2/http2/test_utils"
 )
 
 func Test(t *testing.T) {
@@ -31,14 +31,15 @@ func startHttpServers(c *C) []int {
 		server.ListenAndServe()
 	}
 
-	ports := []int{
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c),
-		test_utils.RandomListenPort(c)}
+	ports := make([]int, 0)
+	portSets := make(map[int]struct{})
+	for len(ports) < 8 {
+		port := test_utils.RandomListenPort(c)
+		if _, ok := portSets[port]; !ok {
+			portSets[port] = struct{}{}
+			ports = append(ports, port)
+		}
+	}
 
 	for _, port := range ports {
 		go startHttpServer(port)

@@ -7,8 +7,8 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	. "godropbox/gocheck2"
 )
 
 type LogFileV4EventReaderSuite struct {

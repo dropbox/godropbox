@@ -3,8 +3,8 @@ package binlog
 import (
 	"math"
 
-	"github.com/dropbox/godropbox/errors"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
 )
 
 // A representation of the table map event.
@@ -253,7 +253,7 @@ func (p *TableMapEventParser) parseColumns(t *TableMapEvent) error {
 		case mysql_proto.FieldType_INT24:
 			fd = NewInt24FieldDescriptor(nullable)
 		case mysql_proto.FieldType_DATE:
-			return errors.New("TODO")
+			fd = NewDateFieldDescriptor(nullable)
 		case mysql_proto.FieldType_TIME:
 			return errors.New("TODO")
 		case mysql_proto.FieldType_DATETIME:

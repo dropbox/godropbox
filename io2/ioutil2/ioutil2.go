@@ -9,23 +9,41 @@
 package ioutil2
 
 import (
+	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
+	"syscall"
+
+	"godropbox/errors"
 )
 
 // Write file to temp and atomically move when everything else succeeds.
-func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
-	dir, name := path.Split(filename)
+func WriteFileAtomic(filename string, data []byte, perm os.FileMode) (err error) {
+	return WriteFileAtomicReader(filename, bytes.NewReader(data), perm)
+}
+
+// Write file to temp and atomically move when everything else succeeds.
+func WriteFileAtomicReader(filename string, reader io.Reader, perm os.FileMode) (err error) {
+	dir := filepath.Dir(filename)
+	name := filepath.Base(filename)
+
 	fDir, dirErr := os.Open(dir)
 	if dirErr != nil {
 		return dirErr
 	}
+	defer func() {
+		if closeErr := fDir.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
 	f, err := ioutil.TempFile(dir, name)
 	if err != nil {
 		return err
 	}
-	_, err = f.Write(data)
+	_, err = io.Copy(f, reader)
 	if err == nil {
 		err = f.Sync()
 	}
@@ -43,9 +61,28 @@ func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 	if err = os.Rename(f.Name(), filename); err != nil {
 		return err
 	}
-	err = fDir.Sync()
-	if closeErr := fDir.Close(); err == nil {
-		err = closeErr
+	return fDir.Sync()
+}
+
+// CreateFileIfNotExists creates the specified file if it does not
+// already exist.
+func CreateFileIfNotExists(filename string, perm os.FileMode) error {
+	f, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, perm)
+	if err != nil {
+		return err
 	}
-	return err
+	return f.Close()
+}
+
+func UnlinkedTempFile(dir, pattern string) (f *os.File, err error) {
+	file, err := ioutil.TempFile(dir, pattern)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create a temporary file")
+	}
+	err = syscall.Unlink(file.Name())
+	if err != nil {
+		file.Close()
+		return nil, errors.Wrapf(err, "failed to unlink %s so that it goes away even if process dies", file.Name())
+	}
+	return file, nil
 }

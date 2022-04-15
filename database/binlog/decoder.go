@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 func bytesToLEUint(valBytes []byte) uint64 {

@@ -18,13 +18,12 @@ func ShallowString(b []byte) (s string) {
 	return
 }
 
-// InternStringPool is a simple thread-safe intern string pool.
+// A simple thread-safe intern string pool.
 type InternStringPool struct {
 	mutex sync.RWMutex
 	pool  map[string]string
 }
 
-// NewInternStringPool returns a new instance of InternStringPool
 func NewInternStringPool() *InternStringPool {
 	return &InternStringPool{
 		pool: make(map[string]string, 8192),

@@ -3,8 +3,8 @@ package binlog
 import (
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
 )
 
 // This contains field descriptors for temporal types as defined by
@@ -50,6 +50,36 @@ func NewTimestampFieldDescriptor(nullable NullableColumn) FieldDescriptor {
 		4,
 		func(b []byte) interface{} {
 			return time.Unix(int64(LittleEndian.Uint32(b)), 0).UTC()
+		})
+}
+
+// This returns a fields descriptor for FieldType_DATE
+// (i.e., Field_date)
+func NewDateFieldDescriptor(nullable NullableColumn) FieldDescriptor {
+	return newFixedLengthFieldDescriptor(
+		mysql_proto.FieldType_DATE,
+		nullable,
+		3,
+		func(b []byte) interface{} {
+			// https://dev.mysql.com/doc/internals/en/date-and-time-data-type-representation.html
+			val := LittleEndian.Uint24(b)
+			// bits of val:
+			// MSB                    LSB
+			// 000000000000000 0000 00000
+			// |-------------| |--| |---|
+			//      year      month  day
+			year := val >> 9
+			month := (val >> 5) & 0xF
+			day := val & 0x1F
+			return time.Date(
+				int(year),
+				time.Month(int(month)),
+				int(day),
+				0, // hour
+				0, // minute
+				0, // second
+				0, // nanosecond
+				time.UTC)
 		})
 }
 

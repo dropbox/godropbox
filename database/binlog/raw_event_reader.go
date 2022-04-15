@@ -3,8 +3,8 @@ package binlog
 import (
 	"io"
 
-	"github.com/dropbox/godropbox/bufio2"
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/bufio2"
+	"godropbox/errors"
 )
 
 type rawV4EventReader struct {

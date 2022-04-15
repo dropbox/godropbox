@@ -1,9 +1,10 @@
 package memcache
 
 import (
+	"context"
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
 )
 
 type RawAsciiClientSuite struct {
@@ -15,7 +16,7 @@ var _ = Suite(&RawAsciiClientSuite{})
 
 func (s *RawAsciiClientSuite) SetUpTest(c *C) {
 	s.rw = newMockReadWriter()
-	s.client = NewRawAsciiClient(0, s.rw).(*RawAsciiClient)
+	s.client = NewRawAsciiClient("0", s.rw).(*RawAsciiClient)
 }
 
 func (s *RawAsciiClientSuite) TestGet(c *C) {
@@ -23,7 +24,8 @@ func (s *RawAsciiClientSuite) TestGet(c *C) {
 	s.rw.recvBuf.WriteString("VALUE key2 42 6 14\r\nAB\r\nCD\r\n")
 	s.rw.recvBuf.WriteString("END\r\n")
 
-	responses := s.client.GetMulti([]string{"key2", "key"})
+	ctx := context.Background()
+	responses := s.client.GetMulti(ctx, []string{"key2", "key"})
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "gets key2 key\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -52,7 +54,8 @@ func (s *RawAsciiClientSuite) TestGet(c *C) {
 func (s *RawAsciiClientSuite) TestGetNotFound(c *C) {
 	s.rw.recvBuf.WriteString("END\r\n")
 
-	resp := s.client.Get("key")
+	ctx := context.Background()
+	resp := s.client.Get(ctx, "key")
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "gets key\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -68,14 +71,16 @@ func (s *RawAsciiClientSuite) TestGetNotFound(c *C) {
 func (s *RawAsciiClientSuite) TestGetDupKeys(c *C) {
 	s.rw.recvBuf.WriteString("END\r\n")
 
-	_ = s.client.GetMulti([]string{"key", "key", "key2", "key"})
+	ctx := context.Background()
+	_ = s.client.GetMulti(ctx, []string{"key", "key", "key2", "key"})
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "gets key key2\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
 }
 
 func (s *RawAsciiClientSuite) TestGetBadKey(c *C) {
-	resp := s.client.Get("b a d")
+	ctx := context.Background()
+	resp := s.client.Get(ctx, "b a d")
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -86,7 +91,8 @@ func (s *RawAsciiClientSuite) TestGetBadKey(c *C) {
 func (s *RawAsciiClientSuite) TestGetErrorMidStream(c *C) {
 	s.rw.recvBuf.WriteString("VALUE key 333 100 12345\r\nunexpected eof ...")
 
-	responses := s.client.GetMulti([]string{"key2", "key"})
+	ctx := context.Background()
+	responses := s.client.GetMulti(ctx, []string{"key2", "key"})
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "gets key2 key\r\n")
 	c.Assert(s.client.IsValidState(), IsFalse)
@@ -106,7 +112,8 @@ func (s *RawAsciiClientSuite) TestGetCheckEmptyBuffers(c *C) {
 	s.rw.recvBuf.WriteString("VALUE key 1 4 2\r\nitem\r\n")
 	s.rw.recvBuf.WriteString("END\r\nextra stuff")
 
-	resp := s.client.Get("key")
+	ctx := context.Background()
+	resp := s.client.Get(ctx, "key")
 
 	c.Assert(s.client.IsValidState(), IsFalse)
 
@@ -146,7 +153,8 @@ func (s *RawAsciiClientSuite) TestSet(c *C) {
 		Expiration:    4,
 	}
 
-	responses := s.client.SetMulti([]*Item{item1, item2, item3})
+	ctx := context.Background()
+	responses := s.client.SetMulti(ctx, []*Item{item1, item2, item3})
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -164,7 +172,8 @@ func (s *RawAsciiClientSuite) TestSet(c *C) {
 }
 
 func (s *RawAsciiClientSuite) TestSetNilItem(c *C) {
-	resp := s.client.Set(nil)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, nil)
 
 	c.Assert(resp.Error(), NotNil)
 }
@@ -178,7 +187,8 @@ func (s *RawAsciiClientSuite) TestSetBadKey(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Set(item)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, item)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -195,7 +205,8 @@ func (s *RawAsciiClientSuite) TestSetBadValue(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Set(item)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, item)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -214,7 +225,8 @@ func (s *RawAsciiClientSuite) TestStoreNotFound(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Set(item)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, item)
 	c.Assert(s.client.IsValidState(), IsTrue)
 
 	c.Assert(
@@ -237,7 +249,8 @@ func (s *RawAsciiClientSuite) TestStoreItemNotStore(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Add(item)
+	ctx := context.Background()
+	resp := s.client.Add(ctx, item)
 	c.Assert(s.client.IsValidState(), IsTrue)
 
 	c.Assert(
@@ -260,7 +273,8 @@ func (s *RawAsciiClientSuite) TestStoreKeyExists(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Set(item)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, item)
 	c.Assert(s.client.IsValidState(), IsTrue)
 
 	c.Assert(
@@ -283,7 +297,8 @@ func (s *RawAsciiClientSuite) TestStoreError(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Set(item)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, item)
 	c.Assert(s.client.IsValidState(), IsTrue)
 
 	c.Assert(
@@ -321,7 +336,8 @@ func (s *RawAsciiClientSuite) TestStoreErrorMidStream(c *C) {
 		Expiration:    4,
 	}
 
-	responses := s.client.SetMulti([]*Item{item1, item2, item3})
+	ctx := context.Background()
+	responses := s.client.SetMulti(ctx, []*Item{item1, item2, item3})
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -348,7 +364,8 @@ func (s *RawAsciiClientSuite) TestStoreCheckEmptyBuffers(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Set(item)
+	ctx := context.Background()
+	resp := s.client.Set(ctx, item)
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -370,7 +387,8 @@ func (s *RawAsciiClientSuite) TestAdd(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Add(item)
+	ctx := context.Background()
+	resp := s.client.Add(ctx, item)
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -390,7 +408,8 @@ func (s *RawAsciiClientSuite) TestAddInvalidCasId(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Add(item)
+	ctx := context.Background()
+	resp := s.client.Add(ctx, item)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -409,7 +428,8 @@ func (s *RawAsciiClientSuite) TestReplace(c *C) {
 		Expiration:    555,
 	}
 
-	resp := s.client.Replace(item)
+	ctx := context.Background()
+	resp := s.client.Replace(ctx, item)
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -423,7 +443,8 @@ func (s *RawAsciiClientSuite) TestReplace(c *C) {
 func (s *RawAsciiClientSuite) TestAppend(c *C) {
 	s.rw.recvBuf.WriteString("STORED\r\n")
 
-	resp := s.client.Append("key", []byte("suffix"))
+	ctx := context.Background()
+	resp := s.client.Append(ctx, "key", []byte("suffix"))
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -437,7 +458,8 @@ func (s *RawAsciiClientSuite) TestAppend(c *C) {
 func (s *RawAsciiClientSuite) TestPrepend(c *C) {
 	s.rw.recvBuf.WriteString("STORED\r\n")
 
-	resp := s.client.Prepend("key", []byte("prefix"))
+	ctx := context.Background()
+	resp := s.client.Prepend(ctx, "key", []byte("prefix"))
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -451,7 +473,8 @@ func (s *RawAsciiClientSuite) TestPrepend(c *C) {
 func (s *RawAsciiClientSuite) TestDelete(c *C) {
 	s.rw.recvBuf.WriteString("DELETED\r\nDELETED\r\n")
 
-	responses := s.client.DeleteMulti([]string{"key1", "key2"})
+	ctx := context.Background()
+	responses := s.client.DeleteMulti(ctx, []string{"key1", "key2"})
 
 	c.Assert(
 		s.rw.sendBuf.String(),
@@ -469,7 +492,8 @@ func (s *RawAsciiClientSuite) TestDelete(c *C) {
 func (s *RawAsciiClientSuite) TestDeleteNotFound(c *C) {
 	s.rw.recvBuf.WriteString("NOT_FOUND\r\n")
 
-	resp := s.client.Delete("key")
+	ctx := context.Background()
+	resp := s.client.Delete(ctx, "key")
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "delete key\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -481,7 +505,8 @@ func (s *RawAsciiClientSuite) TestDeleteNotFound(c *C) {
 func (s *RawAsciiClientSuite) TestDeleteError(c *C) {
 	s.rw.recvBuf.WriteString("SERVER_ERROR\r\n")
 
-	resp := s.client.Delete("key")
+	ctx := context.Background()
+	resp := s.client.Delete(ctx, "key")
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "delete key\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -490,7 +515,8 @@ func (s *RawAsciiClientSuite) TestDeleteError(c *C) {
 }
 
 func (s *RawAsciiClientSuite) TestDeleteBadKey(c *C) {
-	resp := s.client.Delete("b a d")
+	ctx := context.Background()
+	resp := s.client.Delete(ctx, "b a d")
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -501,7 +527,8 @@ func (s *RawAsciiClientSuite) TestDeleteBadKey(c *C) {
 func (s *RawAsciiClientSuite) TestDeleteCheckEmptyBuffers(c *C) {
 	s.rw.recvBuf.WriteString("DELETED\r\nextra")
 
-	resp := s.client.Delete("key")
+	ctx := context.Background()
+	resp := s.client.Delete(ctx, "key")
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "delete key\r\n")
 	c.Assert(s.client.IsValidState(), IsFalse)
@@ -513,7 +540,8 @@ func (s *RawAsciiClientSuite) TestDeleteCheckEmptyBuffers(c *C) {
 func (s *RawAsciiClientSuite) TestIncrement(c *C) {
 	s.rw.recvBuf.WriteString("16\r\n")
 
-	resp := s.client.Increment("key", 2, 0, 0xffffffff)
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "key", 2, 0, 0xffffffff)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "incr key 2\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -525,7 +553,8 @@ func (s *RawAsciiClientSuite) TestIncrement(c *C) {
 }
 
 func (s *RawAsciiClientSuite) TestIncrementBadKey(c *C) {
-	resp := s.client.Increment("b a d", 2, 0, 0xffffffff)
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "b a d", 2, 0, 0xffffffff)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -534,7 +563,8 @@ func (s *RawAsciiClientSuite) TestIncrementBadKey(c *C) {
 }
 
 func (s *RawAsciiClientSuite) TestIncrementBadExpiration(c *C) {
-	resp := s.client.Increment("key", 2, 0, 0)
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "key", 2, 0, 0)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -545,7 +575,8 @@ func (s *RawAsciiClientSuite) TestIncrementBadExpiration(c *C) {
 func (s *RawAsciiClientSuite) TestIncrementNotFound(c *C) {
 	s.rw.recvBuf.WriteString("NOT_FOUND\r\n")
 
-	resp := s.client.Increment("key", 2, 0, 0xffffffff)
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "key", 2, 0, 0xffffffff)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "incr key 2\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -556,10 +587,26 @@ func (s *RawAsciiClientSuite) TestIncrementNotFound(c *C) {
 	c.Assert(resp.Count(), Equals, uint64(0))
 }
 
+func (s *RawAsciiClientSuite) TestIncrementNotAnInteger(c *C) {
+	s.rw.recvBuf.WriteString("CLIENT_ERROR cannot increment or decrement non-numeric value\r\n")
+
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "key", 2, 0, 0xffffffff)
+
+	c.Assert(s.rw.sendBuf.String(), Equals, "incr key 2\r\n")
+	c.Assert(s.client.IsValidState(), IsTrue)
+
+	c.Assert(resp.Error(), NotNil)
+	c.Assert(resp.Status(), Equals, StatusIncrDecrOnNonNumericValue)
+	c.Assert(resp.Key(), Equals, "key")
+	c.Assert(resp.Count(), Equals, uint64(0))
+}
+
 func (s *RawAsciiClientSuite) TestIncrementError(c *C) {
 	s.rw.recvBuf.WriteString("SERVER_ERROR\r\n")
 
-	resp := s.client.Increment("key", 2, 0, 0xffffffff)
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "key", 2, 0, 0xffffffff)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "incr key 2\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -570,7 +617,8 @@ func (s *RawAsciiClientSuite) TestIncrementError(c *C) {
 func (s *RawAsciiClientSuite) TestIncrementCheckEmptyBuffers(c *C) {
 	s.rw.recvBuf.WriteString("89\r\nextra")
 
-	resp := s.client.Increment("key", 24, 0, 0xffffffff)
+	ctx := context.Background()
+	resp := s.client.Increment(ctx, "key", 24, 0, 0xffffffff)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "incr key 24\r\n")
 	c.Assert(s.client.IsValidState(), IsFalse)
@@ -582,7 +630,8 @@ func (s *RawAsciiClientSuite) TestIncrementCheckEmptyBuffers(c *C) {
 func (s *RawAsciiClientSuite) TestDecrement(c *C) {
 	s.rw.recvBuf.WriteString("123\r\n")
 
-	resp := s.client.Decrement("key1", 5, 0, 0xffffffff)
+	ctx := context.Background()
+	resp := s.client.Decrement(ctx, "key1", 5, 0, 0xffffffff)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "decr key1 5\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -596,7 +645,8 @@ func (s *RawAsciiClientSuite) TestDecrement(c *C) {
 func (s *RawAsciiClientSuite) TestFlush(c *C) {
 	s.rw.recvBuf.WriteString("OK\r\n")
 
-	resp := s.client.Flush(123)
+	ctx := context.Background()
+	resp := s.client.Flush(ctx, 123)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "flush_all 123\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -607,7 +657,8 @@ func (s *RawAsciiClientSuite) TestFlush(c *C) {
 func (s *RawAsciiClientSuite) TestFlushError(c *C) {
 	s.rw.recvBuf.WriteString("SERVER_ERROR\r\n")
 
-	resp := s.client.Flush(0)
+	ctx := context.Background()
+	resp := s.client.Flush(ctx, 0)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "flush_all 0\r\n")
 	c.Assert(s.client.IsValidState(), IsTrue)
@@ -618,7 +669,8 @@ func (s *RawAsciiClientSuite) TestFlushError(c *C) {
 func (s *RawAsciiClientSuite) TestFlushCheckEmptyBuffers(c *C) {
 	s.rw.recvBuf.WriteString("OK\r\nextra")
 
-	resp := s.client.Flush(123)
+	ctx := context.Background()
+	resp := s.client.Flush(ctx, 123)
 
 	c.Assert(s.rw.sendBuf.String(), Equals, "flush_all 123\r\n")
 	c.Assert(s.client.IsValidState(), IsFalse)

@@ -19,14 +19,23 @@ type Set interface {
 	// Removes v from this set, if it is present.  Returns true if and only if v was present.
 	Remove(v interface{}) bool
 
-	// Executes f(v) for every element v in this set.  If f mutates this set, behavior is undefined.
+	// Executes f(v) for every element v in this set.  Iteration will end early if f returns
+	// an error, in which case the error will be returned.
+	// Mutating the set during iteration will behave in the same way as a builtin Go map.
 	Do(f func(interface{}))
-	// Executes f(v) once for every element v in the set, aborting if f ever returns false. If f
-	// mutates this set, behavior is undefined.
+	// Executes f(v) once for every element v in the set, aborting if f ever returns false.
+	// Iteration will end early if f returns an error, in which case the error will be returned.
+	// Mutating the set during iteration will behave in the same way as a Go map.
 	DoWhile(f func(interface{}) bool)
-	// Returns a channel from which each element in the set can be read exactly once.  If this set
-	// is mutated before the channel is emptied, the exact data read from the channel is undefined.
-	Iter() <-chan interface{}
+
+	// Executes f(bh) for every element bh in this set.  Iteration will end early if f returns
+	// an error, in which case the error will be returned.
+	// Mutating the set during iteration will behave in the same way as a builtin Go map.
+	DoErr(f func(interface{}) error) error
+	// Executes f(bh) once for every element v in the set, aborting if f ever returns false.
+	// Iteration will end early if f returns an error, in which case the error will be returned.
+	// Mutating the set during iteration will behave in the same way as a builtin Go map.
+	DoWhileErr(f func(interface{}) (bool, error)) error
 
 	// Adds every element in s into this set.
 	Union(s Set)
@@ -117,6 +126,8 @@ type setImpl struct {
 	data map[interface{}]struct{}
 }
 
+var _ Set = setImpl{}
+
 func (s setImpl) Len() int {
 	return len(s.data)
 }
@@ -151,28 +162,35 @@ func (s setImpl) Remove(v interface{}) bool {
 }
 
 func (s setImpl) Do(f func(interface{})) {
-	for key := range s.data {
-		f(key)
-	}
+	s.DoErr(func(v interface{}) error {
+		f(v)
+		return nil
+	})
 }
 
 func (s setImpl) DoWhile(f func(interface{}) bool) {
-	for key := range s.data {
-		if !f(key) {
-			break
-		}
-	}
+	s.DoWhileErr(func(v interface{}) (bool, error) {
+		return f(v), nil
+	})
 }
 
-func (s setImpl) Iter() <-chan interface{} {
-	iter := make(chan interface{})
-	go func() {
-		for key := range s.data {
-			iter <- key
+func (s setImpl) DoErr(f func(interface{}) error) error {
+	for key := range s.data {
+		if err := f(key); err != nil {
+			return err
 		}
-		close(iter)
-	}()
-	return iter
+	}
+	return nil
+}
+
+func (s setImpl) DoWhileErr(f func(interface{}) (bool, error)) error {
+	for key := range s.data {
+		shouldContinue, err := f(key)
+		if err != nil || !shouldContinue {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s setImpl) Union(s2 Set) {
@@ -228,6 +246,8 @@ type keyedSetImpl struct {
 	keyfunc (func(interface{}) interface{})
 }
 
+var _ Set = keyedSetImpl{}
+
 func (s keyedSetImpl) Len() int {
 	return len(s.data)
 }
@@ -264,28 +284,35 @@ func (s keyedSetImpl) Remove(v interface{}) bool {
 }
 
 func (s keyedSetImpl) Do(f func(interface{})) {
-	for _, v := range s.data {
+	s.DoErr(func(v interface{}) error {
 		f(v)
-	}
+		return nil
+	})
 }
 
 func (s keyedSetImpl) DoWhile(f func(interface{}) bool) {
-	for _, v := range s.data {
-		if !f(v) {
-			break
-		}
-	}
+	s.DoWhileErr(func(v interface{}) (bool, error) {
+		return f(v), nil
+	})
 }
 
-func (s keyedSetImpl) Iter() <-chan interface{} {
-	iter := make(chan interface{})
-	go func() {
-		for _, v := range s.data {
-			iter <- v
+func (s keyedSetImpl) DoErr(f func(interface{}) error) error {
+	for key := range s.data {
+		if err := f(key); err != nil {
+			return err
 		}
-		close(iter)
-	}()
-	return iter
+	}
+	return nil
+}
+
+func (s keyedSetImpl) DoWhileErr(f func(interface{}) (bool, error)) error {
+	for key := range s.data {
+		shouldContinue, err := f(key)
+		if err != nil || !shouldContinue {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s keyedSetImpl) Union(s2 Set) {

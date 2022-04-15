@@ -1,11 +1,12 @@
 package memcache
 
 import (
+	susanin_pb "dropbox/proto/susanin"
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/container/set"
-	. "github.com/dropbox/godropbox/gocheck2"
-	"github.com/dropbox/godropbox/net2"
+	"godropbox/container/set"
+	. "godropbox/gocheck2"
+	"godropbox/net2"
 )
 
 type ManagerSuite struct {
@@ -26,47 +27,70 @@ func newMockPool() *mockPool {
 	}
 }
 
-func (p *mockPool) Register(_, address string) error {
-	p.registered.Add(address)
+func (p *mockPool) Register(_, shardIpPort string) error {
+	p.registered.Add(shardIpPort)
 	return nil
 }
 
-func (p *mockPool) Unregister(_, address string) error {
-	p.registered.Remove(address)
+func (p *mockPool) Unregister(_, shardIpPort string) error {
+	p.registered.Remove(shardIpPort)
 	return nil
 }
 
 func (s *ManagerSuite) SetUpTest(c *C) {
 	s.pool = newMockPool()
 	s.manager = &BaseShardManager{
-		pool: s.pool,
+		pool:     s.pool,
+		hostToIp: map[string]string{},
 	}
 }
 
-func (s *ManagerSuite) TestRegister(c *C) {
-	shardStates := make([]ShardState, 4)
-	shardStates[0].Address = "foo"
-	shardStates[1].Address = "bar"
-	shardStates[2].Address = "baz"
-	shardStates[3].Address = "foo"
-	s.manager.UpdateShardStates(shardStates)
+func (s *ManagerSuite) TestRegisterAndDeregister(c *C) {
+	shards := []*susanin_pb.Address {
+		{
+			Host: "foo",
+			Ip4:  "fooIp",
+			Port: 5211,
+		},
+		{
+			Host: "bar",
+			Ip4:  "barIp",
+			Port: 5211,
+		},
+		{
+			Host: "baz",
+			Ip4:  "bazIp",
+			Port: 5211,
+		},
+		{
+			Host: "foo",
+			Ip4:  "fooIp",
+			Port: 5211,
+		},
+	}
+	s.manager.UpdateShards(shards)
 
-	expectedRegistered := set.NewSet("foo", "bar", "baz")
+	expectedRegistered := set.NewSet("fooIp:5211", "barIp:5211", "bazIp:5211")
 	c.Assert(expectedRegistered.IsEqual(s.pool.registered), IsTrue)
-}
 
-func (s *ManagerSuite) TestUnregister(c *C) {
-	shardStates := make([]ShardState, 4)
-	shardStates[0].Address = "foo"
-	shardStates[1].Address = "bar"
-	shardStates[2].Address = "baz"
-	shardStates[3].Address = "foo"
-	s.manager.UpdateShardStates(shardStates)
+	shards = []*susanin_pb.Address {
+		{
+			Host: "bar",
+			Ip4:  "barIp",
+			Port: 5211,
+		},
+		{
+			Host: "baz",
+			Ip4:  "bazIp",
+			Port: 5211,
+		},
+	}
+	s.manager.UpdateShards(shards)
+	expectedRegistered = set.NewSet("barIp:5211", "bazIp:5211")
+	c.Assert(expectedRegistered.IsEqual(s.pool.registered), IsTrue)
 
-	shardStates = make([]ShardState, 2)
-	shardStates[0].Address = "bar"
-	shardStates[1].Address = "baz"
-	s.manager.UpdateShardStates(shardStates)
-	expectedRegistered := set.NewSet("bar", "baz")
+	shards = []*susanin_pb.Address{}
+	s.manager.UpdateShards(shards)
+	expectedRegistered = set.NewSet()
 	c.Assert(expectedRegistered.IsEqual(s.pool.registered), IsTrue)
 }

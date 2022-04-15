@@ -1,7 +1,8 @@
 package concurrent
 
 import (
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -11,18 +12,23 @@ type ConcurrentLruCacheSuite struct {
 var _ = Suite(&ConcurrentLruCacheSuite{})
 
 func (s *ConcurrentLruCacheSuite) TestBasic(c *C) {
-	m := NewLRUCache(5)
-	c.Assert(m.MaxSize(), Equals, 5)
-	m.Set("1", 1)
-	m.Set("2", 2)
-	m.Set("3", 9)
-	_, ok := m.Get("2")
+	cache := NewLRUCache(5)
+	basicCacheTest(c, cache)
+}
+
+func basicCacheTest(c *C, cache LRUCache) {
+	c.Assert(cache.MaxSize(), Equals, 5)
+	cache.Set("1", 1)
+	cache.Set("2", 2)
+	cache.Set("3", 9)
+	c.Assert(cache.Len(), Equals, 3)
+	_, ok := cache.Get("2")
 	c.Assert(ok, IsTrue)
-	_, ok = m.Get("3")
+	_, ok = cache.Get("3")
 	c.Assert(ok, IsTrue)
-	_, ok = m.Get("1")
+	_, ok = cache.Get("1")
 	c.Assert(ok, IsTrue)
-	results := m.GetMultiple([]string{"1", "2", "3"})
+	results := cache.GetMultiple([]string{"1", "2", "3"})
 	c.Assert(len(results), Equals, 3)
 
 	newVals := map[string]interface{}{
@@ -32,15 +38,17 @@ func (s *ConcurrentLruCacheSuite) TestBasic(c *C) {
 	}
 
 	// the first element should have been evicted
-	m.SetMultiple(newVals)
-	_, ok = m.Get("1")
+	cache.SetMultiple(newVals)
+	_, ok = cache.Get("1")
 	c.Assert(ok, IsFalse)
+	c.Assert(cache.Len(), Equals, 5)
 
-	m.Clear()
+	cache.Clear()
 
 	// clear only removes the values, but the max size
 	// should be maintained
-	c.Assert(m.MaxSize(), Equals, 5)
-	_, ok = m.Get("2")
+	c.Assert(cache.MaxSize(), Equals, 5)
+	_, ok = cache.Get("2")
 	c.Assert(ok, IsFalse)
+	c.Assert(cache.Len(), Equals, 0)
 }

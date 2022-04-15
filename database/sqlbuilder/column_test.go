@@ -76,8 +76,34 @@ func (s *ColumnSuite) TestRealColumnSerializeSql(c *gc.C) {
 	c.Assert(sql, gc.Equals, "`foo`.`col`")
 }
 
+func (s *ColumnSuite) TestBaseColumnSubtypes(c *gc.C) {
+	col := IntColumn("int_col", Nullable)
+	c.Assert(col.Name(), gc.Equals, "int_col")
+
+	col = DecimalColumn("decimal_col", 5, 2, Nullable)
+	c.Assert(col.Name(), gc.Equals, "decimal_col")
+
+	col = DoubleColumn("double_col", Nullable)
+	c.Assert(col.Name(), gc.Equals, "double_col")
+
+	col = BytesColumn("bytes_col", Nullable)
+	c.Assert(col.Name(), gc.Equals, "bytes_col")
+
+	col = StrColumn("string_col", UTF8, UTF8CaseSensitive, NotNullable)
+	c.Assert(col.Name(), gc.Equals, "string_col")
+
+	col = DateTimeColumn("datetime_col", Nullable)
+	c.Assert(col.Name(), gc.Equals, "datetime_col")
+
+	col = DoubleColumn("double_col", Nullable)
+	c.Assert(col.Name(), gc.Equals, "double_col")
+
+	col = BoolColumn("bool_col", Nullable)
+	c.Assert(col.Name(), gc.Equals, "bool_col")
+}
+
 //
-// tests for AliasCoulmns
+// tests for AliasColumns
 //
 
 func (s *ColumnSuite) TestAliasColumnName(c *gc.C) {
@@ -205,4 +231,15 @@ func (s *ColumnSuite) TestDeferredLookupColumnSetTableName(c *gc.C) {
 
 	err := col.setTableName("foo")
 	c.Assert(err, gc.NotNil)
+}
+
+
+func (s *ColumnSuite) TestValidateNameWithAndWithoutCache(c *gc.C) {
+	c.Assert(validIdentifierName("a"), gc.Equals, true)
+	c.Assert(validIdentifierName("1a"), gc.Equals, false)
+	EnableIdentifierValidationCache()
+	c.Assert(validIdentifierName("a"), gc.Equals, true)
+	c.Assert(validIdentifierName("1a"), gc.Equals, false)
+	c.Assert(validIdentifierName("a"), gc.Equals, true)
+	c.Assert(validIdentifierName("1a"), gc.Equals, false)
 }

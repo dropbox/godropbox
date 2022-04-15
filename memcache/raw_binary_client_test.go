@@ -2,12 +2,13 @@ package memcache
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
 )
 
 // Constant values used in testing the client.
@@ -68,7 +69,7 @@ var _ = Suite(&RawBinaryClientSuite{})
 
 func (s *RawBinaryClientSuite) SetUpTest(c *C) {
 	s.rw = newMockReadWriter()
-	s.client = NewRawBinaryClient(0, s.rw).(*RawBinaryClient)
+	s.client = NewRawBinaryClient("0", s.rw).(*RawBinaryClient)
 }
 
 func (s *RawBinaryClientSuite) verifyRequestMessage(c *C, code opCode) {
@@ -443,17 +444,18 @@ func (s *RawBinaryClientSuite) performMutateRequestTest(
 	item := createTestItem()
 	respChan := make(chan []MutateResponse)
 	go func() {
+		ctx := context.Background()
 		if code == opAdd {
 			if isMulti {
-				respChan <- s.client.AddMulti([]*Item{item})
+				respChan <- s.client.AddMulti(ctx, []*Item{item})
 			} else {
-				respChan <- []MutateResponse{s.client.Add(item)}
+				respChan <- []MutateResponse{s.client.Add(ctx, item)}
 			}
 		} else if code == opSet {
 			if isMulti {
-				respChan <- s.client.SetMulti([]*Item{item})
+				respChan <- s.client.SetMulti(ctx, []*Item{item})
 			} else {
-				respChan <- []MutateResponse{s.client.Set(item)}
+				respChan <- []MutateResponse{s.client.Set(ctx, item)}
 			}
 		}
 	}()
@@ -523,7 +525,7 @@ func (s *RawBinaryClientSuite) TestGetMultiDupKeys(c *C) {
 
 	s.rw.recvBuf.Write(fooResp)
 
-	results := s.client.GetMulti([]string{"foo", "foo"})
+	results := s.client.GetMulti(context.Background(), []string{"foo", "foo"})
 
 	c.Assert(s.rw.sendBuf.Bytes(), DeepEquals, expectedFooReq)
 

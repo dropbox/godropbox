@@ -5,7 +5,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 func Test(t *testing.T) {

@@ -23,7 +23,7 @@ type LockingMapOptions struct {
 	LockStoreOptions LockStoreOptions
 
 	// ValueCheckFunc is invoked before the map ever returns a value. See
-	// LockingMapCheckFunc for more informatino.
+	// LockingMapCheckFunc for more information.
 	ValueCheckFunc LockingMapCheckFunc
 }
 

@@ -19,10 +19,11 @@ type shuffleSortHelper struct {
 }
 
 func (s shuffleSortHelper) sortIdx(idx int) uint64 {
-	var buffer [16]byte
+	addr := s.instances[idx].addr
+	buffer := make([]byte, 8+len(addr))
 	binary.LittleEndian.PutUint64(buffer[:8], uint64(s.shuffleSeed))
-	binary.LittleEndian.PutUint64(buffer[8:], uint64(s.instances[idx].instanceId))
-	sum := md5.Sum(buffer[:])
+	copy(buffer[8:], addr)
+	sum := md5.Sum(buffer)
 	return binary.LittleEndian.Uint64(sum[:8])
 }
 func (s shuffleSortHelper) Len() int { return len(s.instances) }
@@ -43,3 +44,17 @@ func (s consistentHashSortHelper) Swap(i, j int) {
 	s.Hashes[i], s.Hashes[j] = s.Hashes[j], s.Hashes[i]
 }
 func (s consistentHashSortHelper) Less(i, j int) bool { return s.Hashes[i] < s.Hashes[j] }
+
+// Recency sort
+type recencySortHelper struct {
+	Instances []*instancePool
+}
+
+func (s recencySortHelper) Len() int { return len(s.Instances) }
+func (s recencySortHelper) Swap(i, j int) {
+	s.Instances[i], s.Instances[j] = s.Instances[j], s.Instances[i]
+}
+func (s recencySortHelper) Less(i, j int) bool {
+	// Sort in REVERSE order of added time
+	return s.Instances[i].addedTimeNano >= s.Instances[j].addedTimeNano
+}

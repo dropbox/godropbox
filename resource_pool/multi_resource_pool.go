@@ -3,7 +3,7 @@ package resource_pool
 import (
 	"sync"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 // A resource pool implementation that manages multiple resource location

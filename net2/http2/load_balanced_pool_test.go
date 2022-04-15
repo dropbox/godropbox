@@ -8,8 +8,8 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
-	"github.com/dropbox/godropbox/net2/http2/test_utils"
+	. "godropbox/gocheck2"
+	"godropbox/net2/http2/test_utils"
 )
 
 type LoadBalancedPoolSuite struct {
@@ -213,4 +213,44 @@ func (s *LoadBalancedPoolSuite) TestConnectTimeout(c *C) {
 	_, err = pool.Do(req)
 	c.Assert(err, NotNil)
 	c.Assert(time.Now().Sub(stTime) < params.ConnParams.ConnectTimeout*2, Equals, true)
+}
+
+func (s *LoadBalancedPoolSuite) TestSortedRecencyStrategy(c *C) {
+	ports := startHttpServers(c)
+
+	pool := NewLoadBalancedPool(DefaultLoadBalancedPoolParams())
+	pool.SetStrategy(LBSortedRecency)
+	infos := make([]LBPoolInstanceInfo, len(ports))
+	for i, port := range ports {
+		infos[i].Addr = fmt.Sprintf("127.0.0.1:%d", port)
+		infos[i].InstanceId = i
+	}
+
+	for i := 1; i < len(infos); i *= 2 {
+		numInstances := 2 * i
+		if numInstances > len(infos) {
+			numInstances = len(infos)
+		}
+
+		// Reverse the order so the old instances get "added" last
+		toUpdate := make([]LBPoolInstanceInfo, numInstances)
+		for j := 0; j < numInstances; j++ {
+			toUpdate[numInstances-j-1] = infos[j]
+		}
+		pool.Update(toUpdate)
+
+		receivedPorts := sendHttpRequests(c, pool, 1)
+		c.Assert(receivedPorts, HasLen, 1)
+		var receivedAddr string
+		for p, _ := range receivedPorts {
+			receivedAddr = p
+		}
+		// The last "new" instance should be the -(i-1)th, since the previous i appear in indexes
+		// i..2*i-1
+		expectedInstance := toUpdate[numInstances-1-i]
+		if i == 1 {
+			expectedInstance = toUpdate[numInstances-1]
+		}
+		c.Assert(receivedAddr, Equals, expectedInstance.Addr)
+	}
 }

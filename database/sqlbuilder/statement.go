@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 type Statement interface {
 	// String returns generated SQL as string.
 	String(database string) (sql string, err error)
+	// True if the statement has side effects, as in it changes some state on the database (taking
+	// row locks, inserting rows, etc.).
+	HasSideEffects() bool
 }
 
 type SelectStatement interface {
@@ -26,7 +29,13 @@ type SelectStatement interface {
 	ForUpdate() SelectStatement
 	Offset(offset int64) SelectStatement
 	Comment(comment string) SelectStatement
+	// Validation for comments is currently done using a regex, which is expensive
+	// (validated/discovered through production profiles on panda). If your
+	// comment is a known good string, you can use this instead of Comment()
+	// to avoid the validation overhead.
+	CommentUnsafeSkipValidation(comment string) SelectStatement
 	Copy() SelectStatement
+	CanUnion(projections []Projection) ([]Projection, error)
 }
 
 type InsertStatement interface {
@@ -100,6 +109,16 @@ type GtidNextStatement interface {
 	Statement
 }
 
+// Used for setting session-local variables.
+type SetSessionVariableStatement interface {
+	Statement
+
+	SetSessionTimeout(timeoutSec int64) SetSessionVariableStatement
+	ResetSessionTimeout() SetSessionVariableStatement
+
+	SetsSessionTimeout() bool
+}
+
 //
 // UNION SELECT Statement ======================================================
 //
@@ -131,9 +150,14 @@ type unionStatementImpl struct {
 	limit, offset int64
 	// True if results of the union should be deduped.
 	unique bool
+	// Set on errors from invalid query construction, and returned when the query is built.
+	builderError error
 }
 
 func (us *unionStatementImpl) Where(expression BoolExpression) UnionStatement {
+	if us.where != nil {
+		us.builderError = errors.Newf("stmt.Where can only be safely used once, see AndWhere")
+	}
 	us.where = expression
 	return us
 }
@@ -178,7 +202,20 @@ func (us *unionStatementImpl) Offset(offset int64) UnionStatement {
 	return us
 }
 
+func (us *unionStatementImpl) HasSideEffects() bool {
+	for _, s := range us.selects {
+		if s.HasSideEffects() {
+			return true
+		}
+	}
+	return false
+}
+
 func (us *unionStatementImpl) String(database string) (sql string, err error) {
+	if us.builderError != nil {
+		return "", us.builderError
+	}
+
 	if len(us.selects) == 0 {
 		return "", errors.Newf("Union statement must have at least one SELECT")
 	}
@@ -191,33 +228,9 @@ func (us *unionStatementImpl) String(database string) (sql string, err error) {
 	var projections []Projection
 
 	for _, statement := range us.selects {
-		// do a type assertion to get at the underlying struct
-		statementImpl, ok := statement.(*selectStatementImpl)
-		if !ok {
-			return "", errors.Newf(
-				"Expected inner select statement to be of type " +
-					"selectStatementImpl")
-		}
-
-		// check that for limit for statements with order by clauses
-		if statementImpl.order != nil && statementImpl.limit < 0 {
-			return "", errors.Newf(
-				"All inner selects in Union statement must have LIMIT if " +
-					"they have ORDER BY")
-		}
-
-		// check number of projections
-		if projections == nil {
-			projections = statementImpl.projections
-		} else {
-			if len(projections) != len(statementImpl.projections) {
-				return "", errors.Newf(
-					"All inner selects in Union statement must select the " +
-						"same number of columns.  For sanity, you probably " +
-						"want to select the same table columns in the same " +
-						"order.  If you are selecting on multiple tables, " +
-						"use Null to pad to the right number of fields.")
-			}
+		projections, err = statement.CanUnion(projections)
+		if err != nil {
+			return "", err
 		}
 	}
 
@@ -275,7 +288,7 @@ func (us *unionStatementImpl) String(database string) (sql string, err error) {
 // SELECT Statement ============================================================
 //
 
-func newSelectStatement(
+func NewSelectStatement(
 	table ReadableTable,
 	projections []Projection) SelectStatement {
 
@@ -293,16 +306,19 @@ func newSelectStatement(
 // NOTE: SelectStatement purposely does not implement the Table interface since
 // mysql's subquery performance is horrible.
 type selectStatementImpl struct {
-	table          ReadableTable
-	projections    []Projection
-	where          BoolExpression
-	group          *listClause
-	order          *listClause
-	comment        string
-	limit, offset  int64
-	withSharedLock bool
-	forUpdate      bool
-	distinct       bool
+	table           ReadableTable
+	projections     []Projection
+	where           BoolExpression
+	group           *listClause
+	order           *listClause
+	comment         string
+	limit, offset   int64
+	withSharedLock  bool
+	forUpdate       bool
+	distinct        bool
+	validateComment bool
+	// Set on errors from invalid query construction, and returned when the query is built.
+	builderError error
 }
 
 func (s *selectStatementImpl) Copy() SelectStatement {
@@ -322,6 +338,9 @@ func (q *selectStatementImpl) AndWhere(
 }
 
 func (q *selectStatementImpl) Where(expression BoolExpression) SelectStatement {
+	if q.where != nil {
+		q.builderError = errors.Newf("stmt.Where can only be safely used once, see AndWhere")
+	}
 	q.where = expression
 	return q
 }
@@ -379,11 +398,50 @@ func (q *selectStatementImpl) Offset(offset int64) SelectStatement {
 
 func (q *selectStatementImpl) Comment(comment string) SelectStatement {
 	q.comment = comment
+	q.validateComment = true
 	return q
+}
+
+func (q *selectStatementImpl) CommentUnsafeSkipValidation(comment string) SelectStatement {
+	q.comment = comment
+	q.validateComment = false
+	return q
+}
+
+func (q *selectStatementImpl) HasSideEffects() bool {
+	return q.forUpdate || q.withSharedLock
+}
+
+func (q *selectStatementImpl) CanUnion(projections []Projection) ([]Projection, error) {
+	// check that for limit for statements with order by clauses
+	if q.order != nil && q.limit < 0 {
+		return nil, errors.Newf(
+			"All inner selects in Union statement must have LIMIT if " +
+				"they have ORDER BY")
+	}
+
+	// check number of projections
+	if projections == nil {
+		return q.projections, nil
+	} else {
+		if len(projections) != len(q.projections) {
+			return nil, errors.Newf(
+				"All inner selects in Union statement must select the " +
+					"same number of columns.  For sanity, you probably " +
+					"want to select the same table columns in the same " +
+					"order.  If you are selecting on multiple tables, " +
+					"use Null to pad to the right number of fields.")
+		}
+	}
+	return projections, nil
 }
 
 // Return the properly escaped SQL statement, against the specified database
 func (q *selectStatementImpl) String(database string) (sql string, err error) {
+	if q.builderError != nil {
+		return "", q.builderError
+	}
+
 	if !validIdentifierName(database) {
 		return "", errors.New("Invalid database name specified")
 	}
@@ -391,7 +449,7 @@ func (q *selectStatementImpl) String(database string) (sql string, err error) {
 	buf := new(bytes.Buffer)
 	_, _ = buf.WriteString("SELECT ")
 
-	if err = writeComment(q.comment, buf); err != nil {
+	if err = writeComment(q.comment, buf, q.validateComment); err != nil {
 		return
 	}
 
@@ -474,9 +532,9 @@ func newInsertStatement(
 	columns ...NonAliasColumn) InsertStatement {
 
 	return &insertStatementImpl{
-		table:   t,
-		columns: columns,
-		rows:    make([][]Expression, 0, 1),
+		table:                 t,
+		columns:               columns,
+		rows:                  make([][]Expression, 0, 1),
 		onDuplicateKeyUpdates: make([]columnAssignment, 0, 0),
 	}
 }
@@ -523,6 +581,10 @@ func (s *insertStatementImpl) Comment(comment string) InsertStatement {
 	return s
 }
 
+func (s *insertStatementImpl) HasSideEffects() bool {
+	return true
+}
+
 func (s *insertStatementImpl) String(database string) (sql string, err error) {
 	if !validIdentifierName(database) {
 		return "", errors.New("Invalid database name specified")
@@ -535,7 +597,7 @@ func (s *insertStatementImpl) String(database string) (sql string, err error) {
 	}
 	_, _ = buf.WriteString("INTO ")
 
-	if err = writeComment(s.comment, buf); err != nil {
+	if err = writeComment(s.comment, buf, true /* validate comment */); err != nil {
 		return
 	}
 
@@ -663,6 +725,8 @@ type updateStatementImpl struct {
 	order        *listClause
 	limit        int64
 	comment      string
+	// Set on errors from invalid query construction, and returned when the query is built.
+	builderError error
 }
 
 func (u *updateStatementImpl) Set(
@@ -674,6 +738,9 @@ func (u *updateStatementImpl) Set(
 }
 
 func (u *updateStatementImpl) Where(expression BoolExpression) UpdateStatement {
+	if u.where != nil {
+		u.builderError = errors.Newf("stmt.Where can only be safely used once, see AndWhere")
+	}
 	u.where = expression
 	return u
 }
@@ -695,7 +762,15 @@ func (u *updateStatementImpl) Comment(comment string) UpdateStatement {
 	return u
 }
 
+func (u *updateStatementImpl) HasSideEffects() bool {
+	return true
+}
+
 func (u *updateStatementImpl) String(database string) (sql string, err error) {
+	if u.builderError != nil {
+		return "", u.builderError
+	}
+
 	if !validIdentifierName(database) {
 		return "", errors.New("Invalid database name specified")
 	}
@@ -703,7 +778,7 @@ func (u *updateStatementImpl) String(database string) (sql string, err error) {
 	buf := new(bytes.Buffer)
 	_, _ = buf.WriteString("UPDATE ")
 
-	if err = writeComment(u.comment, buf); err != nil {
+	if err = writeComment(u.comment, buf, true /* validate comment */); err != nil {
 		return
 	}
 
@@ -806,9 +881,14 @@ type deleteStatementImpl struct {
 	order   *listClause
 	limit   int64
 	comment string
+	// Set on errors from invalid query construction, and returned when the query is built.
+	builderError error
 }
 
 func (d *deleteStatementImpl) Where(expression BoolExpression) DeleteStatement {
+	if d.where != nil {
+		d.builderError = errors.Newf("stmt.Where can only be safely used once, see AndWhere")
+	}
 	d.where = expression
 	return d
 }
@@ -830,7 +910,15 @@ func (d *deleteStatementImpl) Comment(comment string) DeleteStatement {
 	return d
 }
 
+func (d *deleteStatementImpl) HasSideEffects() bool {
+	return true
+}
+
 func (d *deleteStatementImpl) String(database string) (sql string, err error) {
+	if d.builderError != nil {
+		return "", d.builderError
+	}
+
 	if !validIdentifierName(database) {
 		return "", errors.New("Invalid database name specified")
 	}
@@ -838,7 +926,7 @@ func (d *deleteStatementImpl) String(database string) (sql string, err error) {
 	buf := new(bytes.Buffer)
 	_, _ = buf.WriteString("DELETE FROM ")
 
-	if err = writeComment(d.comment, buf); err != nil {
+	if err = writeComment(d.comment, buf, true /* validate comment */); err != nil {
 		return
 	}
 
@@ -907,6 +995,10 @@ func (s *lockStatementImpl) AddWriteLock(t *Table) LockStatement {
 	return s
 }
 
+func (s *lockStatementImpl) HasSideEffects() bool {
+	return true
+}
+
 func (s *lockStatementImpl) String(database string) (sql string, err error) {
 	if !validIdentifierName(database) {
 		return "", errors.New("Invalid database name specified")
@@ -951,6 +1043,10 @@ func NewUnlockStatement() UnlockStatement {
 type unlockStatementImpl struct {
 }
 
+func (s *unlockStatementImpl) HasSideEffects() bool {
+	return true
+}
+
 func (s *unlockStatementImpl) String(database string) (sql string, err error) {
 	return "UNLOCK TABLES", nil
 }
@@ -968,6 +1064,10 @@ type gtidNextStatementImpl struct {
 	gno uint64
 }
 
+func (s *gtidNextStatementImpl) HasSideEffects() bool {
+	return true
+}
+
 func (s *gtidNextStatementImpl) String(database string) (sql string, err error) {
 	// This statement sets a session local variable defining what the next transaction ID is.  It
 	// does not interact with other MySQL sessions. It is neither a DDL nor DML statement, so we
@@ -983,20 +1083,64 @@ func (s *gtidNextStatementImpl) String(database string) (sql string, err error) 
 }
 
 //
+// SET statement ===========================================================
+//
+
+type setSessionVariableStatementImpl struct {
+	timeoutSec   int64
+	resetTimeout bool
+}
+
+func NewSetSessionVariableStatement() SetSessionVariableStatement {
+	return &setSessionVariableStatementImpl{}
+}
+
+func (s *setSessionVariableStatementImpl) HasSideEffects() bool {
+	return true
+}
+
+func (s *setSessionVariableStatementImpl) SetsSessionTimeout() bool {
+	return s.timeoutSec > 0
+}
+
+func (s *setSessionVariableStatementImpl) SetSessionTimeout(timeoutSec int64) SetSessionVariableStatement {
+	s.timeoutSec = timeoutSec
+	return s
+}
+
+func (s *setSessionVariableStatementImpl) ResetSessionTimeout() SetSessionVariableStatement {
+	s.resetTimeout = true
+	return s
+}
+
+func (s *setSessionVariableStatementImpl) String(database string) (sql string, err error) {
+	if s.timeoutSec > 0 && s.resetTimeout {
+		return "", errors.New("Invalid usage: tried to both set and reset wait_timeout")
+	}
+	if s.timeoutSec > 0 {
+		return fmt.Sprintf("SET SESSION wait_timeout = %d;", s.timeoutSec), nil
+	}
+	if s.resetTimeout {
+		return "SET SESSION wait_timeout = DEFAULT;", nil
+	}
+	return "", nil
+}
+
+//
 // Util functions =============================================================
 //
 
 // Once again, teisenberger is lazy.  Here's a quick filter on comments
-var validCommentRegexp *regexp.Regexp = regexp.MustCompile("^[\\w .?]*$")
+var validCommentRegexp *regexp.Regexp = regexp.MustCompile("^[\\w\\d_: .?>\\-]*$")
 
 func isValidComment(comment string) bool {
 	return validCommentRegexp.MatchString(comment)
 }
 
-func writeComment(comment string, buf *bytes.Buffer) error {
+func writeComment(comment string, buf *bytes.Buffer, validateComment bool) error {
 	if comment != "" {
 		_, _ = buf.WriteString("/* ")
-		if !isValidComment(comment) {
+		if validateComment && !isValidComment(comment) {
 			return errors.Newf("Invalid comment: %s", comment)
 		}
 		_, _ = buf.WriteString(comment)

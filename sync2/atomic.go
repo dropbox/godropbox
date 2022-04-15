@@ -76,3 +76,28 @@ func (dur *AtomicDuration) Get() time.Duration {
 func (dur *AtomicDuration) CompareAndSwap(oldval, newval time.Duration) (swapped bool) {
 	return atomic.CompareAndSwapInt64((*int64)(dur), int64(oldval), int64(newval))
 }
+
+type AtomicBool int32
+
+func (b *AtomicBool) Set(value bool) {
+	var intVal int32 = 0
+	if value {
+		intVal = 1
+	}
+	atomic.StoreInt32((*int32)(b), intVal)
+}
+
+func (b *AtomicBool) Get() bool {
+	return atomic.LoadInt32((*int32)(b)) != 0
+}
+
+func (b *AtomicBool) CompareAndSwap(oldval, newval bool) (swapped bool) {
+	var oldIntVal, newIntVal int32 = 0, 0
+	if oldval {
+		oldIntVal = 1
+	}
+	if newval {
+		newIntVal = 1
+	}
+	return atomic.CompareAndSwapInt32((*int32)(b), oldIntVal, newIntVal)
+}

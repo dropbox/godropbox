@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
-	"github.com/dropbox/godropbox/math2/rand2"
+	"godropbox/errors"
+	"godropbox/math2/rand2"
 )
 
 const (
@@ -45,6 +45,10 @@ const (
 	// LBConsistentHashing will prefer availability over consistency. In the case some server
 	// is down, it will try new servers in the hash-ring
 	LBConsistentHashing LBStrategy = 3
+	// Sort the instances in reverse order of when they were first added to the pool. This is useful
+	// for services that have lame duck registration/deregistration in which they will temporarily
+	// have 2 instances registered but only the newer instances is accepting new requests.
+	LBSortedRecency LBStrategy = 4
 )
 
 type ConsistentHashFunc func(key []byte, seed uint32) uint32
@@ -102,6 +106,9 @@ type LoadBalancedPool struct {
 type instancePool struct {
 	SimplePool
 	instanceId int
+	// Time at which the SimplePool.Addr() was first added to the LBPool. Used if strategy ==
+	// LBSortedRecency
+	addedTimeNano int64
 }
 
 type LBPoolInstanceInfo struct {
@@ -149,7 +156,11 @@ func (pool *LoadBalancedPool) SetMarkDownDuration(duration time.Duration) {
 
 func (pool *LoadBalancedPool) newInstancePool(info LBPoolInstanceInfo) *instancePool {
 	simplePool := NewSimplePool(info.Addr, pool.params)
-	return &instancePool{SimplePool: *simplePool, instanceId: info.InstanceId}
+	return &instancePool{
+		SimplePool:    *simplePool,
+		instanceId:    info.InstanceId,
+		addedTimeNano: time.Now().UnixNano(),
+	}
 }
 
 func (pool *LoadBalancedPool) sortInstances(instances instancePoolSlice, hashes []uint32) {
@@ -167,13 +178,16 @@ func (pool *LoadBalancedPool) sortInstances(instances instancePoolSlice, hashes 
 		hashHelper := consistentHashSortHelper{
 			Instances: instances, Hashes: hashes}
 		sort.Sort(hashHelper)
+	// In LBConsistentRecency strategy, InstanceList is sorted in reverse order of addedTimeNano
+	case LBSortedRecency:
+		sort.Sort(recencySortHelper{Instances: instances})
 	}
 }
 
 func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
-
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
+
 	newInstances := make(map[string]*instancePool)
 	var newInstanceList instancePoolSlice
 	for _, instanceInfo := range instanceInfos {
@@ -185,6 +199,7 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 				// Update `instanceId` for given instance since same host:port address
 				// might have a new `instanceId` now.
 				instance.instanceId = instanceInfo.InstanceId
+				// Preserve the original added time.
 			}
 			newInstances[instanceInfo.Addr] = instance
 			newInstanceList = append(newInstanceList, instance)
@@ -213,7 +228,6 @@ func (pool *LoadBalancedPool) Update(instanceInfos []LBPoolInstanceInfo) {
 	pool.instanceList = newInstanceList
 	pool.instanceHashes = instanceHashes
 	pool.markDownUntil = make([]int64, len(newInstanceList))
-
 }
 
 //
@@ -369,13 +383,7 @@ func (pool *LoadBalancedPool) getInstance(key []byte, maxInstances int) (
 			// achieve round robin load balancing.
 			instanceIdx := atomic.AddUint64(&pool.instanceIdx, 1)
 			idx = int(instanceIdx % numInstancesToTry)
-		case LBSortedFixed:
-			// In SortedFixed strategy instances are always traversed in same
-			// exact order.
-			idx = i
-		case LBShuffledFixed:
-			// In ShuffledFixed strategy instances are also always traversed in
-			// same exact order.
+		case LBShuffledFixed, LBSortedFixed, LBSortedRecency:
 			idx = i
 		case LBConsistentHashing:
 			// In ConsistentHashing strategy instances are picked up randomly between

@@ -2,11 +2,12 @@ package memcache
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"io"
 	"sync"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 const (
@@ -92,7 +93,7 @@ func (h *header) Deserialize(buffer []byte) {
 // operations are serialized (Use multiple channels / clients if parallelism
 // is needed).
 type RawBinaryClient struct {
-	shard          int
+	shard          string
 	channel        io.ReadWriter
 	mutex          sync.Mutex
 	validState     bool
@@ -100,7 +101,7 @@ type RawBinaryClient struct {
 }
 
 // This creates a new memcache RawBinaryClient.
-func NewRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
+func NewRawBinaryClient(shard string, channel io.ReadWriter) ClientShard {
 	return &RawBinaryClient{
 		shard:          shard,
 		channel:        channel,
@@ -110,7 +111,7 @@ func NewRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
 }
 
 // This creates a new memcache RawBinaryClient for use with np-large cluster.
-func NewLargeRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
+func NewLargeRawBinaryClient(shard string, channel io.ReadWriter) ClientShard {
 	return &RawBinaryClient{
 		shard:          shard,
 		channel:        channel,
@@ -120,7 +121,7 @@ func NewLargeRawBinaryClient(shard int, channel io.ReadWriter) ClientShard {
 }
 
 // See ClientShard interface for documentation.
-func (c *RawBinaryClient) ShardId() int {
+func (c *RawBinaryClient) Shard() string {
 	return c.shard
 }
 
@@ -143,7 +144,7 @@ func (c *RawBinaryClient) sendRequest(
 	}
 	if !c.validState {
 		// An error has occurred previously.  It's not safe to continue sending.
-		return errors.New("Skipping due to previous error")
+		return NewInvalidStateError()
 	}
 	defer func() {
 		if err != nil {
@@ -213,7 +214,7 @@ func (c *RawBinaryClient) receiveResponse(
 
 	if !c.validState {
 		// An error has occurred previously.  It's not safe to continue sending.
-		err = errors.New("Skipping due to previous error")
+		err = NewInvalidStateError()
 		return
 	}
 	defer func() {
@@ -332,7 +333,7 @@ func (c *RawBinaryClient) receiveGetResponse(key string) GetResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Get(key string) GetResponse {
+func (c *RawBinaryClient) Get(ctx context.Context, key string) GetResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -358,17 +359,18 @@ func (c *RawBinaryClient) removeDuplicateKey(keys []string) []string {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) GetMulti(keys []string) map[string]GetResponse {
+func (c *RawBinaryClient) GetMulti(ctx context.Context, keys []string) map[string]GetResponse {
 	if keys == nil {
 		return nil
 	}
 
-	responses := make(map[string]GetResponse)
 	cacheKeys := c.removeDuplicateKey(keys)
+	responses := make(map[string]GetResponse, len(cacheKeys))
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	// TODO(team): Should this be parallelized?
 	for _, key := range cacheKeys {
 		if resp := c.sendGetRequest(key); resp != nil {
 			responses[key] = resp
@@ -383,12 +385,6 @@ func (c *RawBinaryClient) GetMulti(keys []string) map[string]GetResponse {
 	}
 
 	return responses
-}
-
-func (c *RawBinaryClient) GetSentinels(keys []string) map[string]GetResponse {
-	// For raw clients, there are no difference between GetMulti and
-	// GetSentinels.
-	return c.GetMulti(keys)
 }
 
 func (c *RawBinaryClient) sendMutateRequest(
@@ -500,46 +496,32 @@ func (c *RawBinaryClient) mutateMulti(
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Set(item *Item) MutateResponse {
+func (c *RawBinaryClient) Set(ctx context.Context, item *Item) MutateResponse {
 	return c.mutate(opSet, item)
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) SetMulti(items []*Item) []MutateResponse {
+func (c *RawBinaryClient) SetMulti(ctx context.Context, items []*Item) []MutateResponse {
 	return c.mutateMulti(opSet, opSet, items)
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) SetSentinels(items []*Item) []MutateResponse {
-	// For raw clients, there are no difference between SetMulti and
-	// SetSentinels.
-	return c.SetMulti(items)
-}
-
-// See Client interface for documentation.
-func (c *RawBinaryClient) CasMulti(items []*Item) []MutateResponse {
+func (c *RawBinaryClient) CasMulti(ctx context.Context, items []*Item) []MutateResponse {
 	return c.mutateMulti(opSet, opAdd, items)
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) CasSentinels(items []*Item) []MutateResponse {
-	// For raw clients, there are no difference between CasMulti and
-	// CasSentinels.
-	return c.CasMulti(items)
-}
-
-// See Client interface for documentation.
-func (c *RawBinaryClient) Add(item *Item) MutateResponse {
+func (c *RawBinaryClient) Add(ctx context.Context, item *Item) MutateResponse {
 	return c.mutate(opAdd, item)
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) AddMulti(items []*Item) []MutateResponse {
+func (c *RawBinaryClient) AddMulti(ctx context.Context, items []*Item) []MutateResponse {
 	return c.mutateMulti(opAdd, opAdd, items)
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Replace(item *Item) MutateResponse {
+func (c *RawBinaryClient) Replace(ctx context.Context, item *Item) MutateResponse {
 	if item == nil {
 		return NewMutateErrorResponse("", errors.New("item is nil"))
 	}
@@ -568,7 +550,7 @@ func (c *RawBinaryClient) sendDeleteRequest(key string) MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Delete(key string) MutateResponse {
+func (c *RawBinaryClient) Delete(ctx context.Context, key string) MutateResponse {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -580,7 +562,7 @@ func (c *RawBinaryClient) Delete(key string) MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) DeleteMulti(keys []string) []MutateResponse {
+func (c *RawBinaryClient) DeleteMulti(ctx context.Context, keys []string) []MutateResponse {
 	if keys == nil {
 		return nil
 	}
@@ -605,7 +587,7 @@ func (c *RawBinaryClient) DeleteMulti(keys []string) []MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Append(key string, value []byte) MutateResponse {
+func (c *RawBinaryClient) Append(ctx context.Context, key string, value []byte) MutateResponse {
 	item := &Item{
 		Key:   key,
 		Value: value,
@@ -622,7 +604,7 @@ func (c *RawBinaryClient) Append(key string, value []byte) MutateResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Prepend(key string, value []byte) MutateResponse {
+func (c *RawBinaryClient) Prepend(ctx context.Context, key string, value []byte) MutateResponse {
 	item := &Item{
 		Key:   key,
 		Value: value,
@@ -685,7 +667,8 @@ func (c *RawBinaryClient) receiveCountResponse(
 
 // See Client interface for documentation.
 func (c *RawBinaryClient) Increment(
-	key string,
+	ctx context.Context,
+key string,
 	delta uint64,
 	initValue uint64,
 	expiration uint32) CountResponse {
@@ -702,7 +685,8 @@ func (c *RawBinaryClient) Increment(
 
 // See Client interface for documentation.
 func (c *RawBinaryClient) Decrement(
-	key string,
+	ctx context.Context,
+key string,
 	delta uint64,
 	initValue uint64,
 	expiration uint32) CountResponse {
@@ -718,10 +702,10 @@ func (c *RawBinaryClient) Decrement(
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Stat(statsKey string) StatResponse {
-	shardEntries := make(map[int](map[string]string))
+func (c *RawBinaryClient) Stat(ctx context.Context, statsKey string) StatResponse {
+	shardEntries := make(map[string](map[string]string))
 	entries := make(map[string]string)
-	shardEntries[c.ShardId()] = entries
+	shardEntries[c.Shard()] = entries
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -757,8 +741,8 @@ func (c *RawBinaryClient) Stat(statsKey string) StatResponse {
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Version() VersionResponse {
-	versions := make(map[int]string)
+func (c *RawBinaryClient) Version(ctx context.Context) VersionResponse {
+	versions := make(map[string]string)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -773,7 +757,7 @@ func (c *RawBinaryClient) Version() VersionResponse {
 		return NewVersionErrorResponse(err, versions)
 	}
 
-	versions[c.ShardId()] = string(value)
+	versions[c.Shard()] = string(value)
 	return NewVersionResponse(status, versions)
 }
 
@@ -797,11 +781,11 @@ func (c *RawBinaryClient) genericOp(
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Flush(expiration uint32) Response {
+func (c *RawBinaryClient) Flush(ctx context.Context, expiration uint32) Response {
 	return c.genericOp(opFlush, expiration)
 }
 
 // See Client interface for documentation.
-func (c *RawBinaryClient) Verbosity(verbosity uint32) Response {
+func (c *RawBinaryClient) Verbosity(ctx context.Context, verbosity uint32) Response {
 	return c.genericOp(opVerbosity, verbosity)
 }

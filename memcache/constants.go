@@ -23,9 +23,6 @@ const (
 	StatusInvalidArguments
 	StatusItemNotStored
 	StatusIncrDecrOnNonNumericValue
-	StatusVbucketBelongsToAnotherServer // Not used
-	StatusAuthenticationError           // Not used
-	StatusAuthenticationContinue        // Not used
 )
 
 const (

@@ -1,162 +1,158 @@
 package memcache
 
 import (
+	susanin_pb "dropbox/proto/susanin"
 	"expvar"
+	"fmt"
 	"sync"
+	"time"
 
-	"github.com/dropbox/godropbox/container/set"
-	"github.com/dropbox/godropbox/net2"
+	"godropbox/container/set"
+	"godropbox/hash2/hashring"
+	"godropbox/net2"
 )
 
-type MemcachedState int
-
 const (
-	ActiveServer    = MemcachedState(0)
-	WriteOnlyServer = MemcachedState(1)
-	DownServer      = MemcachedState(2)
-	WarmUpServer    = MemcachedState(4)
+	DefaultReadWriteTimeout = 50 * time.Millisecond
 )
 
 var (
-	// Counters for number of connections that succeeded / errored / were skipped, by address.
-	connOkByAddr      = expvar.NewMap("ShardManagerConnOkByAddrCounter")
-	connErrByAddr     = expvar.NewMap("ShardManagerConnErrByAddrCounter")
-	connSkippedByAddr = expvar.NewMap("ShardManagerConnSkippedByAddrCounter")
+	// Counters for number of connections that succeeded / errored / were skipped, by shard.
+	connOkByShard  = expvar.NewMap("ShardManagerConnOkByShardCounter")
+	connErrByShard = expvar.NewMap("ShardManagerConnErrByShardCounter")
 )
 
-type ShardState struct {
-	Address string
-	State   MemcachedState
+func DefaultConnectionOptions() net2.ConnectionOptions {
+	return net2.ConnectionOptions{
+		MaxActiveConnections: -1, // unbounded,
+		MaxIdleConnections:   16,
+		// default Dial is net.DialTimeout(timeout=1s)
+		DialMaxConcurrency: 10,
+		ReadTimeout:        DefaultReadWriteTimeout,
+		WriteTimeout:       DefaultReadWriteTimeout,
+	}
 }
 
 // A base shard manager implementation that can be used to implement other
 // shard managers.
 type BaseShardManager struct {
-	getShardId (func(key string, numShard int) (shard int))
-	pool       net2.ConnectionPool
+	pool net2.ConnectionPool
 
-	rwMutex     sync.RWMutex
-	shardStates []ShardState // guarded by rwMutex
+	rwMutex       sync.RWMutex
+	shards        []*susanin_pb.Address	// guarded by rwMutex
+	hostToIp 	  map[string]string		// guarded by rwMutex
+	shardHashRing *hashring.HashRing 	// guarded by rwMutex
 
 	logError func(err error)
-	logInfo  func(v ...interface{})
 }
 
 var _ ShardManager = (*BaseShardManager)(nil)
 
-// Initializes the BaseShardManager.
-func (m *BaseShardManager) Init(
-	shardFunc func(key string, numShard int) (shard int),
+func NewBaseShardManagerWithOptions(
 	logError func(err error),
-	logInfo func(v ...interface{}),
-	options net2.ConnectionOptions) {
+	poolLogger func(pool net2.ConnectionPool),
+	shards []*susanin_pb.Address,
+	poolOptions net2.ConnectionOptions) *BaseShardManager {
 
-	m.InitWithPool(
-		shardFunc,
-		logError,
-		logInfo,
-		net2.NewMultiConnectionPool(options))
+	baseShardManger := &BaseShardManager{
+		shardHashRing: hashring.New([]string{}),
+		shards:        make([]*susanin_pb.Address, 0),
+		hostToIp:	   make(map[string]string, 0),
+		pool:          net2.NewMultiConnectionPool(poolOptions),
+		logError:      logError,
+	}
+	baseShardManger.UpdateShards(shards)
+	go poolLogger(baseShardManger.pool)
+
+	return baseShardManger
 }
 
-func (m *BaseShardManager) InitWithPool(
-	shardFunc func(key string, numShard int) (shard int),
-	logError func(err error),
-	logInfo func(v ...interface{}),
-	pool net2.ConnectionPool) {
-
-	m.shardStates = make([]ShardState, 0, 0)
-	m.getShardId = shardFunc
-	m.pool = pool
-
-	m.logError = logError
-	m.logInfo = logInfo
-}
-
-// This updates the shard manager to use new shard states.
-func (m *BaseShardManager) UpdateShardStates(shardStates []ShardState) {
-	newAddrs := set.NewSet()
-	for _, state := range shardStates {
-		newAddrs.Add(state.Address)
+func (m *BaseShardManager) UpdateShards(shards []*susanin_pb.Address) {
+	newShards := set.NewSet()
+	for _, shard := range shards {
+		newShards.Add(*shard)
 	}
 
 	m.rwMutex.Lock()
 	defer m.rwMutex.Unlock()
 
-	oldAddrs := set.NewSet()
-	for _, state := range m.shardStates {
-		oldAddrs.Add(state.Address)
+	oldShards := set.NewSet()
+	for _, shard := range m.shards {
+		oldShards.Add(*shard)
 	}
 
-	for address := range set.Subtract(newAddrs, oldAddrs).Iter() {
-		if err := m.pool.Register("tcp", address.(string)); err != nil {
+	shardHosts := make([]string, len(shards))
+	for i, shard := range shards {
+		shardHosts[i] = m.addrToHostPort(shard)
+	}
+
+	set.Subtract(newShards, oldShards).Do(func(shard interface{}) {
+		addr := shard.(susanin_pb.Address)
+		shardIpPort := m.addrToIpPort(&addr)
+		if err := m.pool.Register("tcp", shardIpPort); err != nil {
 			m.logError(err)
 		}
-	}
+		m.hostToIp[m.addrToHostPort(&addr)] = shardIpPort
+	})
 
-	for address := range set.Subtract(oldAddrs, newAddrs).Iter() {
-		if err := m.pool.Unregister("tcp", address.(string)); err != nil {
+	set.Subtract(oldShards, newShards).Do(func(shard interface{}) {
+		fmt.Printf("%v\n", shard)
+		addr := shard.(susanin_pb.Address)
+		shardIpPort := m.addrToIpPort(&addr)
+		if err := m.pool.Unregister("tcp", shardIpPort); err != nil {
 			m.logError(err)
 		}
-	}
+		delete(m.hostToIp, m.addrToHostPort(&addr))
+	})
 
-	m.shardStates = shardStates
+	m.shards = shards
+	m.shardHashRing = hashring.New(shardHosts)
 }
 
 // See ShardManager interface for documentation.
 func (m *BaseShardManager) GetShard(
 	key string) (
-	shardId int,
 	conn net2.ManagedConn,
 	err error) {
 
 	m.rwMutex.RLock()
 	defer m.rwMutex.RUnlock()
 
-	shardId = m.getShardId(key, len(m.shardStates))
-	if shardId == -1 {
-		return
-	}
-
-	state := m.shardStates[shardId]
-	if state.State != ActiveServer {
-		m.logInfo("Memcache shard ", shardId, " is not in active state.")
-		connSkippedByAddr.Add(state.Address, 1)
+	shardIpPort, ok := m.hostToIp[m.shardHashRing.GetNode(key)]
+	if !ok || shardIpPort == "" {
+		err = noShardsError(key)
 		return
 	}
 
 	entry := &ShardMapping{}
-	m.fillEntryWithConnection(state.Address, entry)
+	m.fillEntryWithConnection(shardIpPort, entry)
 	conn, err = entry.Connection, entry.ConnErr
+	if err != nil {
+		err = connectionError(shardIpPort, err)
+	}
 
 	return
 }
 
 // See ShardManager interface for documentation.
 func (m *BaseShardManager) GetShardsForKeys(
-	keys []string) map[int]*ShardMapping {
+	keys []string) map[string]*ShardMapping {
 
 	m.rwMutex.RLock()
 	defer m.rwMutex.RUnlock()
 
-	numShards := len(m.shardStates)
-	results := make(map[int]*ShardMapping)
+	results := make(map[string]*ShardMapping)
 
 	for _, key := range keys {
-		shardId := m.getShardId(key, numShards)
-
-		entry, inMap := results[shardId]
+		shardIpPort, ok := m.hostToIp[m.shardHashRing.GetNode(key)]
+		entry, inMap := results[shardIpPort]
 		if !inMap {
 			entry = &ShardMapping{}
-			if shardId != -1 {
-				state := m.shardStates[shardId]
-				if state.State == ActiveServer {
-					m.fillEntryWithConnection(state.Address, entry)
-				} else {
-					connSkippedByAddr.Add(state.Address, 1)
-				}
+			if ok && shardIpPort != "" {
+				m.fillEntryWithConnection(shardIpPort, entry)
 			}
 			entry.Keys = make([]string, 0, 1)
-			results[shardId] = entry
+			results[shardIpPort] = entry
 		}
 		entry.Keys = append(entry.Keys, key)
 	}
@@ -166,31 +162,24 @@ func (m *BaseShardManager) GetShardsForKeys(
 
 // See ShardManager interface for documentation.
 func (m *BaseShardManager) GetShardsForItems(
-	items []*Item) map[int]*ShardMapping {
+	items []*Item) map[string]*ShardMapping {
 
 	m.rwMutex.RLock()
 	defer m.rwMutex.RUnlock()
 
-	numShards := len(m.shardStates)
-	results := make(map[int]*ShardMapping)
+	results := make(map[string]*ShardMapping)
 
 	for _, item := range items {
-		shardId := m.getShardId(item.Key, numShards)
-
-		entry, inMap := results[shardId]
+		shardIpPort, ok := m.hostToIp[m.shardHashRing.GetNode(item.Key)]
+		entry, inMap := results[shardIpPort]
 		if !inMap {
 			entry = &ShardMapping{}
-			if shardId != -1 {
-				state := m.shardStates[shardId]
-				if state.State == ActiveServer {
-					m.fillEntryWithConnection(state.Address, entry)
-				} else {
-					connSkippedByAddr.Add(state.Address, 1)
-				}
+			if ok && shardIpPort != "" {
+				m.fillEntryWithConnection(shardIpPort, entry)
 			}
 			entry.Items = make([]*Item, 0, 1)
 			entry.Keys = make([]string, 0, 1)
-			results[shardId] = entry
+			results[shardIpPort] = entry
 		}
 		entry.Items = append(entry.Items, item)
 		entry.Keys = append(entry.Keys, item.Key)
@@ -200,112 +189,41 @@ func (m *BaseShardManager) GetShardsForItems(
 }
 
 // See ShardManager interface for documentation.
-func (m *BaseShardManager) GetShardsForSentinelsFromKeys(
-	keys []string) map[int]*ShardMapping {
+func (m *BaseShardManager) GetAllShards() map[string]net2.ManagedConn {
+	results := make(map[string]net2.ManagedConn)
 
 	m.rwMutex.RLock()
 	defer m.rwMutex.RUnlock()
 
-	return m.getShardsForSentinelsLocked(keys)
-}
-
-// This method assumes that m.rwMutex is locked.
-func (m *BaseShardManager) getShardsForSentinelsLocked(
-	keys []string) map[int]*ShardMapping {
-
-	numShards := len(m.shardStates)
-	results := make(map[int]*ShardMapping)
-
-	for _, key := range keys {
-		shardId := m.getShardId(key, numShards)
-
-		entry, inMap := results[shardId]
-		if !inMap {
-			entry = &ShardMapping{}
-			if shardId != -1 {
-				state := m.shardStates[shardId]
-				if state.State == ActiveServer ||
-					state.State == WriteOnlyServer ||
-					state.State == WarmUpServer {
-
-					m.fillEntryWithConnection(state.Address, entry)
-
-					// During WARM_UP state, we do try to write sentinels to
-					// memcache but any failures are ignored. We run memcache
-					// server in this mode for sometime to prime our memcache
-					// and warm up memcache server.
-					if state.State == WarmUpServer {
-						entry.WarmingUp = true
-					}
-				} else {
-					connSkippedByAddr.Add(state.Address, 1)
-				}
-			}
-			entry.Keys = make([]string, 0, 1)
-			results[shardId] = entry
-		}
-		entry.Keys = append(entry.Keys, key)
-	}
-
-	return results
-}
-
-// See ShardManager interface for documentation.
-func (m *BaseShardManager) GetShardsForSentinelsFromItems(
-	items []*Item) map[int]*ShardMapping {
-
-	keys := make([]string, len(items))
-	for i, item := range items {
-		keys[i] = item.Key
-	}
-
-	m.rwMutex.RLock()
-	defer m.rwMutex.RUnlock()
-
-	numShards := len(m.shardStates)
-	results := m.getShardsForSentinelsLocked(keys)
-
-	// Now fill in all entries with items.
-	for _, item := range items {
-		shardId := m.getShardId(item.Key, numShards)
-
-		entry := results[shardId]
-		if len(entry.Items) == 0 {
-			entry.Items = make([]*Item, 0, len(entry.Keys))
-		}
-		entry.Items = append(entry.Items, item)
-	}
-
-	return results
-}
-
-// See ShardManager interface for documentation.
-func (m *BaseShardManager) GetAllShards() map[int]net2.ManagedConn {
-	results := make(map[int]net2.ManagedConn)
-
-	m.rwMutex.RLock()
-	defer m.rwMutex.RUnlock()
-
-	for i, state := range m.shardStates {
-		conn, err := m.pool.Get("tcp", state.Address)
+	for _, shard := range m.shards {
+		shardIpPort := fmt.Sprintf("%s:%d", shard.Ip4, shard.Port)
+		conn, err := m.pool.Get("tcp", shardIpPort)
 		if err != nil {
 			m.logError(err)
 			conn = nil
 		}
-		results[i] = conn
+		results[shardIpPort] = conn
 	}
 
 	return results
 }
 
-func (m *BaseShardManager) fillEntryWithConnection(address string, entry *ShardMapping) {
-	conn, err := m.pool.Get("tcp", address)
+func (m *BaseShardManager) fillEntryWithConnection(shardIpPort string, entry *ShardMapping) {
+	conn, err := m.pool.Get("tcp", shardIpPort)
 	if err != nil {
 		m.logError(err)
-		connErrByAddr.Add(address, 1)
+		connErrByShard.Add(shardIpPort, 1)
 		entry.ConnErr = err
 	} else {
-		connOkByAddr.Add(address, 1)
+		connOkByShard.Add(shardIpPort, 1)
 		entry.Connection = conn
 	}
+}
+
+func (m *BaseShardManager) addrToIpPort(shard *susanin_pb.Address) string {
+	return fmt.Sprintf("%s:%d", shard.Ip4, shard.Port)
+}
+
+func (m *BaseShardManager) addrToHostPort(shard *susanin_pb.Address) string {
+	return fmt.Sprintf("%s:%d", shard.Host, shard.Port)
 }

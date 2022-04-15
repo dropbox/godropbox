@@ -14,7 +14,8 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	"github.com/stretchr/testify/assert"
+	. "godropbox/gocheck2"
 )
 
 func Test(t *testing.T) {
@@ -28,6 +29,7 @@ var _ = Suite(&SqlTypesSuite{})
 
 func (s *SqlTypesSuite) TestNull(c *C) {
 	n := Value{}
+	c.Assert(n.Size(), Equals, 0)
 	c.Assert(n.IsNull(), IsTrue)
 	c.Assert(n.String(), Equals, "")
 
@@ -41,6 +43,7 @@ func (s *SqlTypesSuite) TestNull(c *C) {
 
 func TestNumeric(t *testing.T) {
 	n := Value{Numeric([]byte("1234"))}
+	assert.Equal(t, 4, n.Size(), "Numeric size not match")
 	b := bytes.NewBuffer(nil)
 	n.EncodeSql(b)
 	if b.String() != "1234" {
@@ -135,6 +138,7 @@ func TestString(t *testing.T) {
 	s := MakeString([]byte(HARDSQL))
 	b := bytes.NewBuffer(nil)
 	s.EncodeSql(b)
+	assert.Equal(t, len(HARDSQL), s.Size(), "HARDSQL len mismatch")
 	if b.String() != HARDESCAPED {
 		t.Errorf("Expecting %s, received %s", HARDESCAPED, b.String())
 	}
@@ -147,6 +151,7 @@ func TestString(t *testing.T) {
 
 	// Now, just printable strings.
 	s, err := BuildValue(PRINTABLE)
+	assert.Equal(t, len(PRINTABLE), s.Size(), "PRINTABLE len mismatch")
 	if err != nil {
 		t.Errorf("BuildValue failed on printable: %s", PRINTABLE)
 	}
@@ -162,6 +167,7 @@ func TestString(t *testing.T) {
 	}
 
 	s, err = BuildValue(SPECIAL_CASES)
+	assert.Equal(t, len(SPECIAL_CASES), s.Size(), "SPECIAL_CASES len mismatch")
 	if err != nil {
 		t.Errorf("BuildValue failed on special cases: %s", SPECIAL_CASES)
 	}
@@ -221,6 +227,7 @@ func (s *SqlTypesSuite) TestBuildValue(c *C) {
 	v, err = BuildValue(1.23)
 	c.Assert(err, IsNil)
 	c.Assert(v.IsFractional(), IsTrue)
+	c.Assert(v.Size(), Equals, 4)
 	c.Assert(v.String(), Equals, "1.23")
 
 	err = ConvertAssign(v, &n64)

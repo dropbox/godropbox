@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dropbox/godropbox/encoding2"
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/encoding2"
+	"godropbox/errors"
 )
 
 var (
@@ -35,6 +35,15 @@ const (
 	StringType     = ValueType(3)
 	UTF8StringType = ValueType(4)
 )
+
+// InnerValue defines methods that need to be supported by all non-null value types.
+type InnerValue interface {
+	raw() []byte
+	size() int
+	encodeSql(encoding2.BinaryWriter)
+	encodeAscii(encoding2.BinaryWriter)
+	MarshalBinary() ([]byte, error)
+}
 
 // Value can store any SQL value. NULL is stored as nil.
 type Value struct {
@@ -81,6 +90,14 @@ func (v Value) Raw() []byte {
 		return nil
 	}
 	return v.Inner.raw()
+}
+
+// Size returns the number of bytes in the underlying value's byte array.
+func (v Value) Size() int {
+	if v.Inner == nil {
+		return 0
+	}
+	return v.Inner.size()
 }
 
 // String returns the raw value as a string
@@ -204,12 +221,12 @@ func (v Value) IsUtf8String() (ok bool) {
 	return ok
 }
 
-// InnerValue defines methods that need to be supported by all non-null value types.
-type InnerValue interface {
-	raw() []byte
-	encodeSql(encoding2.BinaryWriter)
-	encodeAscii(encoding2.BinaryWriter)
-	MarshalBinary() ([]byte, error)
+func MustBuildValue(goval interface{}) Value {
+	v, err := BuildValue(goval)
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
 
 func BuildValue(goval interface{}) (v Value, err error) {
@@ -464,6 +481,10 @@ func (n Numeric) raw() []byte {
 	return []byte(n)
 }
 
+func (n Numeric) size() int {
+	return len(n)
+}
+
 func (n Numeric) encodeSql(b encoding2.BinaryWriter) {
 	if _, err := b.Write(n.raw()); err != nil {
 		panic(err)
@@ -482,6 +503,10 @@ func (n Numeric) MarshalBinary() ([]byte, error) {
 
 func (f Fractional) raw() []byte {
 	return []byte(f)
+}
+
+func (f Fractional) size() int {
+	return len(f)
 }
 
 func (f Fractional) encodeSql(b encoding2.BinaryWriter) {
@@ -504,6 +529,9 @@ func (s String) raw() []byte {
 	return []byte(s.data)
 }
 
+func (s String) size() int {
+	return len(s.data)
+}
 func (s String) encodeSql(b encoding2.BinaryWriter) {
 	if s.isUtf8 {
 		writebyte(b, '\'')

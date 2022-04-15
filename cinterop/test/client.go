@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dropbox/godropbox/cinterop"
+	"godropbox/cinterop"
 )
 
 func reader(r io.Reader) {

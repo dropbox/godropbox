@@ -4,25 +4,34 @@
 package rand2
 
 import (
+	secure_rand "crypto/rand"
+	"encoding/binary"
 	"math/rand"
 	"os"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/dropbox/godropbox/container/set"
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/container/set"
+	"godropbox/errors"
 )
 
 // A Source that can be concurrently used by multiple goroutines.
 type lockedSource struct {
 	mutex sync.Mutex
-	src   rand.Source
+	src   rand.Source64
 }
 
 func (r *lockedSource) Int63() int64 {
 	r.mutex.Lock()
 	val := r.src.Int63()
+	r.mutex.Unlock()
+	return val
+}
+
+func (r *lockedSource) Uint64() uint64 {
+	r.mutex.Lock()
+	val := r.src.Uint64()
 	r.mutex.Unlock()
 	return val
 }
@@ -36,14 +45,31 @@ func (r *lockedSource) Seed(seed int64) {
 // This returns a thread-safe random source.
 func NewSource(seed int64) rand.Source {
 	return &lockedSource{
-		src: rand.NewSource(seed),
+		src: rand.NewSource(seed).(rand.Source64),
 	}
 }
 
-// Generates a seed based on the current time and the process ID.
+var _ rand.Source64 = (*lockedSource)(nil)
+
+// Generates a seed based on a good source of entropy taken from crypto/rand's Read().
+// This does not make rand2 a CSPRNG, but is better than seeding based on system time and pid
 func GetSeed() int64 {
-	now := time.Now()
-	return now.Unix() + int64(now.Nanosecond()) + 12345*int64(os.Getpid())
+	b := make([]byte, 8)
+	_, err := secure_rand.Read(b)
+
+	// The system's CSPRNG failing is *extremely* unlikely.
+	// Unfortunately a lot of calls to this function rely
+	// on it returning only one value, so we can't keep raising
+	// the error without breaking other code. Let's revert to
+	// the old hilarious behavior in this extremely unlikely situation.
+	//
+	// Since we're not relying on this for security-sensitive functions
+	// it's probably better not to panic here
+	if err != nil {
+		now := time.Now()
+		return now.Unix() + int64(now.Nanosecond()) + 12345*int64(os.Getpid())
+	}
+	return int64(binary.BigEndian.Uint64(b))
 }
 
 func init() {
@@ -59,6 +85,9 @@ var (
 
 	// See math/rand for documentation.
 	Int63 = rand.Int63
+
+	// See math/rand for documentation.
+	Uint64 = rand.Uint64
 
 	// See math/rand for documentation.
 	Uint32 = rand.Uint32
@@ -95,6 +124,9 @@ var (
 
 	// See math/rand for documentation.
 	NewZipf = rand.NewZipf
+
+	// See math/rand for documentation.
+	Read = rand.Read
 )
 
 // Dur returns a pseudo-random Duration in [0, max)
@@ -134,10 +166,10 @@ func SampleInts(n int, k int) (res []int, err error) {
 
 	res = make([]int, k)
 	e := 0
-	for i := range picked.Iter() {
+	picked.Do(func(i interface{}) {
 		res[e] = i.(int)
 		e++
-	}
+	})
 
 	return
 }

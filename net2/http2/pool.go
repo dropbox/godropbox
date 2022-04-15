@@ -8,8 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
-	"github.com/dropbox/godropbox/stats"
+	"godropbox/errors"
 )
 
 type DoParams struct {
@@ -84,6 +83,10 @@ type ConnectionParams struct {
 	// Timeout for waiting for an HTTP response header
 	ResponseTimeout time.Duration
 
+	// Timeout for idle HTTP conenction (IdleConnTimeout)
+	// Zero means no limit.
+	IdleConnTimeout time.Duration
+
 	// Host header to use instead of address.
 	HostHeader *string
 
@@ -96,14 +99,19 @@ type ConnectionParams struct {
 	// default policy, which follows at most 10 consecutive requests.
 	DisableFollowRedirect bool
 
-	// Dial function to use instead of the default
-	Dial func(network, addr string) (net.Conn, error)
+	// DialContext function to use instead of the default
+	DialContext DialContextFunc
+
+	// If set, takes priority over TLSClientConfig.
+	DialTLS func(dial DialContextFunc, network, addr string) (net.Conn, error)
 
 	// Function to determine proxy
 	Proxy func(*http.Request) (*url.URL, error)
 
-	// For logging stats
-	StatsFactory stats.StatsFactory
+	// When the is not zero, it specifies the maximum amount of time that transmitted data may remain
+	// unacknowledged before TCP will forcibly close the corresponding connection.
+	// Applied through TCP_USER_TIMEOUT socket option.
+	TcpUserTimeout time.Duration
 }
 
 func (p ConnectionParams) String() string {
@@ -114,20 +122,23 @@ func (p ConnectionParams) String() string {
 
 	return fmt.Sprintf(
 		"MaxConns: %d MaxIdle: %d UseSSL: %t TLSClientConfig: %+v "+
-			"ConnectionTimeout: %v ResponseTimeout: %v HostHeader %s "+
-			"UseRequestHost: %t DisableFollowRedirect: %t Dial: %p Proxy %p "+
-			"Name: %s",
+			"ConnectionTimeout: %v ResponseTimeout: %v IdleConnTimeout: %v HostHeader %s "+
+			"UseRequestHost: %t DisableFollowRedirect: %t DialContext: %p DialTLS: %p, Proxy %p "+
+			"TcpUserTimeout: %v, Name: %s",
 		p.MaxConns,
 		p.MaxIdle,
 		p.UseSSL,
 		p.TLSClientConfig,
 		p.ConnectTimeout,
 		p.ResponseTimeout,
+		p.IdleConnTimeout,
 		hostHeader,
 		p.UseRequestHost,
 		p.DisableFollowRedirect,
-		p.Dial,
+		p.DialContext,
+		p.DialTLS,
 		p.Proxy,
+		p.TcpUserTimeout,
 		p.Name)
 }
 

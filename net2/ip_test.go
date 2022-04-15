@@ -1,7 +1,7 @@
 package net2
 
 import (
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
 
 	. "gopkg.in/check.v1"
 )

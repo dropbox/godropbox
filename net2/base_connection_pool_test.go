@@ -3,14 +3,14 @@ package net2
 import (
 	"fmt"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
-	"github.com/dropbox/godropbox/time2"
+	. "godropbox/gocheck2"
+	"godropbox/time2"
+	"sync"
 )
 
 // Hook up gocheck into go test runner
@@ -167,7 +167,7 @@ func (s *BaseConnectionPoolSuite) TestRecycleConnections(c *C) {
 	c.Assert(SameConnection(n3, c1), IsFalse)
 	c.Assert(SameConnection(n3, c3), IsTrue)
 
-	n4, _ := pool.Get("foo", "bar")
+	n4, err := pool.Get("foo", "bar")
 	c.Assert(dialer.MaxId(), Equals, 5)
 	c.Assert(n4.RawConn().(*mockConn).Id(), Equals, 5)
 }

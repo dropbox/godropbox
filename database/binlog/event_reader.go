@@ -3,7 +3,7 @@ package binlog
 import (
 	"io"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 type Logger struct {

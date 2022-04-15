@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dropbox/godropbox/database/sqltypes"
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/database/sqltypes"
+	"godropbox/errors"
 )
 
 type orderByClause struct {

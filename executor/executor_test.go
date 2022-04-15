@@ -5,7 +5,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/time2"
+	"godropbox/time2"
 )
 
 type testRequest struct {
@@ -19,15 +19,19 @@ type testRequest struct {
 	doneChan chan struct{}
 }
 
+func (r *testRequest) Priority() uint16 {
+	return 1
+}
+
 func (r *testRequest) Execute() {
-	r.startChan <- struct{}{}
+	close(r.startChan)
 	<-r.finishChan
 
 	r.executeChan <- r.i
 }
 
 func (r *testRequest) Cancel() {
-	r.startChan <- struct{}{}
+	close(r.startChan)
 	<-r.finishChan
 
 	r.cancelChan <- r.i
@@ -572,4 +576,44 @@ func (s *WorkPoolExecutorSuite) TestMaybeTruncate(c *C) {
 			5: {},
 			6: {},
 		})
+}
+
+func (s *WorkPoolExecutorSuite) TestMaxQueueSize(c *C) {
+	err := s.executor.Configure(
+		WorkPoolExecutorParams{
+			NumWorkers:   1,
+			MaxQueueSize: 1,
+		})
+	c.Assert(err, IsNil)
+
+	req1 := s.queue()
+
+	// Make sure the worker grabs the first request before queuing another.
+	req1.WaitTilStarted(c)
+	req2 := s.queue()
+
+	for i := 0; i < 3; i++ {
+		req3 := s.queue()
+		req3.Finish()
+		req3.AssertDone(c)
+	}
+
+	req1.Finish()
+	req1.AssertDone(c)
+	req2.Finish()
+	req2.AssertDone(c)
+
+	obtained := []int{}
+	close(s.executeChan)
+	for i := range s.executeChan {
+		obtained = append(obtained, i)
+	}
+	c.Assert([]int{1, 2}, DeepEquals, obtained)
+
+	obtained = []int{}
+	close(s.cancelChan)
+	for i := range s.cancelChan {
+		obtained = append(obtained, i)
+	}
+	c.Assert([]int{3, 4, 5}, DeepEquals, obtained)
 }

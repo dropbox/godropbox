@@ -1,104 +1,46 @@
 package memcache
 
 import (
-	"errors"
+	"context"
+	susanin_pb "dropbox/proto/susanin"
+	"strings"
 
+	. "godropbox/gocheck2"
+	"godropbox/net2"
 	. "gopkg.in/check.v1"
-
-	"github.com/dropbox/godropbox/net2"
 )
 
-// MockShardManager
-type MockShardManager struct {
-	ShardManager
-	*C
-
-	shardMap map[int]*ShardMapping
-}
-
-func (m *MockShardManager) GetShardsForSentinelsFromItems(items []*Item) map[int]*ShardMapping {
-	m.Assert(items, HasLen, 1)
-	return m.shardMap
-}
-
-// BadMemcacheConn fails all write operations.
-type BadMemcacheConn struct {
-	net2.ManagedConn
-}
-
-func (BadMemcacheConn) Write([]byte) (int, error) {
-	return 0, errors.New("Bad conn")
-}
-
-func (BadMemcacheConn) DiscardConnection() error {
-	return nil
-}
-
-// ShardedClientSuite
-type ShardedClientSuite struct {
-	sm *MockShardManager
-	mc Client
-}
+type ShardedClientSuite struct{}
 
 var _ = Suite(&ShardedClientSuite{})
 
-func (s *ShardedClientSuite) SetUpTest(c *C) {
-	s.sm = &MockShardManager{C: c}
-	s.mc = NewShardedClient(s.sm, NewRawBinaryClient)
+func assertNoShardError(c *C, resp Response) {
+	err := resp.Error()
+	c.Assert(err, NotNil)
+	c.Assert(strings.Contains(err.Error(), "No Memcache shard"), IsTrue)
 }
 
-func (s *ShardedClientSuite) TestSetSentinels(c *C) {
-	keys := []string{"key"}
-	items := []*Item{
-		{
-			Key:   "key",
-			Value: []byte("value"),
-		},
+func (s *ShardedClientSuite) TestNoShards(c *C) {
+	testKeys := []string{"key1", "key2"}
+	manager := NewBaseShardManagerWithOptions(
+		func(err error) {},
+		func(pool net2.ConnectionPool) {},
+		[]*susanin_pb.Address{}, DefaultConnectionOptions())
+	shardedClient := NewShardedClient(manager, NewRawBinaryClient)
+	ctx := context.Background()
+	assertNoShardError(c, shardedClient.Set(ctx, &Item{Key: testKeys[0], Value: []byte("value")}))
+	assertNoShardError(c, shardedClient.Get(ctx, testKeys[0]))
+
+	items := make([]*Item, len(testKeys))
+	for i, key := range testKeys {
+		items[i] = &Item{Key: key, Value: []byte("testVal")}
 	}
-
-	// In DOWN state, SetSentinels should always succeed.
-	s.sm.shardMap = map[int]*ShardMapping{
-		0: {
-			ConnErr:    nil,
-			Connection: nil,
-			Keys:       keys,
-			Items:      items,
-			WarmingUp:  false,
-		},
+	setResps := shardedClient.SetMulti(ctx, items)
+	for _, resp := range setResps {
+		assertNoShardError(c, resp)
 	}
-
-	response := s.mc.SetSentinels(items)
-	c.Assert(response, HasLen, 1)
-	c.Assert(response[0].Error(), IsNil)
-	c.Assert(response[0].DataVersionId(), Equals, uint64(0))
-
-	// In WARM_UP state, SetSentinels should succeed with bad connection.
-	s.sm.shardMap = map[int]*ShardMapping{
-		0: {
-			ConnErr:    nil,
-			Connection: BadMemcacheConn{},
-			Keys:       keys,
-			Items:      items,
-			WarmingUp:  true,
-		},
+	getResps := shardedClient.GetMulti(ctx, testKeys)
+	for _, key := range testKeys {
+		assertNoShardError(c, getResps[key])
 	}
-
-	response = s.mc.SetSentinels(items)
-	c.Assert(response, HasLen, 1)
-	c.Assert(response[0].Error(), IsNil)
-	c.Assert(response[0].DataVersionId(), Equals, uint64(0))
-
-	// In WRITE_ONLY & ACTIVE state, SetSentinels should fail with bad connection.
-	s.sm.shardMap = map[int]*ShardMapping{
-		0: {
-			ConnErr:    nil,
-			Connection: BadMemcacheConn{},
-			Items:      items,
-			WarmingUp:  false,
-		},
-	}
-
-	response = s.mc.SetSentinels(items)
-	c.Assert(response, HasLen, 1)
-	c.Assert(response[0].Error(), NotNil)
 }

@@ -7,9 +7,9 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/dropbox/godropbox/errors"
-	. "github.com/dropbox/godropbox/gocheck2"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
+	. "godropbox/gocheck2"
 )
 
 type parsedTestEvent struct {

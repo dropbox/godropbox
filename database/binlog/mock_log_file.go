@@ -6,7 +6,7 @@ import (
 	"io"
 	"sync"
 
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
 )
 
 // MockLogFile is thread-safe.
@@ -138,6 +138,14 @@ func (mlf *MockLogFile) WriteRotate(prefix string, num int) {
 
 func (mlf *MockLogFile) WriteStop() {
 	mlf.writeWithHeader([]byte{}, mysql_proto.LogEventType_STOP_EVENT)
+}
+
+func (mlf *MockLogFile) WriteHeartbeat() {
+	mlf.writeWithHeader([]byte{}, mysql_proto.LogEventType_HEARTBEAT_LOG_EVENT)
+}
+
+func (mlf *MockLogFile) WriteIntVar() {
+	mlf.writeWithHeader([]byte("SET LAST_INSERT_ID=0"), mysql_proto.LogEventType_INTVAR_EVENT)
 }
 
 func (mlf *MockLogFile) WriteQueryWithParam(query string, dbName string) {

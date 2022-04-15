@@ -3,8 +3,8 @@ package binlog
 import (
 	"bytes"
 
-	"github.com/dropbox/godropbox/errors"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
 )
 
 const MaxDbsInEventMts = 254
@@ -70,6 +70,8 @@ const MaxDbsInEventMts = 254
 //          microseconds:
 //              1 byte for Q_MICROSECONDS (= 13)
 //              3 bytes (uint24) for microseconds
+//			explicitDefaultsForTimestamp
+//				1 byte for boolean
 //      X bytes for the database name (zero terminated)
 //      the remaining is for the query (not zero terminated).
 //  5.6 Specific:
@@ -101,6 +103,8 @@ type QueryEvent struct {
 	numUpdatedDbs         *uint8
 	updatedDbNames        [][]byte
 	microseconds          *uint32
+
+	explicitDefaultsForTimestamp *uint8
 }
 
 // ThreadId returns the thread id which executed the query.
@@ -359,6 +363,9 @@ func (p *QueryEventParser) parseStatus(q *QueryEvent) error {
 		case mysql_proto.QueryStatusCode_MICROSECONDS:
 			data, err = p.parseMircoseconds(data, q)
 
+		case mysql_proto.QueryStatusCode_EXPLICIT_DEFAULTS_FOR_TIMESTAMP:
+			q.explicitDefaultsForTimestamp = new(uint8)
+			data, err = readLittleEndian(data, q.explicitDefaultsForTimestamp)
 		default:
 			return errors.Newf("Unknown query status code: %d", int(code))
 		}

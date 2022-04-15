@@ -607,6 +607,6 @@ func (s *PipelinedCopySuite) TestFailedRW(c *C) {
 			return 0, fmt.Errorf("write fails")
 		},
 	}
-	_, err := PipelinedCopy(rw, rw, 4, 10, 9)
+	_, _, err := PipelinedCopy(rw, rw, 4, 10, 9)
 	c.Assert(err, NotNil)
 }

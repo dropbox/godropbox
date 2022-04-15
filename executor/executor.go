@@ -4,15 +4,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 type Request interface {
+	// If priority aware executor is used, it will prioritize requests with
+	// higher priority (small number) over lower priority (higher number)
+	Priority() uint16
+
 	// The executor will call this method to serve the request.
 	Execute()
 
 	// The executor will call this method if the executor cannot serve the
-	// request.  Cancel should be a cheap operation than Execute.
+	// request.  Cancel should be a cheaper operation than Execute.
 	Cancel()
 }
 
@@ -61,6 +65,12 @@ type WorkPoolExecutorParams struct {
 	// How frequent should the work pool sweeps timed out requests from its
 	// queue. CheckInterval must by positive when QueueTimeout is enabled.
 	CheckInterval time.Duration
+
+	// The queue's max size (non-positive means unlimited).  If the max queue
+	// size is set, and the queue is full, new requests will be cancel
+	// immediately.  In general, lowering QueueTimeout is preferred over
+	// capping the queue size.
+	MaxQueueSize int
 }
 
 // Process requests using a fixed number of workers (when configured) to limit
@@ -81,8 +91,9 @@ type WorkPoolExecutor struct {
 
 	// guarded by mutex
 	params        WorkPoolExecutorParams
-	requests      []*queuedRequest
+	queue         queue
 	highWaterMark int
+	maxRequests   int
 	workers       []*worker
 	stopChan      chan struct{} // initialize each time truncate loop starts
 	workerId      int
@@ -90,17 +101,31 @@ type WorkPoolExecutor struct {
 
 var _ Executor = &WorkPoolExecutor{} // verify interface
 
-func NewWorkPoolExecutor() *WorkPoolExecutor {
+type Option func(*WorkPoolExecutor)
+
+func WithPriorityQueue(priorities []uint16) Option {
+	return func(w *WorkPoolExecutor) {
+		w.queue = newPriorityQueue(priorities)
+	}
+}
+
+func NewWorkPoolExecutor(opts ...Option) *WorkPoolExecutor {
 	mutex := &sync.Mutex{}
 
-	return &WorkPoolExecutor{
+	w := &WorkPoolExecutor{
 		now:                  time.Now,
 		after:                time.After,
 		checkIntervalUpdates: make(chan time.Duration, 1),
 		mutex:                mutex,
 		cond:                 sync.NewCond(mutex),
-		requests:             make([]*queuedRequest, 0, 1024),
+		queue:                newLifoQueue(),
 	}
+
+	for _, opt := range opts {
+		opt(w)
+	}
+
+	return w
 }
 
 func (p *WorkPoolExecutor) Process(req Request) *sync.WaitGroup {
@@ -121,16 +146,23 @@ func (p *WorkPoolExecutor) ProcessWithWaitGroup(r Request, wg *sync.WaitGroup) {
 	wg.Add(1)
 
 	unlimited := false
+	shouldCancel := false
 
 	p.mutex.Lock()
 	if p.params.NumWorkers > 0 {
-		p.requests = append(p.requests, req)
+		if p.queue.Push(req, p.params.MaxQueueSize) {
+			queueSize := p.queue.Size()
+			if queueSize > p.highWaterMark {
+				p.highWaterMark = queueSize
+			}
+			if queueSize > p.maxRequests {
+				p.maxRequests = queueSize
+			}
 
-		if len(p.requests) > p.highWaterMark {
-			p.highWaterMark = len(p.requests)
+			p.cond.Signal()
+		} else {
+			shouldCancel = true
 		}
-
-		p.cond.Signal()
 	} else {
 		unlimited = true
 	}
@@ -142,6 +174,15 @@ func (p *WorkPoolExecutor) ProcessWithWaitGroup(r Request, wg *sync.WaitGroup) {
 			req.execute()
 		} else {
 			go req.execute()
+		}
+	}
+
+	if shouldCancel {
+		_, ok := req.request.(InlineableRequest)
+		if ok {
+			req.cancel()
+		} else {
+			go req.cancel()
 		}
 	}
 }
@@ -164,7 +205,7 @@ func (p *WorkPoolExecutor) Size() int {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	return len(p.requests)
+	return p.queue.Size()
 }
 
 func (p *WorkPoolExecutor) HighWaterMark() int {
@@ -172,6 +213,15 @@ func (p *WorkPoolExecutor) HighWaterMark() int {
 	defer p.mutex.Unlock()
 
 	return p.highWaterMark
+}
+
+func (p *WorkPoolExecutor) MaxRequests() int {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	maxRequests := p.maxRequests
+	p.maxRequests = 0
+	return maxRequests
 }
 
 func (p *WorkPoolExecutor) Configure(params WorkPoolExecutorParams) error {
@@ -191,15 +241,18 @@ func (p *WorkPoolExecutor) Configure(params WorkPoolExecutorParams) error {
 		params.CheckInterval = 0
 	}
 
+	if params.MaxQueueSize < 0 {
+		params.MaxQueueSize = 0
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	// "unlimited" workers; drain the queue
-	if params.NumWorkers <= 0 && len(p.requests) > 0 {
-		for _, r := range p.requests {
+	if params.NumWorkers <= 0 && p.queue.Size() > 0 {
+		for _, r := range p.queue.Drain() {
 			go r.execute()
 		}
-		p.requests = make([]*queuedRequest, 0, 1024)
 	}
 
 	if params.CheckInterval == 0 && p.stopChan != nil { // stop truncate loop
@@ -287,53 +340,22 @@ func (p *WorkPoolExecutor) truncateLoop(stopChan chan struct{}) {
 func (p *WorkPoolExecutor) maybeTruncate(now time.Time) {
 	expired := p.pruneExpiredRequests(now)
 
-	for _, req := range expired {
+	for idx, req := range expired {
 		go req.cancel()
+		expired[idx] = nil // release memory
 	}
 }
 
-func (p *WorkPoolExecutor) pruneExpiredRequests(
-	now time.Time) []*queuedRequest {
-
+func (p *WorkPoolExecutor) pruneExpiredRequests(now time.Time) []*queuedRequest {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	if p.params.QueueTimeout <= 0 {
+	if p.params.QueueTimeout <= 0 { // no timeout
 		return nil
 	}
 
-	timeout := p.params.QueueTimeout
-
-	if len(p.requests) == 0 {
-		return nil
-	}
-
-	low := 0
-	if now.Sub(p.requests[low].enqueueTime) < timeout {
-		// Oldest entry in queue has not timed out yet
-		return nil
-	}
-
-	high := len(p.requests) - 1
-	if now.Sub(p.requests[high].enqueueTime) >= timeout {
-		// Newest entry in queue has timed out, hence all requests timed out
-		ret := p.requests
-		p.requests = make([]*queuedRequest, 0, 1024)
-		return ret
-	}
-
-	for (high - low) > 1 { // > 1 to ensure low, mid, high are unique
-		mid := (high + low) / 2 // assume no overflow
-		if now.Sub(p.requests[mid].enqueueTime) >= timeout {
-			low = mid
-		} else {
-			high = mid
-		}
-	}
-
-	head := p.requests[:low+1]
-	p.requests = p.requests[low+1:]
-	return head
+	cutoff := now.Add(-p.params.QueueTimeout)
+	return p.queue.PruneExpiredRequests(cutoff)
 }
 
 // For testing
@@ -372,11 +394,8 @@ func (w *worker) pop() (*queuedRequest, time.Duration) {
 			return nil, 0
 		}
 
-		if len(w.pool.requests) > 0 {
-			req := w.pool.requests[len(w.pool.requests)-1]
-			w.pool.requests = w.pool.requests[:len(w.pool.requests)-1]
-
-			if len(w.pool.requests) > 0 {
+		if req := w.pool.queue.Pop(); req != nil {
+			if w.pool.queue.Size() > 0 {
 				w.pool.cond.Signal()
 			}
 

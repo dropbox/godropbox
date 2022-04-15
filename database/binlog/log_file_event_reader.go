@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dropbox/godropbox/errors"
-	mysql_proto "github.com/dropbox/godropbox/proto/mysql"
+	mysql_proto "dropbox/proto/mysql"
+	"godropbox/errors"
 )
 
 var logFileMagic = []byte("\xfe\x62\x69\x6e")
@@ -40,6 +40,11 @@ func (h *formatVersionHeader) version() int {
 	return 3
 }
 
+// TODO(sammyst): This reader combines two pieces of logic:
+// 1. Some checks (magic bytes, version) that are specifc to binlog files and don't apply to binlog streams.
+// 2. Applying the appropriate V4 parser+checksum logic, which is needed for both binlog file and
+// binlog stream processing.
+// We should split the event reader into these two layers or move the parsing/checksum logic into ParsedV4EventReader.
 type logFileV4EventReader struct {
 	reader                      EventReader
 	parsers                     V4EventParserMap
@@ -70,6 +75,24 @@ func NewLogFileV4EventReader(
 		passedLogFormatVersionCheck: false,
 		logger: logger,
 	}
+}
+
+// Returns an event reader which reads events from a single binlog stream with the
+// appropriate parser applied on each event. Since the binlog stream does not contain
+// magic byte and verion headers, the parser skips these checks.
+func NewBinlogStreamV4EventReader(
+	streamReader EventReader,
+	parsers V4EventParserMap,
+	logger Logger) EventReader {
+
+	return &logFileV4EventReader{
+		reader:                      NewParsedV4EventReader(streamReader, parsers),
+		parsers:                     parsers,
+		passedMagicBytesCheck:       true,
+		passedLogFormatVersionCheck: true,
+		logger: logger,
+	}
+
 }
 
 func (r *logFileV4EventReader) peekHeaderBytes(numBytes int) ([]byte, error) {
@@ -167,14 +190,28 @@ func (r *logFileV4EventReader) checkFDE(fde *FormatDescriptionEvent) error {
 
 		if t == mysql_proto.LogEventType_FORMAT_DESCRIPTION_EVENT {
 			actual := fde.FixedLengthDataSizeForType(t)
-			if actual != FDEFixedLengthDataSizeFor56 &&
+			if actual != FDEFixedLengthDataSizeFor57 &&
+				actual != FDEFixedLengthDataSizeFor56 &&
 				actual != FDEFixedLengthDataSizeFor55 {
 
 				errMsg += fmt.Sprintf(
-					"%s (expected: %d (5.6) or %d (5.5) actual: %d); ",
+					"%s (expected: %d (5.7) or %d (5.6) or %d (5.5) actual: %d); ",
 					t.String(),
+					FDEFixedLengthDataSizeFor57,
 					FDEFixedLengthDataSizeFor56,
 					FDEFixedLengthDataSizeFor55,
+					actual)
+			}
+		} else if t == mysql_proto.LogEventType_GTID_LOG_EVENT {
+			actual := fde.FixedLengthDataSizeForType(t)
+			if actual != GTIDLogEventFixedLengthDataSizeFor57 &&
+				actual != GTIDLogEventFixedLengthDataSizeFor56 {
+
+				errMsg += fmt.Sprintf(
+					"%s (expected: %d (5.7) or %d (5.6)actual: %d); ",
+					t.String(),
+					GTIDLogEventFixedLengthDataSizeFor57,
+					GTIDLogEventFixedLengthDataSizeFor56,
 					actual)
 			}
 		} else {

@@ -1,9 +1,10 @@
 package memcache
 
 import (
+	"context"
 	"io"
 
-	"github.com/dropbox/godropbox/net2"
+	"godropbox/net2"
 )
 
 // An item to be gotten from or stored in a memcache server.
@@ -105,9 +106,8 @@ type VersionResponse interface {
 
 	// This returns the memcache version entries.  On error status, this
 	// returns an empty string.  The mapping is stored as:
-	//      shard id -> version string
-	// (If the client is unsharded, the shard id is always zero).
-	Versions() map[int]string
+	//      shard -> version string
+	Versions() map[string]string
 }
 
 // Response returned by Stat request.
@@ -116,81 +116,62 @@ type StatResponse interface {
 
 	// This returns the retrieved stat entries.  On error status, this returns
 	// nil.  The mapping is stored as:
-	//      shard id -> stats key -> stats value
+	//      shard -> stats key -> stats value
 	// (If the client is unsharded, the shard id is always zero).
-	Entries() map[int](map[string]string)
+	Entries() map[string](map[string]string)
 }
 
-// NOTE(mihnea) - ideally we should be able to separate methods that are state-aware
-// (i.e. GetSentinels / SetSentinels) away from this interface and into a new
-// interface (e.g. StateAwareClient / ConsistentCachingClient). Such an interface should also
-// have fewer methods (e.g. no Increment, Flush, etc.)
+// NOTE(mihnea) - ideally we should be able to separate methods that are state-aware away from this
+// interface and into a new interface (e.g. StateAwareClient / ConsistentCachingClient). Such an
+// interface should also have fewer methods (e.g. no Increment, Flush, etc.)
 type Client interface {
 	// This retrieves a single entry from memcache.
-	Get(key string) GetResponse
+	Get(ctx context.Context, key string) GetResponse
 
 	// Batch version of the Get method.
-	GetMulti(keys []string) map[string]GetResponse
-
-	// *** This method is specific to Dropbox zookeeper-managed memcache ***
-	// This is the same as GetMulti.  The only difference is that GetMulti will
-	// only read from ACTIVE memcache shards, while GetSentinels will read from
-	// both ACTIVE and WRITE_ONLY memcache shards.
-	GetSentinels(keys []string) map[string]GetResponse
+	GetMulti(ctx context.Context, keys []string) map[string]GetResponse
 
 	// This sets a single entry into memcache.  If the item's data version id
 	// (aka CAS) is nonzero, the set operation can only succeed if the item
 	// exists in memcache and has a same data version id; otherwise, this will
 	// do an unconditional set.
-	Set(item *Item) MutateResponse
+	Set(ctx context.Context, item *Item) MutateResponse
 
 	// Batch version of the Set method.  Note that the response entries
 	// ordering is undefined (i.e., may not match the input ordering).
-	SetMulti(items []*Item) []MutateResponse
-
-	// *** This method is specific to Dropbox zookeeper-managed memcache ***
-	// This is the same as SetMulti.  The only difference is that SetMulti will
-	// only write to ACTIVE memcache shards, while SetSentinels will write to
-	// both ACTIVE and WRITE_ONLY memcache shards.
-	SetSentinels(items []*Item) []MutateResponse
+	SetMulti(ctx context.Context, items []*Item) []MutateResponse
 
 	// Just like SetMulti, but if item's data version id (aka CAS) is zero,
 	// it will do a **conditional** add (will fail if the item already exists
 	// in memcache).
-	CasMulti(items []*Item) []MutateResponse
-
-	// *** This method is specific to Dropbox zookeeper-managed memcache ***
-	// This is the same as CasMulti.  The only difference is that CasMulti will
-	// only write to ACTIVE memcache shards, while CasSentinels will write to
-	// both ACTIVE and WRITE_ONLY memcache shards.
-	CasSentinels(items []*Item) []MutateResponse
+	CasMulti(ctx context.Context, items []*Item) []MutateResponse
 
 	// This adds a single entry into memcache.  Note: Add will fail if the
 	// item already exist in memcache.
-	Add(item *Item) MutateResponse
+	Add(ctx context.Context, item *Item) MutateResponse
 
 	// Batch version of the Add method.  Note that the response entries
 	// ordering is undefined (i.e., may not match the input ordering).
-	AddMulti(item []*Item) []MutateResponse
+	AddMulti(ctx context.Context, item []*Item) []MutateResponse
 
 	// This replaces a single entry in memcache.  Note: Replace will fail if
 	// the does not exist in memcache.
-	Replace(item *Item) MutateResponse
+	Replace(ctx context.Context, item *Item) MutateResponse
 
-	// This delets a single entry from memcache.
-	Delete(key string) MutateResponse
+	// This deletes a single entry from memcache.
+	Delete(ctx context.Context, key string) MutateResponse
 
 	// Batch version of the Delete method.  Note that the response entries
 	// ordering is undefined (i.e., may not match the input ordering)
-	DeleteMulti(keys []string) []MutateResponse
+	DeleteMulti(ctx context.Context, keys []string) []MutateResponse
 
 	// This appends the value bytes to the end of an existing entry.  Note that
 	// this does not allow you to extend past the item limit.
-	Append(key string, value []byte) MutateResponse
+	Append(ctx context.Context, key string, value []byte) MutateResponse
 
 	// This prepends the value bytes to the end of an existing entry.  Note that
 	// this does not allow you to extend past the item limit.
-	Prepend(key string, value []byte) MutateResponse
+	Prepend(ctx context.Context, key string, value []byte) MutateResponse
 
 	// This increments the key's counter by delta.  If the counter does not
 	// exist, one of two things may happen:
@@ -206,6 +187,7 @@ type Client interface {
 	//    not the byte values of a 64 bit integer.
 	// 2. Incrementing the counter may cause the counter to wrap.
 	Increment(
+		ctx context.Context,
 		key string,
 		delta uint64,
 		initValue uint64,
@@ -226,6 +208,7 @@ type Client interface {
 	// 2. Decrementing a counter will never result in a "negative value" (or
 	//    cause the counter to "wrap"). instead the counter is set to 0.
 	Decrement(
+		ctx context.Context,
 		key string,
 		delta uint64,
 		initValue uint64,
@@ -233,25 +216,24 @@ type Client interface {
 
 	// This invalidates all existing cache items after expiration number of
 	// seconds.
-	Flush(expiration uint32) Response
+	Flush(ctx context.Context, expiration uint32) Response
 
 	// This requests the server statistics. When the key is an empty string,
 	// the server will respond with a "default" set of statistics information.
-	Stat(statsKey string) StatResponse
+	Stat(ctx context.Context, statsKey string) StatResponse
 
 	// This returns the server's version string.
-	Version() VersionResponse
+	Version(ctx context.Context) VersionResponse
 
 	// This set the verbosity level of the server.
-	Verbosity(verbosity uint32) Response
+	Verbosity(ctx context.Context, verbosity uint32) Response
 }
 
 // A memcache client which communicates with a specific memcache shard.
 type ClientShard interface {
 	Client
 
-	// This returns the memcache server's shard id.
-	ShardId() int
+	Shard() string
 
 	// This returns true if the client is in a valid state.  If the client is
 	// in invalid state, the user should abandon the current client / channel,
@@ -260,7 +242,7 @@ type ClientShard interface {
 }
 
 // The ClientShardBuilder creates ClientShard by shard id and connection.
-type ClientShardBuilder func(shard int, channel io.ReadWriter) ClientShard
+type ClientShardBuilder func(shard string, channel io.ReadWriter) ClientShard
 
 // Used for returning shard mapping results from ShardManager's
 // GetShardsForKeys/GetShardsForItems calls.
@@ -268,41 +250,25 @@ type ShardMapping struct {
 	Connection net2.ManagedConn
 	ConnErr    error
 	Keys       []string // Populated by the 4 GetShards* methods
-	Items      []*Item  // Populated by GetShardsForItems and GetShardsForSentinelsFromItems
-	WarmingUp  bool     // Populated by GetShardsForSentinels
+	Items      []*Item  // Populated by GetShardsForItems
 }
 
 // The ShardManager decides which memcache shard a key/item belongs to, and
 // provide connections to the shards.
 type ShardManager interface {
-	// This returns the shard id and a connection to shard for a single key.
-	// If the key does not belong to any shard, this returns (-1, nil). Note
-	// that the connection may be nil for valid shard id (for instance, if
-	// the shard server is temporarily unavailable).
-	GetShard(key string) (shardId int, conn net2.ManagedConn, err error)
+	// This returns a connection to shard for a single key. If the key does not belong to any
+	// shard, this returns nil. Note that the connection may be nil for valid shard (for
+	// instance, if the shard server is temporarily unavailable).
+	GetShard(key string) (conn net2.ManagedConn, err error)
 
-	// This returns a (shard id -> (connection, list of keys)) mapping for
-	// the requested keys.  Keys that do not belong to any shard are mapped
-	// to shard id -1.
-	GetShardsForKeys(keys []string) map[int]*ShardMapping
+	// This returns a (shard -> (connection, list of keys)) mapping for the requested keys. If no
+	// shards are available, shard is the empty string.
+	GetShardsForKeys(keys []string) map[string]*ShardMapping
 
-	// This returns a (shard id -> (connection, list of items)) mapping for
-	// the requested items.  Items that do not belong to any shard are mapped
-	// to shard id -1.
-	GetShardsForItems(items []*Item) map[int]*ShardMapping
+	// This returns a (shard -> (connection, list of items)) mapping for the requested items. If
+	// no shards are available, shard is the empty string.
+	GetShardsForItems(items []*Item) map[string]*ShardMapping
 
-	// *** This method is specific to Dropbox zookeeper-managed memcache ***
-	// This returns a (shard id -> (connection, list of items)) mapping for
-	// the requested sentinel keys. Sentinel keys that do not belong to any
-	// shard are mapped to shard id -1.
-	GetShardsForSentinelsFromKeys(keys []string) map[int]*ShardMapping
-
-	// *** This method is specific to Dropbox zookeeper-managed memcache ***
-	// This returns a (shard id -> (connection, list of items)) mapping for
-	// the requested sentinel items. Sentinel items that do not belong to any
-	// shard are mapped to shard id -1.
-	GetShardsForSentinelsFromItems(items []*Item) map[int]*ShardMapping
-
-	// This return a (shard id -> connection) mapping for all shards.
-	GetAllShards() map[int]net2.ManagedConn
+	// This return a (shard -> connection) mapping for all shards.
+	GetAllShards() map[string]net2.ManagedConn
 }

@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/dropbox/godropbox/errors"
+	"godropbox/errors"
 )
 
 // The sql table read interface.  NOTE: NATURAL JOINs, and join "USING" clause
@@ -59,6 +59,7 @@ func NewTable(name string, columns ...NonAliasColumn) *Table {
 		name:         name,
 		columns:      columns,
 		columnLookup: make(map[string]NonAliasColumn),
+		primaryKeys:  make(map[string]struct{}),
 	}
 	for _, c := range columns {
 		err := c.setTableName(name)
@@ -66,6 +67,9 @@ func NewTable(name string, columns ...NonAliasColumn) *Table {
 			panic(err)
 		}
 		t.columnLookup[c.Name()] = c
+		if columnWithIsPrimaryKey, ok := c.(ColumnWithIsPrimaryKey); ok && columnWithIsPrimaryKey.IsPrimaryKey() {
+			t.primaryKeys[c.Name()] = struct{}{}
+		}
 	}
 
 	if len(columns) == 0 {
@@ -79,6 +83,7 @@ type Table struct {
 	name         string
 	columns      []NonAliasColumn
 	columnLookup map[string]NonAliasColumn
+	primaryKeys  map[string]struct{}
 	// If not empty, the name of the index to force
 	forcedIndex string
 }
@@ -149,9 +154,14 @@ func (t *Table) SerializeSql(database string, out *bytes.Buffer) error {
 	return nil
 }
 
+// Returns a set of primary keys column names of this table
+func (t *Table) PrimaryKeys() map[string]struct{} {
+	return t.primaryKeys
+}
+
 // Generates a select query on the current table.
 func (t *Table) Select(projections ...Projection) SelectStatement {
-	return newSelectStatement(t, projections)
+	return NewSelectStatement(t, projections)
 }
 
 // Creates a inner join table expression using onCondition.
@@ -292,7 +302,7 @@ func (t *joinTable) SerializeSql(
 }
 
 func (t *joinTable) Select(projections ...Projection) SelectStatement {
-	return newSelectStatement(t, projections)
+	return NewSelectStatement(t, projections)
 }
 
 func (t *joinTable) InnerJoinOn(

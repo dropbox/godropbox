@@ -6,14 +6,16 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/dropbox/godropbox/gocheck2"
-	"github.com/dropbox/godropbox/net2/http2/test_utils"
+	. "godropbox/gocheck2"
+	"godropbox/net2/http2/test_utils"
 )
 
 type SimplePoolSuite struct {
@@ -36,16 +38,27 @@ func (s *SimplePoolSuite) TestHTTP(c *C) {
 	defer func() { runtime.GOMAXPROCS(origMaxProcs) }()
 
 	const count = 10
-	finished := make(chan bool)
+	finished := make(chan bool, count)
+	errCh := make(chan error, 2*count)
 	for i := 0; i < count; i++ {
 		go func() {
 			req, err := http.NewRequest("GET", "/", nil)
-			c.Assert(err, IsNil)
+			errCh <- err
 
-			_, err = pool.Do(req)
-			c.Assert(err, IsNil)
+			if err == nil {
+				_, err = pool.Do(req)
+				errCh <- err
+			}
 			finished <- true
 		}()
+	}
+
+	for i := 0; i < 2*count; i++ {
+		select {
+		case err := <-errCh:
+			c.Assert(err, IsNil)
+		default:
+		}
 	}
 
 	for i := 0; i < count; i++ {
@@ -130,29 +143,46 @@ func (s *SimplePoolSuite) TestMaxConnTimeoutSucceed(c *C) {
 	tooManyConn := make(chan int)
 
 	const count = 5
+	reqErrCh := make(chan error, count)
+	doErrCh := make(chan error, count)
 	for i := 0; i < count; i++ {
 		go func() {
 			// /slow_request takes about 500ms. With 5 requests in parallel and 2 connections
 			// we should finish within 1.5 seconds. We set ConnectionAcquireTimeout to be on
 			// the safe side
 			req, err := http.NewRequest("GET", "/slow_request", nil)
-			c.Assert(err, IsNil)
+			reqErrCh <- err
 
+			if err != nil {
+				return
+			}
 			_, err = pool.Do(req)
+			doErrCh <- err
 			if err == nil {
 				tooManyConn <- 0
 			} else {
-				_, ok := err.(DialError)
-				c.Assert(ok, IsTrue)
-				c.Log(err)
-				c.Assert(
-					strings.HasPrefix(
-						err.Error(),
-						"Dial Error: Reached maximum active requests for connection pool"),
-					IsTrue)
 				tooManyConn <- 1
 			}
 		}()
+	}
+
+	for i := 0; i < count; i++ {
+		err := <-reqErrCh
+		c.Assert(err, IsNil)
+	}
+
+	for i := 0; i < count; i++ {
+		err := <-doErrCh
+		if err != nil {
+			_, ok := err.(DialError)
+			c.Assert(ok, IsTrue)
+			c.Log(err)
+			c.Assert(
+				strings.HasPrefix(
+					err.Error(),
+					"Dial Error: Reached maximum active requests for connection pool"),
+				IsTrue)
+		}
 	}
 
 	tooManyConnCount := 0
@@ -169,7 +199,30 @@ func (s *SimplePoolSuite) TestMaxConnTimeoutSucceed(c *C) {
 }
 
 func (s *SimplePoolSuite) TestMaxConnTimeoutFails(c *C) {
-	server, addr := test_utils.SetupTestServer(false)
+	origMaxProcs := runtime.GOMAXPROCS(runtime.NumCPU())
+	defer func() { runtime.GOMAXPROCS(origMaxProcs) }()
+	var wg, wg2 sync.WaitGroup
+	wg.Add(1)
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc(
+		"/slow_request",
+		func(writer http.ResponseWriter, req *http.Request) {
+			wg2.Done()
+			wg.Wait()
+		})
+	serveMux.HandleFunc(
+		"/",
+		func(writer http.ResponseWriter, req *http.Request) {
+			_, _ = writer.Write([]byte("ok"))
+		})
+
+	server := httptest.NewUnstartedServer(serveMux)
+	server.Config.ReadTimeout = 5 * time.Second
+	server.Config.WriteTimeout = 5 * time.Second
+	server.Start()
+
+	addr := server.Listener.Addr().String()
+
 	defer server.Close()
 
 	params := ConnectionParams{
@@ -180,49 +233,43 @@ func (s *SimplePoolSuite) TestMaxConnTimeoutFails(c *C) {
 	pool := NewSimplePool(addr, params)
 	pool.closeWait = 100 * time.Millisecond
 
-	// do 10 requests concurrently
-	origMaxProcs := runtime.GOMAXPROCS(runtime.NumCPU())
-	defer func() { runtime.GOMAXPROCS(origMaxProcs) }()
-
-	tooManyConn := make(chan int)
-
-	const count = 5
-	for i := 0; i < count; i++ {
+	// send 2 requests block in serveMux
+	wg2.Add(2)
+	reqErrCh := make(chan error, 2)
+	doErrCh := make(chan error, 2)
+	for i := 0; i < 2; i++ {
 		go func() {
-			// /slow_request takes about 500ms. With 5 requests in parallel and 2 connections
-			// we should finish within 1.5 seconds. Since ConnectionAcquireTimeout is 1 second
-			// the last request will fail
 			req, err := http.NewRequest("GET", "/slow_request", nil)
-			c.Assert(err, IsNil)
+			reqErrCh <- err
 
-			_, err = pool.Do(req)
-			if err == nil {
-				tooManyConn <- 0
-			} else {
-				_, ok := err.(DialError)
-				c.Assert(ok, IsTrue)
-				c.Log(err)
-				c.Assert(
-					strings.HasPrefix(
-						err.Error(),
-						"Dial Error: Reached maximum active requests for connection pool"),
-					IsTrue)
-				tooManyConn <- 1
+			if err != nil {
+				return
 			}
+			_, err = pool.Do(req)
+			doErrCh <- err
 		}()
 	}
+	wg2.Wait()
+	req, _ := http.NewRequest("GET", "/", nil)
+	_, err := pool.Do(req)
+	c.Assert(err, NotNil)
+	c.Assert(
+		strings.HasPrefix(
+			err.Error(),
+			"Dial Error: Reached maximum active requests for connection pool"),
+		IsTrue)
 
-	tooManyConnCount := 0
-	for i := 0; i < count; i++ {
-		select {
-		case cnt := <-tooManyConn:
-			tooManyConnCount += cnt
-		case <-time.After(5 * time.Second):
-			c.FailNow()
-		}
+	wg.Done()
+
+	for i := 0; i < 2; i++ {
+		err = <-reqErrCh
+		c.Assert(err, IsNil)
 	}
 
-	c.Assert(tooManyConnCount, Equals, 1)
+	for i := 0; i < 2; i++ {
+		err = <-doErrCh
+		c.Assert(err, IsNil)
+	}
 }
 
 func (s *SimplePoolSuite) TestMaxConn(c *C) {
@@ -241,29 +288,46 @@ func (s *SimplePoolSuite) TestMaxConn(c *C) {
 	origMaxProcs := runtime.GOMAXPROCS(runtime.NumCPU())
 	defer func() { runtime.GOMAXPROCS(origMaxProcs) }()
 
-	tooManyConn := make(chan int)
-
 	const count = 10
+	tooManyConn := make(chan int, count)
+	reqErrCh := make(chan error, count)
+	doErrCh := make(chan error, count)
 	for i := 0; i < count; i++ {
 		go func() {
 			req, err := http.NewRequest("GET", "/slow_request", nil)
-			c.Assert(err, IsNil)
+			reqErrCh <- err
+
+			if err != nil {
+				return
+			}
 
 			_, err = pool.Do(req)
+			doErrCh <- err
 			if err == nil {
 				tooManyConn <- 0
 			} else {
-				_, ok := err.(DialError)
-				c.Assert(ok, IsTrue)
-				c.Log(err)
-				c.Assert(
-					strings.HasPrefix(
-						err.Error(),
-						"Dial Error: Reached pool max connection limit"),
-					IsTrue)
 				tooManyConn <- 1
 			}
 		}()
+	}
+
+	for i := 0; i < count; i++ {
+		err := <-reqErrCh
+		c.Assert(err, IsNil)
+	}
+
+	for i := 0; i < count; i++ {
+		err := <-doErrCh
+		if err != nil {
+			_, ok := err.(DialError)
+			c.Assert(ok, IsTrue)
+			c.Log(err)
+			c.Assert(
+				strings.HasPrefix(
+					err.Error(),
+					"Dial Error: Reached pool max connection limit"),
+				IsTrue)
+		}
 	}
 
 	tooManyConnCount := 0
@@ -295,16 +359,27 @@ func (s *SimplePoolSuite) TestClose(c *C) {
 	defer func() { runtime.GOMAXPROCS(origMaxProcs) }()
 
 	const count = 10
-	finished := make(chan bool)
+	finished := make(chan bool, count)
+	errCh := make(chan error, 2*count)
 	for i := 0; i < count; i++ {
 		go func() {
 			req, err := http.NewRequest("GET", "/", nil)
-			c.Assert(err, IsNil)
+			errCh <- err
 
-			_, err = pool.Do(req)
-			c.Assert(err, IsNil)
+			if err == nil {
+				_, err = pool.Do(req)
+				errCh <- err
+			}
 			finished <- true
 		}()
+	}
+
+	for i := 0; i < 2*count; i++ {
+		select {
+		case err := <-errCh:
+			c.Assert(err, IsNil)
+		default:
+		}
 	}
 
 	for i := 0; i < count; i++ {
@@ -352,20 +427,38 @@ func (s *SimplePoolSuite) TestRedirect(c *C) {
 	redirect_pool.closeWait = 100 * time.Millisecond
 
 	const count = 10
-	finished := make(chan bool)
+	finished := make(chan bool, count)
+	errCh := make(chan error, 2*count)
+	respCh := make(chan *http.Response, count)
 	for i := 0; i < count; i++ {
 		go func() {
 			req, err := http.NewRequest("GET", "/redirect", nil)
-			c.Assert(err, IsNil)
+			errCh <- err
 
-			resp, err := redirect_pool.Do(req)
-			c.Assert(err, IsNil)
-			c.Assert(resp.StatusCode, Equals, http.StatusOK)
-			body, err := ioutil.ReadAll(resp.Body)
-			c.Assert(err, IsNil)
-			c.Assert(string(body), Equals, "ok")
+			if err == nil {
+				resp, err := redirect_pool.Do(req)
+				errCh <- err
+				respCh <- resp
+			}
+
 			finished <- true
 		}()
+	}
+
+	for i := 0; i < 2*count; i++ {
+		select {
+		case err := <-errCh:
+			c.Assert(err, IsNil)
+		default:
+		}
+	}
+
+	for i := 0; i < count; i++ {
+		resp := <-respCh
+		c.Assert(resp.StatusCode, Equals, http.StatusOK)
+		body, err := ioutil.ReadAll(resp.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(body), Equals, "ok")
 	}
 
 	for i := 0; i < count; i++ {
@@ -386,18 +479,33 @@ func (s *SimplePoolSuite) TestRedirect(c *C) {
 		})
 	no_redirect_pool.closeWait = 100 * time.Millisecond
 
-	finished = make(chan bool)
+	finished = make(chan bool, count)
 	for i := 0; i < count; i++ {
 		go func() {
 			req, err := http.NewRequest("GET", "/redirect", nil)
-			c.Assert(err, IsNil)
+			errCh <- err
 
-			resp, err := no_redirect_pool.Do(req)
-			c.Log(err)
-			c.Assert(err, IsNil)
-			c.Assert(resp.StatusCode, Equals, http.StatusMovedPermanently)
+			if err == nil {
+				resp, err := no_redirect_pool.Do(req)
+				errCh <- err
+				respCh <- resp
+			}
+
 			finished <- true
 		}()
+	}
+
+	for i := 0; i < 2*count; i++ {
+		select {
+		case err := <-errCh:
+			c.Assert(err, IsNil)
+		default:
+		}
+	}
+
+	for i := 0; i < count; i++ {
+		resp := <-respCh
+		c.Assert(resp.StatusCode, Equals, http.StatusMovedPermanently)
 	}
 
 	for i := 0; i < count; i++ {
