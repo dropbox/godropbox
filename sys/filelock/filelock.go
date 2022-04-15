@@ -13,11 +13,10 @@
 package filelock
 
 import (
+	"godropbox/errors"
 	"os"
 	"path"
 	"syscall"
-
-	"github.com/dropbox/godropbox/errors"
 )
 
 type FileLock struct {
@@ -31,9 +30,22 @@ type FileLock struct {
 
 // Creates new FileLock object given a unique name.
 func New(name string) *FileLock {
+	return NewInDir("/tmp", name)
+}
+
+// Creates new FileLock object given a unique name and a directory to store the file.
+// NOTE:
+// 1) The directory must already exist and must have write permissions.
+// 2) Default location of file locks is /tmp. If you are specifying a different
+// directory here or changing the directory of an existing file lock
+// make sure you do not break mutual exclusion for production services and applications.
+// If prior versions of your service/app are creating these locks in default/old location.
+// then new version must acquire file locks in both old and new directories to migrate
+// safely.
+func NewInDir(dir string, name string) *FileLock {
 	return &FileLock{
 		name:   name,
-		path:   "/tmp",
+		path:   dir,
 		prefix: "flock-",
 	}
 }

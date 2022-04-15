@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/dropbox/godropbox/gocheck2"
+	. "godropbox/gocheck2"
 
 	. "gopkg.in/check.v1"
+	"os"
 )
 
 // Hook up gocheck into the go test runner.
@@ -235,6 +236,37 @@ func (s *FileLockSuite) TestAllTransitions(c *C) {
 	c.Assert(errResults["LOCKED"]["LOCKED"]["Lock"], ErrorMatches, blocked)
 	c.Assert(errResults["LOCKED"]["LOCKED"]["RUnlock"], ErrorMatches, blocked)
 	c.Assert(errResults["LOCKED"]["LOCKED"]["Unlock"], ErrorMatches, blocked)
+}
+
+func (s *FileLockSuite) TestInDir(c *C) {
+	// Create file locks with same name and different directories
+	lockName := "testflock"
+	lockName2 := "testflock2"
+	dir1 := "/tmp/testflockdir1"
+	dir2 := "/tmp/testflockdir2"
+
+	err := os.Mkdir(dir1, 0777)
+	c.Assert(err, IsNil)
+	err = os.Mkdir(dir2, 0777)
+	c.Assert(err, IsNil)
+	fl1 := NewInDir(dir1, lockName)
+	fl2 := NewInDir(dir2, lockName)
+
+	// try using fl1 and fl2 as exclusive locks
+	c.Assert(fl1.Lock(), IsNil)
+	c.Assert(fl2.Lock(), IsNil)
+
+	// lock a different file name in any of these directories
+	fl3 := NewInDir(dir1, lockName2)
+	c.Assert(fl3.Lock(), IsNil)
+
+	// try locking with same file name in one of these directories
+	fl4 := NewInDir(dir2, lockName)
+	c.Assert(fl4.TryLock(), NotNil)
+
+	// lock a file with same name in default directory.
+	fl5 := New(lockName)
+	c.Assert(fl5.Lock(), IsNil)
 }
 
 func performTransition(errChan chan error, bgState, testState, action string) {
