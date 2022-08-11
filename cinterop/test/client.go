@@ -54,7 +54,6 @@ func main() {
 		_, err := c.Write([]byte("hi"))
 		if err != nil {
 			log.Fatal("write error:", err)
-			break
 		}
 		time.Sleep(1e9)
 	}
