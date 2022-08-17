@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	insecure_rand "godropbox/math2/rand2"
+	insecure_rand "github.com/dropbox/godropbox/math2/rand2"
 )
 
 var rand = insecure_rand.New(insecure_rand.NewSource(1))
