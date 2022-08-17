@@ -5,7 +5,7 @@ import (
 	"encoding"
 	"encoding/binary"
 
-	"godropbox/errors"
+	"github.com/dropbox/godropbox/errors"
 )
 
 const (
