@@ -1,3 +1,4 @@
 issues:
   exclude-rules:
     - path: _test\.go
+      source: "^.*"
