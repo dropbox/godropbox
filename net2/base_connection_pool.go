@@ -109,9 +109,9 @@ func (p *connectionPoolImpl) Register(network string, address string) error {
 	return p.pool.Register(network + " " + address)
 }
 
-// BaseConnectionPool has nothing to do on Unregister.
+// See ConnectionPool for documentation.
 func (p *connectionPoolImpl) Unregister(network string, address string) error {
-	return nil
+	return p.pool.Unregister(network + " " + address)
 }
 
 func (p *connectionPoolImpl) ListRegistered() []NetworkAddress {
