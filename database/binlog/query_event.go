@@ -13,67 +13,67 @@ const MaxDbsInEventMts = 254
 //
 // Query event's binlog payload is structured as follow:
 //
-//  Common to both 5.5 and 5.6:
-//      19 bytes for common v4 event header
-//      4 bytes (uint32) for thread id which executed the query
-//      4 bytes (uint32) for query executation duration (in seconds)
-//      1 byte (uint8) for, X, the length of database name.  Note that the
-//          length does not include the null terminator character.
-//      2 bytes (uint16) for error code resulting from the query execution
-//      2 bytes (uint16) for, Y, the length of the variable status block
-//      Y bytes for the variable status block (all status are optional):
-//          flags2:
-//              1 byte for Q_FLAGS2_CODE (= 0)
-//              4 bytes (uint32) for flags2
-//          sql mode:
-//              1 byte for Q_SQL_MODE_CODE (= 1)
-//              8 bytes (uint64) for sql mode
-//          catalog:
-//              1 byte for Q_CATALOG_NZ_CODE (= 6)
-//              1 byte for length, Z
-//              Z bytes for catalog data (NOTE: As of 5.6, this value should
-//                  always be "std")
-//          auto increment:
-//              1 byte for Q_AUTO_INCREMENT (= 3)
-//              2 bytes (uint16) for increment
-//              2 bytes (uint16) for offset
-//          charset:
-//              1 byte for Q_CHARSET_CODE (= 4)
-//              6 bytes for charset
-//          time zone:
-//              1 byte for Q_TIME_ZONE_CODE (= 5)
-//              1 byte for length, R
-//              R bytes for time zone
-//          lc time:
-//              1 byte for Q_LC_TIME_NAMES_CODE (= 7)
-//              2 bytes (uint16) for lc time names number
-//          charset database:
-//              1 byte for Q_CHARSET_DATABASE_CODE (= 8)
-//              2 bytes (uint16) fro charset database number
-//          table map for update:
-//              1 byte for Q_TABLE_MAP_FOR_UPDATE (= 9)
-//              8 bytes (uint64) for table map for update
-//          master data written: (not used by v4 events)
-//              1 byte for Q_MASTER_DATA_WRITTEN (= 10)
-//              4 bytes (uint32) for master data written
-//          invoker:
-//              1 byte for Q_INVOKER (= 11)
-//              1 byte for user length, S
-//              S bytes for user string
-//              1 byte for host length, T
-//              T bytes for host string
-//          updated db name:
-//              1 byte for Q_UPDATED_DB_NAMES (= 12)
-//              1 byte for number of dbs, N
-//              if N < MAX_DBS_IN_EVENT_MTS (= 254):
-//                  N zero-terminated db name strings
-//          microseconds:
-//              1 byte for Q_MICROSECONDS (= 13)
-//              3 bytes (uint24) for microseconds
-//      X bytes for the database name (zero terminated)
-//      the remaining is for the query (not zero terminated).
-//  5.6 Specific:
-//      (optional) 4 bytes footer for checksum.
+//	Common to both 5.5 and 5.6:
+//	    19 bytes for common v4 event header
+//	    4 bytes (uint32) for thread id which executed the query
+//	    4 bytes (uint32) for query executation duration (in seconds)
+//	    1 byte (uint8) for, X, the length of database name.  Note that the
+//	        length does not include the null terminator character.
+//	    2 bytes (uint16) for error code resulting from the query execution
+//	    2 bytes (uint16) for, Y, the length of the variable status block
+//	    Y bytes for the variable status block (all status are optional):
+//	        flags2:
+//	            1 byte for Q_FLAGS2_CODE (= 0)
+//	            4 bytes (uint32) for flags2
+//	        sql mode:
+//	            1 byte for Q_SQL_MODE_CODE (= 1)
+//	            8 bytes (uint64) for sql mode
+//	        catalog:
+//	            1 byte for Q_CATALOG_NZ_CODE (= 6)
+//	            1 byte for length, Z
+//	            Z bytes for catalog data (NOTE: As of 5.6, this value should
+//	                always be "std")
+//	        auto increment:
+//	            1 byte for Q_AUTO_INCREMENT (= 3)
+//	            2 bytes (uint16) for increment
+//	            2 bytes (uint16) for offset
+//	        charset:
+//	            1 byte for Q_CHARSET_CODE (= 4)
+//	            6 bytes for charset
+//	        time zone:
+//	            1 byte for Q_TIME_ZONE_CODE (= 5)
+//	            1 byte for length, R
+//	            R bytes for time zone
+//	        lc time:
+//	            1 byte for Q_LC_TIME_NAMES_CODE (= 7)
+//	            2 bytes (uint16) for lc time names number
+//	        charset database:
+//	            1 byte for Q_CHARSET_DATABASE_CODE (= 8)
+//	            2 bytes (uint16) fro charset database number
+//	        table map for update:
+//	            1 byte for Q_TABLE_MAP_FOR_UPDATE (= 9)
+//	            8 bytes (uint64) for table map for update
+//	        master data written: (not used by v4 events)
+//	            1 byte for Q_MASTER_DATA_WRITTEN (= 10)
+//	            4 bytes (uint32) for master data written
+//	        invoker:
+//	            1 byte for Q_INVOKER (= 11)
+//	            1 byte for user length, S
+//	            S bytes for user string
+//	            1 byte for host length, T
+//	            T bytes for host string
+//	        updated db name:
+//	            1 byte for Q_UPDATED_DB_NAMES (= 12)
+//	            1 byte for number of dbs, N
+//	            if N < MAX_DBS_IN_EVENT_MTS (= 254):
+//	                N zero-terminated db name strings
+//	        microseconds:
+//	            1 byte for Q_MICROSECONDS (= 13)
+//	            3 bytes (uint24) for microseconds
+//	    X bytes for the database name (zero terminated)
+//	    the remaining is for the query (not zero terminated).
+//	5.6 Specific:
+//	    (optional) 4 bytes footer for checksum.
 type QueryEvent struct {
 	Event
 
@@ -423,6 +423,9 @@ func (p *QueryEventParser) parseInvoker(data []byte, q *QueryEvent) (
 	}
 
 	user, data, err := readSlice(data[1:], int(data[0]))
+	if err != nil {
+		return data, err
+	}
 	q.invokerUser = user
 
 	if len(data) == 0 {
