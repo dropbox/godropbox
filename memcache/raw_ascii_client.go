@@ -672,7 +672,7 @@ func (c *RawAsciiClient) Stat(statsKey string) StatResponse {
 	for {
 		line, err := c.readLine()
 		if err != nil {
-			NewStatErrorResponse(err, shardEntries)
+			return NewStatErrorResponse(err, shardEntries)
 		}
 
 		if line == "END" {
